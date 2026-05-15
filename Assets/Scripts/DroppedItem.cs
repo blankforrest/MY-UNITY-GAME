@@ -8,8 +8,13 @@ using UnityEngine;
 public class DroppedItem : MonoBehaviour
 {
     public Item item;
-    public int  amount   = 1;
+    public int  amount    = 1;
     public byte blockType = 1; // 1=Grass, 2=Dirt — controls dropped cube appearance
+
+    [Tooltip("If set, this mesh is used instead of the default mini-cube (e.g. for tool items).")]
+    public Mesh     overrideMesh;
+    [Tooltip("Material used with overrideMesh. Falls back to chunk material if null.")]
+    public Material overrideMaterial;
 
     [Header("Animation")]
     public float bobSpeed  = 2f;
@@ -60,10 +65,7 @@ public class DroppedItem : MonoBehaviour
 
     void BuildMiniCube()
     {
-        const float SIZE = 0.175f; // 50% of original 0.35
-
-
-        GameObject visual = new GameObject("MiniCube");
+        GameObject visual = new GameObject("Visual");
         visual.transform.SetParent(transform);
         visual.transform.localPosition = Vector3.zero;
         visual.transform.localScale    = Vector3.one;
@@ -71,20 +73,40 @@ public class DroppedItem : MonoBehaviour
         MeshFilter   mf = visual.AddComponent<MeshFilter>();
         MeshRenderer mr = visual.AddComponent<MeshRenderer>();
 
-        mf.mesh = BuildCubeMesh(SIZE);
-
-        // Use the block's correct UVs from the atlas
-        Material mat = null;
-        if (VoxelWorld.Instance != null && VoxelWorld.Instance.chunkMaterial != null)
-            mat = new Material(VoxelWorld.Instance.chunkMaterial);
+        if (overrideMesh != null)
+        {
+            // Use custom mesh (e.g. wrench tool shape)
+            mf.mesh = overrideMesh;
+            if (overrideMaterial != null)
+            {
+                mr.material = overrideMaterial;
+            }
+            else
+            {
+                Shader s = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                Material mat = new Material(s);
+                mat.color = new Color(1f, 0.78f, 0.12f); // gold fallback
+                mr.material = mat;
+            }
+        }
         else
         {
-            Shader s = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            mat = new Material(s);
-            mat.mainTexture = GrassTextureGenerator.Create();
-            mat.color = Color.white;
+            // Default: mini voxel cube
+            const float SIZE = 0.175f;
+            mf.mesh = BuildCubeMesh(SIZE);
+
+            Material mat = null;
+            if (VoxelWorld.Instance != null && VoxelWorld.Instance.chunkMaterial != null)
+                mat = new Material(VoxelWorld.Instance.chunkMaterial);
+            else
+            {
+                Shader s = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                mat = new Material(s);
+                mat.mainTexture = GrassTextureGenerator.Create();
+                mat.color = Color.white;
+            }
+            mr.material = mat;
         }
-        mr.material = mat;
     }
 
     Mesh BuildCubeMesh(float s)
@@ -224,9 +246,9 @@ public class DroppedItem : MonoBehaviour
         Destroy(gameObject);
     }
 
-    public static void Spawn(Item item, int amount, Vector3 worldPosition, byte blockType = 1)
+    public static DroppedItem Spawn(Item item, int amount, Vector3 worldPosition, byte blockType = 1)
     {
-        if (item == null) return;
+        if (item == null) return null;
         worldPosition.y += 0.3f;
         GameObject go = new GameObject($"DroppedItem_{item.itemName}");
         go.transform.position = worldPosition;
@@ -234,16 +256,17 @@ public class DroppedItem : MonoBehaviour
         dropped.item      = item;
         dropped.amount    = amount;
         dropped.blockType = blockType;
+        return dropped;
     }
 
-    public static void Spawn(Item item, int amount, byte blockType = 1)
+    public static DroppedItem Spawn(Item item, int amount, byte blockType = 1)
     {
-        if (item == null) return;
+        if (item == null) return null;
         Camera cam     = Camera.main;
         Vector3 fwd    = cam != null ? cam.transform.forward : Vector3.forward;
         fwd.y = 0f; fwd.Normalize();
         Vector3 pos    = (cam != null ? cam.transform.position : Vector3.zero) + fwd * 1.5f;
         pos.y -= 0.5f;
-        Spawn(item, amount, pos, blockType);
+        return Spawn(item, amount, pos, blockType);
     }
 }

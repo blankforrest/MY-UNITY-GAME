@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 3;  // top, side, bottom
+    public const int TILE_COUNT = 4;  // top, side, bottom, stone
 
     public static Texture2D Create()
     {
@@ -29,7 +29,8 @@ public static class GrassTextureGenerator
                 int lx   = x % TILE_SIZE;
                 px[y * w + x] = tile == 0 ? GrassTop(lx, y)
                               : tile == 1 ? GrassSide(lx, y)
-                                          : Dirt(lx, y);
+                              : tile == 2 ? Dirt(lx, y)
+                                          : Stone(lx, y);
             }
         }
 
@@ -88,17 +89,31 @@ public static class GrassTextureGenerator
         return new Color(0.48f + t - sd, 0.33f + t * 0.5f - sd, 0.15f + t * 0.3f - sd);
     }
 
+    static Color Stone(int x, int y)
+    {
+        float n  = Mathf.PerlinNoise(x * 0.4f + 12f, y * 0.4f + 7f);
+        float n2 = Mathf.PerlinNoise(x * 1.1f + 3f,  y * 1.1f + 5f);
+        float t  = n * 0.08f + n2 * 0.03f;
+
+        bool crack = Mathf.PerlinNoise(x * 0.6f + 9f, y * 0.6f + 2f) > 0.80f;
+        float cd = crack ? 0.07f : 0f;
+
+        return new Color(0.52f + t - cd, 0.52f + t - cd, 0.54f + t - cd);
+    }
+
     // ── UV helpers ────────────────────────────────────────────────────────────
 
     /// <summary>Returns the 4 atlas UVs for a given face and block type.</summary>
     /// <param name="face">0=back,1=front,2=top,3=bottom,4=left,5=right</param>
-    /// <param name="blockType">1=Grass, 2=Dirt</param>
+    /// <param name="blockType">1=Grass, 2=Dirt, 3=Stone</param>
     public static Vector2[] GetBlockUVs(int face, byte blockType)
     {
         int tile;
-        if (blockType == 2) // Dirt: all faces use the dirt tile
+        if (blockType == 2)      // Dirt: all faces dirt
             tile = 2;
-        else // Grass (blockType == 1)
+        else if (blockType == 3) // Stone: all faces stone
+            tile = 3;
+        else                     // Grass (blockType == 1)
             tile = (face == 2) ? 0   // top    → grass top
                  : (face == 3) ? 2   // bottom → dirt
                  :               1;  // sides  → grass side

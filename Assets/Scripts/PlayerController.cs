@@ -41,9 +41,9 @@ public class PlayerController : MonoBehaviour
     {
         if (cameraTransform == null) return;
 
-        if (InventoryUI.IsInventoryOpen)
+        // Block all input when inventory OR confirmation window is open
+        if (InventoryUI.IsInventoryOpen || ConfirmationWindow.IsOpen)
         {
-            // Apply gravity so we don't float, but stop other input
             isGrounded = controller.isGrounded;
             if (isGrounded && velocity.y < 0) velocity.y = -2f;
             velocity.y += gravity * Time.deltaTime;
@@ -104,5 +104,27 @@ public class PlayerController : MonoBehaviour
         // Gravity
         velocity.y += gravity * Time.deltaTime;
         controller.Move(velocity * Time.deltaTime);
+    }
+
+    // ── Push Rigidbodies ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Called by CharacterController whenever it hits a collider.
+    /// Applies a push force to any Rigidbody the player walks into (e.g. vehicles).
+    /// </summary>
+    private void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        Rigidbody rb = hit.collider.attachedRigidbody;
+
+        // Ignore: no rigidbody, kinematic, or something we're standing ON (pushes down)
+        if (rb == null || rb.isKinematic) return;
+        if (hit.moveDirection.y < -0.3f) return;
+
+        // Push direction = horizontal movement direction of the player
+        Vector3 pushDir = new Vector3(hit.moveDirection.x, 0f, hit.moveDirection.z);
+
+        // Force proportional to player speed — feel free to tune the multiplier
+        float pushForce = 3f;
+        rb.AddForce(pushDir * pushForce, ForceMode.Impulse);
     }
 }

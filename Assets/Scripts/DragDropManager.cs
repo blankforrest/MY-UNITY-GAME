@@ -119,7 +119,16 @@ public class DragDropManager : MonoBehaviour
                     var data = dragging.GetItemData();
                     if (data?.item != null)
                     {
-                        DroppedItem.Spawn(data.item, data.amount);
+                        DroppedItem dropped = DroppedItem.Spawn(data.item, data.amount);
+
+                        // If this is the wrench tool, apply the 3D wrench mesh instead of a mini-cube
+                        if (dropped != null && WrenchItem.Instance != null
+                            && data.item.itemID == WrenchItem.Instance.wrenchItemID)
+                        {
+                            dropped.overrideMesh = WrenchItem.BuildWrenchMesh();
+                            // overrideMaterial left null → DroppedItem uses gold fallback color
+                        }
+
                         dragging.WriteItemData(null);
                     }
                     dragging.Refresh();
