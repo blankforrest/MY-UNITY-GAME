@@ -41,13 +41,25 @@ public class Chunk : MonoBehaviour
                     float globalX = x + chunkPos.x * VoxelData.ChunkWidth;
                     float globalZ = z + chunkPos.y * VoxelData.ChunkWidth;
 
-                    float noise = Mathf.PerlinNoise(globalX * 0.05f, globalZ * 0.05f);
-                    int height = Mathf.FloorToInt(noise * VoxelData.ChunkHeight / 2)
-                               + (VoxelData.ChunkHeight / 4);
+                    // Base rolling noise (lower frequency = wider features)
+                    float baseNoise = Mathf.PerlinNoise(globalX * 0.02f, globalZ * 0.02f);
+                    // Exponentiate the noise to widen valleys (pushes mid-values lower)
+                    baseNoise = Mathf.Pow(baseNoise, 2.5f);
+                    
+                    // Minor detail noise to prevent it from looking unnaturally smooth
+                    float detailNoise = Mathf.PerlinNoise(globalX * 0.08f, globalZ * 0.08f) * 0.15f;
 
-                    if      (y >= height)        voxelMap[x, y, z] = 0; // Air
-                    else if (y == height - 1)    voxelMap[x, y, z] = 1; // Grass (top)
-                    else if (y >= height - 4)    voxelMap[x, y, z] = 2; // Dirt (3 layers)
+                    // Combine and lower the overall multiplier to make it less mountainy
+                    float finalNoise = baseNoise + detailNoise;
+                    
+                    // Use float exact height to determine slabs
+                    float exactHeight = finalNoise * VoxelData.ChunkHeight * 0.25f + (VoxelData.ChunkHeight / 5f);
+                    int floorY = Mathf.FloorToInt(exactHeight);
+                    bool isHalfBlock = (exactHeight - floorY) < 0.5f;
+
+                    if      (y > floorY)         voxelMap[x, y, z] = 0; // Air
+                    else if (y == floorY)        voxelMap[x, y, z] = isHalfBlock ? (byte)3 : (byte)1; // Grass Slab (3) or Grass Full (1)
+                    else if (y >= floorY - 4)    voxelMap[x, y, z] = 2; // Dirt (3 layers)
                     else                         voxelMap[x, y, z] = 2; // Dirt (deep)
                 }
             }
@@ -106,17 +118,28 @@ public class Chunk : MonoBehaviour
 
     void UpdateVoxelMeshData(Vector3 pos, byte blockType)
     {
+        bool isSlab = (blockType == 3);
+        byte uvBlockType = isSlab ? (byte)1 : blockType; // Use grass texture for slab
+
         for (int p = 0; p < 6; p++)
         {
-            if (!CheckVoxel(pos + VoxelData.faceChecks[p]))
+            if (!CheckVoxelFace(pos, p, blockType))
             {
-                vertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, 0]]);
-                vertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, 1]]);
-                vertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, 2]]);
-                vertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, 3]]);
+                for (int i = 0; i < 4; i++)
+                {
+                    Vector3 vert = VoxelData.voxelVerts[VoxelData.voxelTris[p, i]];
+                    
+                    // Squash the top vertices down if this is a slab
+                    if (isSlab && vert.y > 0.5f)
+                    {
+                        vert.y = 0.5f;
+                    }
+                    
+                    vertices.Add(pos + vert);
+                }
 
                 // Per-face atlas UVs based on block type
-                Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, blockType);
+                Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, uvBlockType);
                 uvs.Add(faceUVs[0]);
                 uvs.Add(faceUVs[1]);
                 uvs.Add(faceUVs[2]);
@@ -134,20 +157,39 @@ public class Chunk : MonoBehaviour
         }
     }
 
-    bool CheckVoxel(Vector3 pos)
+    bool CheckVoxelFace(Vector3 pos, int faceIndex, byte currentBlockType)
     {
-        int x = Mathf.FloorToInt(pos.x);
-        int y = Mathf.FloorToInt(pos.y);
-        int z = Mathf.FloorToInt(pos.z);
+        Vector3 neighborPos = pos + VoxelData.faceChecks[faceIndex];
+        int x = Mathf.FloorToInt(neighborPos.x);
+        int y = Mathf.FloorToInt(neighborPos.y);
+        int z = Mathf.FloorToInt(neighborPos.z);
+
+        byte neighbor = 0;
 
         if (!IsVoxelInChunk(x, y, z))
         {
             if (VoxelWorld.Instance != null)
-                return VoxelWorld.Instance.GetBlock(pos + transform.position) != 0;
-            return false;
+                neighbor = VoxelWorld.Instance.GetBlock(neighborPos + transform.position);
+        }
+        else
+        {
+            neighbor = voxelMap[x, y, z];
         }
 
-        return voxelMap[x, y, z] != 0;
+        if (neighbor == 0) return false;
+
+        // If neighbor is a full block, it culls our face
+        if (neighbor != 3) return true;
+
+        // If neighbor is a slab (ID = 3):
+        // If we are looking UP at a slab above us (faceIndex = 2), its bottom rests on our top, culling it.
+        if (faceIndex == 2) return true;
+
+        // If we are a slab and neighbor is a slab, side faces match perfectly, culling each other.
+        if (currentBlockType == 3 && (faceIndex == 0 || faceIndex == 1 || faceIndex == 4 || faceIndex == 5)) return true;
+
+        // Otherwise (e.g. looking DOWN at a slab below us), don't cull.
+        return false;
     }
 
     void CreateMesh()

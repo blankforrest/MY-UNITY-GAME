@@ -8,13 +8,18 @@ public class PlayerController : MonoBehaviour
     public float runSpeed = 8f;
     public float jumpHeight = 1.5f;
     public float gravity = -20f; 
-    public float mouseSensitivity = 0.1f; // Lowered for new input system delta
+    public float mouseSensitivity = 0.1f; 
+    public float lookSmoothTime = 0.02f; // Smoothing to fix jittery camera
 
     private CharacterController controller;
     private Transform cameraTransform;
     private Vector3 velocity;
     private bool isGrounded;
     private float xRotation = 0f;
+
+    // Smoothing state
+    private Vector2 currentMouseDelta;
+    private Vector2 currentMouseVelocity;
 
     void Start()
     {
@@ -32,22 +37,40 @@ public class PlayerController : MonoBehaviour
         cameraTransform = cam.transform;
         // Do NOT override localPosition — Inspector value is the correct eye height
 
-
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        // Initial cursor state
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
 
     void Update()
     {
         if (cameraTransform == null) return;
 
+        bool isUIOpen = InventoryUI.IsInventoryOpen || ConfirmationWindow.IsOpen;
+
+        // Handle cursor lock state based on UI
+        if (isUIOpen)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+        else
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
         // Block all input when inventory OR confirmation window is open
-        if (InventoryUI.IsInventoryOpen || ConfirmationWindow.IsOpen)
+        if (isUIOpen)
         {
             isGrounded = controller.isGrounded;
             if (isGrounded && velocity.y < 0) velocity.y = -2f;
             velocity.y += gravity * Time.deltaTime;
             controller.Move(velocity * Time.deltaTime);
+            
+            // Reset smoothing to prevent camera snapping when closing UI
+            currentMouseDelta = Vector2.zero;
+            currentMouseVelocity = Vector2.zero;
             return;
         }
 
@@ -61,9 +84,13 @@ public class PlayerController : MonoBehaviour
         // Look
         if (Mouse.current != null)
         {
-            Vector2 mouseDelta = Mouse.current.delta.ReadValue();
-            float mouseX = mouseDelta.x * mouseSensitivity;
-            float mouseY = mouseDelta.y * mouseSensitivity;
+            Vector2 targetMouseDelta = Mouse.current.delta.ReadValue();
+            
+            // Smooth the mouse delta to prevent micro-jitters
+            currentMouseDelta = Vector2.SmoothDamp(currentMouseDelta, targetMouseDelta, ref currentMouseVelocity, lookSmoothTime);
+
+            float mouseX = currentMouseDelta.x * mouseSensitivity;
+            float mouseY = currentMouseDelta.y * mouseSensitivity;
 
             xRotation -= mouseY;
             xRotation = Mathf.Clamp(xRotation, -90f, 90f);
@@ -76,8 +103,10 @@ public class PlayerController : MonoBehaviour
         float x = 0;
         float z = 0;
         bool isRunning = false;
+        
+        bool isDriving = VehicleHUD.Instance != null && VehicleHUD.Instance.IsOpen;
 
-        if (Keyboard.current != null)
+        if (Keyboard.current != null && !isDriving)
         {
             if (Keyboard.current.wKey.isPressed) z += 1;
             if (Keyboard.current.sKey.isPressed) z -= 1;

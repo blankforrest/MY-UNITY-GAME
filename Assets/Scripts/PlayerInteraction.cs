@@ -5,6 +5,7 @@ public class PlayerInteraction : MonoBehaviour
 {
     public float reach = 5f;
     private Camera playerCam;
+    private CharacterController cc;
 
     void Start()
     {
@@ -13,6 +14,7 @@ public class PlayerInteraction : MonoBehaviour
         {
             Debug.LogError("PlayerInteraction needs a Camera as a child object to raycast from.");
         }
+        cc = GetComponent<CharacterController>();
     }
 
     void Update()
@@ -20,8 +22,13 @@ public class PlayerInteraction : MonoBehaviour
         if (playerCam == null) return;
 
         // Don't interact with the world if the pointer is over any UI element
-        if (InventoryUI.IsInventoryOpen) return;
-        if (DragDropManager.IsPointerOverUI()) return;
+        // IMPORTANT: Only block raycasts if the cursor is unlocked! If the cursor is locked, 
+        // we are in FPS mode and the mouse cannot be clicking UI (it would just hit the crosshair).
+        if (Cursor.lockState != CursorLockMode.Locked)
+        {
+            if (InventoryUI.IsInventoryOpen) return;
+            if (DragDropManager.IsPointerOverUI()) return;
+        }
 
 
         // WRENCH PRIORITY: If the player is holding the wrench, WrenchItem.cs handles
@@ -72,6 +79,36 @@ public class PlayerInteraction : MonoBehaviour
                     Mathf.FloorToInt(p.y),
                     Mathf.FloorToInt(p.z));
                 Vector3 voxelCenter = new Vector3(gridPos.x + 0.5f, gridPos.y + 0.5f, gridPos.z + 0.5f);
+
+                // Prevent placing block inside the player
+                Bounds blockBounds = new Bounds(voxelCenter, Vector3.one);
+                if (blockType == 3) // Slab
+                {
+                    blockBounds = new Bounds(new Vector3(gridPos.x + 0.5f, gridPos.y + 0.25f, gridPos.z + 0.5f), new Vector3(1f, 0.5f, 1f));
+                }
+                
+                // Shrink bounds slightly so you can place blocks while standing flush against the grid
+                blockBounds.Expand(-0.1f);
+
+                // Use the physics engine as the source of truth for overlaps
+                Collider[] hitColliders = Physics.OverlapBox(blockBounds.center, blockBounds.extents, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore);
+                bool playerInWay = false;
+                
+                foreach (Collider col in hitColliders)
+                {
+                    // If the collider belongs to the player (either tagged Player or has the CharacterController)
+                    if (col.CompareTag("Player") || col.GetComponentInParent<CharacterController>() != null)
+                    {
+                        playerInWay = true;
+                        break;
+                    }
+                }
+
+                if (playerInWay)
+                {
+                    // Option 2 chosen: Do not give the player the ability to place a block where they are standing.
+                    return; 
+                }
 
                 if (VoxelWorld.Instance != null)
                     VoxelWorld.Instance.ModifyBlock(voxelCenter, blockType);

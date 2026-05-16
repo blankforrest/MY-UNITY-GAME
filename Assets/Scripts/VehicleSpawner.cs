@@ -29,14 +29,54 @@ public class VehicleSpawner : MonoBehaviour
         else { Destroy(this); return; }
     }
 
+    private void Start()
+    {
+        // Give the player the Control Block (ID 10) so they can actually build it!
+        // We delay slightly to ensure Hotbar is initialized.
+        Invoke(nameof(GiveControlBlock), 0.5f);
+    }
+
+    private void GiveControlBlock()
+    {
+        if (Hotbar.Instance != null)
+        {
+            Item controlBlockItem = ScriptableObject.CreateInstance<Item>();
+            controlBlockItem.itemName = "Control Block";
+            controlBlockItem.itemID = 10;
+            controlBlockItem.blockTypeID = 10;
+            controlBlockItem.icon = CreateColorIcon(Color.yellow);
+            Hotbar.Instance.TryAddItem(controlBlockItem, 64);
+
+            Item smallWheel = ScriptableObject.CreateInstance<Item>();
+            smallWheel.itemName = "Small Wheel";
+            smallWheel.itemID = 20;
+            smallWheel.blockTypeID = 20;
+            smallWheel.icon = CreateColorIcon(Color.black);
+            Hotbar.Instance.TryAddItem(smallWheel, 64);
+
+            Item largeWheel = ScriptableObject.CreateInstance<Item>();
+            largeWheel.itemName = "Large Wheel";
+            largeWheel.itemID = 21;
+            largeWheel.blockTypeID = 21;
+            largeWheel.icon = CreateColorIcon(Color.gray);
+            Hotbar.Instance.TryAddItem(largeWheel, 64);
+
+            Debug.Log("[VehicleSpawner] Gave player Control Blocks and Wheels!");
+        }
+    }
+
+    private Sprite CreateColorIcon(Color c)
+    {
+        Texture2D tex = new Texture2D(64, 64);
+        Color[] colors = new Color[64 * 64];
+        for (int i = 0; i < colors.Length; i++) colors[i] = c;
+        tex.SetPixels(colors);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, 64, 64), new Vector2(0.5f, 0.5f));
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Converts <paramref name="blueprint"/> into a vehicle GameObject:
-    ///   - Creates a parent GO with a Rigidbody (mass = blueprint.totalMass)
-    ///   - Instantiates a block prefab (or fallback cube) for each BlockEntry
-    ///   - Removes the original voxels from the world
-    /// </summary>
     public void SpawnVehicle(StructureBlueprint blueprint)
     {
         if (blueprint == null)
@@ -45,12 +85,18 @@ public class VehicleSpawner : MonoBehaviour
             return;
         }
 
-        // ── a. Create the vehicle parent ──────────────────────────────────────
         string vehicleName = $"Vehicle_{System.DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
         GameObject vehicleGO = new GameObject(vehicleName);
+        try 
+        {
+            vehicleGO.tag = "Vehicle";
+        }
+        catch (UnityException)
+        {
+            Debug.LogWarning("[VehicleSpawner] The 'Vehicle' tag is not defined in your project! Please add it in Edit -> Project Settings -> Tags and Layers so the player can properly ride it.");
+        }
         vehicleGO.transform.position = blueprint.worldOrigin;
 
-        // ── b. Instantiate one block per BlockEntry ───────────────────────────
         foreach (BlockEntry entry in blueprint.blocks)
         {
             GameObject prefab = GetPrefabForType(entry.blockTypeID);
@@ -62,11 +108,9 @@ public class VehicleSpawner : MonoBehaviour
             }
             else
             {
-                // Fallback: plain 1×1×1 cube
                 blockGO = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 blockGO.transform.SetParent(vehicleGO.transform, false);
 
-                // Tint fallback cube by block type for easy visual debug
                 var mr = blockGO.GetComponent<MeshRenderer>();
                 if (mr != null)
                     mr.material.color = GetDebugColor(entry.blockTypeID);
@@ -77,13 +121,45 @@ public class VehicleSpawner : MonoBehaviour
             blockGO.transform.localRotation = Quaternion.identity;
             blockGO.transform.localScale    = Vector3.one;
 
-            // Ensure each block has a collider so the vehicle has collision shape.
-            // Parent Rigidbody automatically aggregates all child colliders.
             if (blockGO.GetComponent<Collider>() == null)
-                blockGO.AddComponent<BoxCollider>();
+            {
+                if (entry.blockTypeID == 20 || entry.blockTypeID == 21)
+                {
+                    SphereCollider sc = blockGO.AddComponent<SphereCollider>();
+                    sc.radius = (entry.blockTypeID == 20) ? 0.5f : 1.0f;
+                }
+                else
+                {
+                    blockGO.AddComponent<BoxCollider>();
+                }
+            }
 
-            // Child blocks must NOT have their own Rigidbody —
-            // remove any that might have come from a prefab.
+            if (entry.blockTypeID == 10)
+            {
+                blockGO.AddComponent<ControlBlock>();
+            }
+            else if (entry.blockTypeID == 20 || entry.blockTypeID == 21)
+            {
+                WheelBlock wb = blockGO.AddComponent<WheelBlock>();
+                wb.wheelSize = (entry.blockTypeID == 20) ? WheelSize.Small : WheelSize.Large;
+                wb.forceContribution = (entry.blockTypeID == 20) ? 1f : 2.5f;
+
+                MeshFilter mf = blockGO.GetComponent<MeshFilter>();
+                MeshRenderer mr = blockGO.GetComponent<MeshRenderer>();
+                if (mf != null && mr != null)
+                {
+                    GameObject childVisual = new GameObject("WheelVisual");
+                    childVisual.transform.SetParent(blockGO.transform, false);
+                    childVisual.AddComponent<MeshFilter>().sharedMesh = mf.sharedMesh;
+                    childVisual.AddComponent<MeshRenderer>().sharedMaterials = mr.sharedMaterials;
+                    
+                    Destroy(mf);
+                    Destroy(mr);
+                    
+                    wb.wheelMesh = childVisual.transform;
+                }
+            }
+
             Rigidbody childRb = blockGO.GetComponent<Rigidbody>();
             if (childRb != null) Destroy(childRb);
         }
