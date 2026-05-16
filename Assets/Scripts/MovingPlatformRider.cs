@@ -11,8 +11,9 @@ public class MovingPlatformRider : MonoBehaviour
     private CharacterController controller;
     private Rigidbody currentPlatform;
 
-    // Rotation tracking
-    private float lastPlatformYRot;
+    // Exact Delta Tracking
+    private Vector3 lastPlatformPos;
+    private Quaternion lastPlatformRot;
 
     // Jump state
     private float jumpTimer = 0f;
@@ -33,12 +34,11 @@ public class MovingPlatformRider : MonoBehaviour
             jumpTimer -= Time.deltaTime;
         }
 
-        // 5. JUMP HANDLING update - Detect jump
+        // Detect jump
         if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
         {
             jumpTimer = jumpIgnoreDuration;
             
-            // Store the vehicle's velocity at the moment of jumping
             if (currentPlatform != null)
             {
                 jumpLaunchVelocity = currentPlatform.linearVelocity;
@@ -114,34 +114,51 @@ public class MovingPlatformRider : MonoBehaviour
             }
         }
 
-        // 2. PLATFORM FOLLOW (Velocity-based)
+        // 2. PLATFORM FOLLOW (Exact Delta Tracking)
         if (currentPlatform != null)
         {
             if (jumpTimer > 0f)
             {
-                // Apply jump launch velocity (horizontal only)
+                // Apply jump launch velocity (horizontal only) when jumping off
                 Vector3 horizontalVelocity = new Vector3(jumpLaunchVelocity.x, 0f, jumpLaunchVelocity.z);
                 transform.position += horizontalVelocity * Time.fixedDeltaTime;
                 
-                // Keep rotation tracking updated so we don't snap when landing
-                lastPlatformYRot = currentPlatform.transform.eulerAngles.y;
+                // Keep history updated so we don't snap when landing back on it
+                lastPlatformPos = currentPlatform.transform.position;
+                lastPlatformRot = currentPlatform.transform.rotation;
             }
             else
             {
-                // Normal velocity follow
-                Vector3 platformVelocity = currentPlatform.linearVelocity;
-                transform.position += platformVelocity * Time.fixedDeltaTime;
-
-                // 3. ROTATION FOLLOW
-                float currentYRot = currentPlatform.transform.eulerAngles.y;
-                float deltaY = Mathf.DeltaAngle(lastPlatformYRot, currentYRot);
+                // Calculate exact translation delta
+                Vector3 platformDeltaPos = currentPlatform.transform.position - lastPlatformPos;
                 
+                // Calculate exact rotation delta
+                Quaternion deltaRot = currentPlatform.transform.rotation * Quaternion.Inverse(lastPlatformRot);
+                
+                // Calculate how the rotation orbits the player around the platform's center
+                Vector3 playerOffsetFromPlatform = transform.position - lastPlatformPos;
+                Vector3 rotatedOffset = deltaRot * playerOffsetFromPlatform;
+                Vector3 rotationOrbitDelta = rotatedOffset - playerOffsetFromPlatform;
+                
+                // Temporarily disable character controller to prevent collision fighting while shifting
+                bool wasEnabled = controller.enabled;
+                controller.enabled = false;
+
+                // Apply EXACT movement (translation + orbital rotation)
+                transform.position += platformDeltaPos + rotationOrbitDelta;
+
+                // Extract only the Y-axis rotation to apply to the player's facing direction
+                float deltaY = deltaRot.eulerAngles.y;
                 if (Mathf.Abs(deltaY) > 0.001f)
                 {
                     transform.Rotate(0f, deltaY, 0f);
                 }
-                
-                lastPlatformYRot = currentPlatform.transform.eulerAngles.y;
+
+                controller.enabled = wasEnabled;
+
+                // Update history
+                lastPlatformPos = currentPlatform.transform.position;
+                lastPlatformRot = currentPlatform.transform.rotation;
 
                 // Logging when fast
                 if (currentPlatform.linearVelocity.magnitude > 3f)
@@ -149,7 +166,7 @@ public class MovingPlatformRider : MonoBehaviour
                     if (Time.time > nextLogTime)
                     {
                         Debug.Log($"Riding vehicle [velocity: {currentPlatform.linearVelocity.magnitude:F2}]");
-                        nextLogTime = Time.time + 0.5f; // Throttled to 2x per second to prevent console flood
+                        nextLogTime = Time.time + 0.5f;
                     }
                 }
             }
@@ -164,7 +181,8 @@ public class MovingPlatformRider : MonoBehaviour
             {
                 Debug.Log($"Riding vehicle: {newPlatform.gameObject.name}");
                 currentPlatform = newPlatform;
-                lastPlatformYRot = currentPlatform.transform.eulerAngles.y;
+                lastPlatformPos = currentPlatform.transform.position;
+                lastPlatformRot = currentPlatform.transform.rotation;
             }
             else
             {
