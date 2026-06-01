@@ -99,21 +99,29 @@ public class VehicleSpawner : MonoBehaviour
 
         foreach (BlockEntry entry in blueprint.blocks)
         {
-            GameObject prefab = GetPrefabForType(entry.blockTypeID);
+            bool isWheel = (entry.blockTypeID == 20 || entry.blockTypeID == 21);
 
             GameObject blockGO;
-            if (prefab != null)
+            if (isWheel)
             {
-                blockGO = Instantiate(prefab, vehicleGO.transform);
+                // Plain empty object for wheels — no MeshFilter/MeshRenderer to conflict with
+                blockGO = new GameObject($"WheelBlock_{entry.blockTypeID}");
+                blockGO.transform.SetParent(vehicleGO.transform, false);
             }
             else
             {
-                blockGO = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                blockGO.transform.SetParent(vehicleGO.transform, false);
-
-                var mr = blockGO.GetComponent<MeshRenderer>();
-                if (mr != null)
-                    mr.material.color = GetDebugColor(entry.blockTypeID);
+                GameObject prefab = GetPrefabForType(entry.blockTypeID);
+                if (prefab != null)
+                {
+                    blockGO = Instantiate(prefab, vehicleGO.transform);
+                }
+                else
+                {
+                    blockGO = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    blockGO.transform.SetParent(vehicleGO.transform, false);
+                    var mr = blockGO.GetComponent<MeshRenderer>();
+                    if (mr != null) mr.material.color = GetDebugColor(entry.blockTypeID);
+                }
             }
 
             blockGO.name = $"Block_{entry.blockTypeID}_{entry.localPosition}";
@@ -121,43 +129,40 @@ public class VehicleSpawner : MonoBehaviour
             blockGO.transform.localRotation = Quaternion.identity;
             blockGO.transform.localScale    = Vector3.one;
 
-            if (blockGO.GetComponent<Collider>() == null)
+            // Replace existing collider on wheel blocks
+            if (isWheel)
             {
-                if (entry.blockTypeID == 20 || entry.blockTypeID == 21)
-                {
-                    SphereCollider sc = blockGO.AddComponent<SphereCollider>();
-                    sc.radius = (entry.blockTypeID == 20) ? 0.5f : 1.0f;
-                }
-                else
-                {
-                    blockGO.AddComponent<BoxCollider>();
-                }
+                // Remove any collider the primitive added (BoxCollider from Cube)
+                Collider existing = blockGO.GetComponent<Collider>();
+                if (existing != null) Destroy(existing);
+
+                SphereCollider sc = blockGO.AddComponent<SphereCollider>();
+                sc.radius = (entry.blockTypeID == 20) ? 0.55f : 1.1f;
+            }
+            else if (blockGO.GetComponent<Collider>() == null)
+            {
+                blockGO.AddComponent<BoxCollider>();
             }
 
             if (entry.blockTypeID == 10)
             {
                 blockGO.AddComponent<ControlBlock>();
             }
-            else if (entry.blockTypeID == 20 || entry.blockTypeID == 21)
+            else if (isWheel)
             {
-                WheelBlock wb = blockGO.AddComponent<WheelBlock>();
-                wb.wheelSize = (entry.blockTypeID == 20) ? WheelSize.Small : WheelSize.Large;
-                wb.forceContribution = (entry.blockTypeID == 20) ? 1f : 2.5f;
+                bool isLarge  = entry.blockTypeID == 21;
+                float radius  = isLarge ? 1.1f : 0.55f;
+                float wWidth  = 1.0f;
 
-                MeshFilter mf = blockGO.GetComponent<MeshFilter>();
-                MeshRenderer mr = blockGO.GetComponent<MeshRenderer>();
-                if (mf != null && mr != null)
-                {
-                    GameObject childVisual = new GameObject("WheelVisual");
-                    childVisual.transform.SetParent(blockGO.transform, false);
-                    childVisual.AddComponent<MeshFilter>().sharedMesh = mf.sharedMesh;
-                    childVisual.AddComponent<MeshRenderer>().sharedMaterials = mr.sharedMaterials;
-                    
-                    Destroy(mf);
-                    Destroy(mr);
-                    
-                    wb.wheelMesh = childVisual.transform;
-                }
+                // Build procedural 3D wheel on a child object
+                GameObject wheelVisual = new GameObject("WheelVisual");
+                wheelVisual.transform.SetParent(blockGO.transform, false);
+                WheelMeshBuilder.Apply(wheelVisual, radius, wWidth);
+
+                WheelBlock wb       = blockGO.AddComponent<WheelBlock>();
+                wb.wheelSize        = isLarge ? WheelSize.Large : WheelSize.Small;
+                wb.forceContribution= isLarge ? 2.5f : 1f;
+                wb.wheelMesh        = wheelVisual.transform;
             }
 
             Rigidbody childRb = blockGO.GetComponent<Rigidbody>();
@@ -172,14 +177,20 @@ public class VehicleSpawner : MonoBehaviour
         rb.useGravity     = true;
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
-        // ── d. Add VehicleController stub ─────────────────────────────────────
+        // ── d. Add VehicleController ──────────────────────────────────────────
         vehicleGO.AddComponent<VehicleController>();
 
-        // ── e. Remove original voxels from the world ──────────────────────────
+        // Warn if no Control Block present (E key won't work without one)
+        bool hasControlBlock = blueprint.blocks.Exists(b => b.blockTypeID == 10);
+        if (!hasControlBlock)
+            Debug.LogWarning("[VehicleSpawner] No Control Block (ID 10) found! " +
+                             "Include the yellow Control Block in your structure so you can press E to drive.");
+
+        // ── e. Remove original voxels ─────────────────────────────────────────
         RemoveSourceBlocks(blueprint);
 
         Debug.Log($"[VehicleSpawner] Vehicle spawned with {blueprint.blocks.Count} blocks " +
-                  $"at {blueprint.worldOrigin}.");
+                  $"at {blueprint.worldOrigin}. HasControlBlock={hasControlBlock}");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -54,7 +54,7 @@ public class WheelBlock : MonoBehaviour
         
         // The block itself is 1 unit tall. So the distance from center to bottom is 0.5f.
         // We must add 0.5f to the suspension distance so the raycast actually extends BELOW the physical wheel block!
-        float blockHalfHeight = (wheelSize == WheelSize.Small) ? 0.5f : 1.0f;
+        float blockHalfHeight = (wheelSize == WheelSize.Small) ? 0.55f : 1.1f;
         float raycastLength = blockHalfHeight + suspensionDistance;
         float sphereRadius = 0.3f; // Proactive detection radius!
         
@@ -96,19 +96,25 @@ public class WheelBlock : MonoBehaviour
         {
             float averageCompression = totalCompression / hitCount;
 
-            Vector3 worldVelocity = rb.GetPointVelocity(transform.position);
+            // Clamp compression so step-edge spikes can't launch the vehicle
+            averageCompression = Mathf.Min(averageCompression, suspensionDistance * 0.75f);
+
+            Vector3 worldVelocity  = rb.GetPointVelocity(transform.position);
             float verticalVelocity = Vector3.Dot(worldVelocity, transform.up);
 
-            // NORMALIZE the 3000f arbitrary value so it perfectly balances the actual mass of the vehicle.
-            // 3000f = 100% strength. This maps it to a ~2G hover acceleration, which is incredibly smooth.
-            float sensibleStrength = (suspensionStrength / 3000f) * 100f * rb.mass / vehicleController.totalWheelForce;
-            float sensibleDamping  = (suspensionDamping / 200f)   * 15f  * rb.mass / vehicleController.totalWheelForce;
+            float sensibleStrength = (suspensionStrength / 3000f) * 20f * rb.mass
+                                     / Mathf.Max(0.001f, vehicleController.totalWheelForce);
+            float sensibleDamping  = (suspensionDamping  / 200f)  * 12f  * rb.mass
+                                     / Mathf.Max(0.001f, vehicleController.totalWheelForce);
 
-            Vector3 suspensionForce = transform.up * (averageCompression * sensibleStrength) 
-                                    - transform.up * (verticalVelocity * sensibleDamping);
+            // Extra damping when moving upward (hitting a bump) — absorbs the spike
+            float speedBoostDamping = Mathf.Max(0f, verticalVelocity) * 2.5f;
+
+            Vector3 suspensionForce = transform.up * (averageCompression * sensibleStrength)
+                                    - transform.up * ((verticalVelocity * sensibleDamping) + speedBoostDamping * rb.mass / vehicleController.totalWheelForce);
             rb.AddForceAtPosition(suspensionForce, transform.position);
 
-            // Apply lateral friction
+            // Lateral friction
             float slipVelocity = Vector3.Dot(worldVelocity, transform.right);
             Vector3 frictionForce = -transform.right * slipVelocity * frictionCoefficient * rb.mass;
             rb.AddForceAtPosition(frictionForce, transform.position);

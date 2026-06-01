@@ -11,6 +11,7 @@ public class VehicleHUD : MonoBehaviour
     public bool IsOpen { get; private set; }
     private VehicleController currentVC;
     private PlayerController playerController;
+    private int justOpenedFrame = -1; // guard against same-frame open+close
 
     private GameObject hudContainer;
     private Text powerText;
@@ -116,7 +117,8 @@ public class VehicleHUD : MonoBehaviour
         currentVC = vc;
         currentVC.isBeingControlled = true;
         IsOpen = true;
-        hudContainer.transform.parent.gameObject.SetActive(true); // Enable canvas
+        justOpenedFrame = Time.frameCount; // don't close on the same frame we opened
+        hudContainer.transform.parent.gameObject.SetActive(true);
 
         Debug.Log("Vehicle control started");
     }
@@ -140,14 +142,9 @@ public class VehicleHUD : MonoBehaviour
     {
         if (!IsOpen || currentVC == null) return;
 
-        // Check for interact key to also close the HUD
-        bool interactPressed = false;
-        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
-        {
-            interactPressed = true;
-        }
-
-        if (interactPressed)
+        // E key closes HUD — but skip the frame it was opened (same-frame open+close bug)
+        if (Time.frameCount > justOpenedFrame &&
+            Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
         {
             CloseHUD();
             return;

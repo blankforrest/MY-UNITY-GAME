@@ -191,15 +191,14 @@ public class VoxelWorld : MonoBehaviour
         int ly = Mathf.FloorToInt(local.y);
         int lz = Mathf.FloorToInt(local.z);
 
-        // Spawn drop when breaking
+        // Spawn drop when breaking — skip vehicle/special blocks (ID >= 10)
         if (blockID == 0)
         {
             byte existing = chunk.GetVoxel(lx, ly, lz);
-            if (existing != 0 && blockDrops != null && existing < blockDrops.Length)
+            if (existing != 0 && existing < 10 && blockDrops != null && existing < blockDrops.Length)
             {
                 Item drop = blockDrops[existing];
                 if (drop != null) DroppedItem.Spawn(drop, 1, pos, existing);
-
             }
         }
 

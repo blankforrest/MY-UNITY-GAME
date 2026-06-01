@@ -54,75 +54,71 @@ public class VehicleController : MonoBehaviour
         if (_rb == null) return;
 
         // 1. BOUNDS & CENTER OF MASS
+        //    Use ALL collider types (box + sphere) so wheel SphereColliders are included.
         Vector3 centerSum = Vector3.zero;
         int childCount = transform.childCount;
         float minBoundY = float.MaxValue;
-        float maxBoundY = float.MinValue;
 
-        BoxCollider[] colliders = GetComponentsInChildren<BoxCollider>();
+        Collider[] allColliders = GetComponentsInChildren<Collider>();
 
         for (int i = 0; i < childCount; i++)
-        {
             centerSum += transform.GetChild(i).localPosition;
-        }
 
-        foreach (var col in colliders)
+        foreach (var col in allColliders)
         {
-            Vector3 c = col.transform.localPosition + col.center;
-            Vector3 s = col.size;
-            Vector3 scl = col.transform.localScale;
-
-            float top = c.y + (s.y * scl.y) / 2f;
-            float bottom = c.y - (s.y * scl.y) / 2f;
-            
-            if (top > maxBoundY) maxBoundY = top;
-            if (bottom < minBoundY) minBoundY = bottom;
+            Bounds b = col.bounds;
+            // bounds are in world space; convert bottom to local Y
+            float localBottom = transform.InverseTransformPoint(b.min).y;
+            if (localBottom < minBoundY) minBoundY = localBottom;
         }
+
+        // Safety: if no colliders found keep CoM at a reasonable low point
+        if (minBoundY == float.MaxValue) minBoundY = -0.5f;
 
         if (childCount > 0)
         {
             Vector3 averageCenter = centerSum / childCount;
-
-            // Make the center of mass EXTREMELY low (1.5 units below the absolute bottom of the vehicle)
-            // This acts like a Weeble-Wobble toy, making it virtually impossible to permanently flip over.
-            averageCenter.y = minBoundY - 1.5f;
+            averageCenter.y = minBoundY - 0.5f; // low CoM for stability
             _rb.centerOfMass = averageCenter;
         }
 
         // Setup Physics
         _rb.mass = Mathf.Max(10f, _rb.mass);
-        _rb.linearDamping = 0.5f; 
+        _rb.linearDamping = 0.5f;
         _rb.angularDamping = 2f;
         _rb.sleepThreshold = 0.0f;
-        _rb.maxAngularVelocity = 3f; // Limit insane spinning!
+        _rb.maxAngularVelocity = 3f;
 
-        // Zero friction so blocks never catch or jam on terrain seams
+        // Zero friction on all colliders so blocks never snag on terrain seams
         PhysicsMaterial glideMaterial = new PhysicsMaterial("GlideMaterial")
         {
             dynamicFriction = 0.0f,
-            staticFriction = 0.0f,
-            bounciness = 0.0f,
+            staticFriction  = 0.0f,
+            bounciness      = 0.0f,
             frictionCombine = PhysicsMaterialCombine.Minimum,
-            bounceCombine = PhysicsMaterialCombine.Minimum
+            bounceCombine   = PhysicsMaterialCombine.Minimum
         };
 
-        foreach (var col in colliders)
-        {
+        foreach (var col in allColliders)
             col.material = glideMaterial;
-        }
     }
 
     private void FixedUpdate()
     {
         if (_rb == null) return;
 
+        // --- DOWNFORCE: keeps wheels on ground at high speed ---
+        float speed = _rb.linearVelocity.magnitude;
+        _rb.AddForce(-transform.up * speed * speed * 0.8f * _rb.mass * Time.fixedDeltaTime,
+                     ForceMode.Force);
+
         // --- ANTI-FLIP GYROSCOPE ---
-        // Automatically rights the vehicle if it tilts too much
+        // Only fires at significant tilt — avoids fighting normal terrain bumps
         float angle = Vector3.Angle(Vector3.up, transform.up);
-        if (angle > 5f)
+        if (angle > 20f)
         {
             Vector3 cross = Vector3.Cross(transform.up, Vector3.up);
-            _rb.AddTorque(cross * angle * _rb.mass * 3f);
+            _rb.AddTorque(cross * angle * _rb.mass * 2f);
         }
 
         // 1. UPDATE GROUNDED WHEELS
@@ -177,21 +173,12 @@ public class VehicleController : MonoBehaviour
         if (backward && currentForwardSpeed > -10f) 
             _rb.AddForce(-transform.forward * actualForce);
 
-        // Braking logic: if not pressing W or S, smoothly decay forward momentum
+        // Braking: apply opposing force instead of directly setting velocity
         if (!forward && !backward)
         {
             Vector3 localVel = transform.InverseTransformDirection(_rb.linearVelocity);
-            
-            // Smoothly lerp forward/backward velocity to 0 (reduces by ~20% every fixed frame)
-            localVel.z = Mathf.Lerp(localVel.z, 0f, 10f * Time.fixedDeltaTime);
-            
-            // If it's extremely slow, snap to 0 to stop completely without micro-drifting
-            if (Mathf.Abs(localVel.z) < 0.1f) 
-            {
-                localVel.z = 0f;
-            }
-
-            _rb.linearVelocity = transform.TransformDirection(localVel);
+            float brakeForce = -localVel.z * _rb.mass * 8f;
+            _rb.AddForce(transform.forward * brakeForce);
         }
 
         // Steer
