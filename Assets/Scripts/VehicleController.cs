@@ -20,8 +20,8 @@ public class VehicleController : MonoBehaviour
 
     [Header("Driving Settings")]
     public bool isBeingControlled = false;
-    public float bruteStrengthForce = 800f;
-    public float bruteStrengthTorque = 400f;
+    public float bruteStrengthForce  = 800f;
+    public float bruteStrengthTorque = 800f;  // doubled for faster turning
 
     private Rigidbody _rb;
     public Vector3 CurrentVelocity => _rb != null ? _rb.linearVelocity : Vector3.zero;
@@ -82,12 +82,12 @@ public class VehicleController : MonoBehaviour
             _rb.centerOfMass = averageCenter;
         }
 
-        // Setup Physics
-        _rb.mass = Mathf.Max(10f, _rb.mass);
-        _rb.linearDamping = 0.5f;
-        _rb.angularDamping = 2f;
-        _rb.sleepThreshold = 0.0f;
-        _rb.maxAngularVelocity = 3f;
+        // Heavy mech physics — Iron Giant feel
+        _rb.mass             = Mathf.Max(50f, _rb.mass * 5f); // much heavier
+        _rb.linearDamping    = 1.0f;   // sluggish, weighty
+        _rb.angularDamping   = 3.5f;  // reduced slightly so turning input is more responsive
+        _rb.sleepThreshold   = 0.0f;
+        _rb.maxAngularVelocity = 1.0f; // nearly impossible to tip permanently
 
         // Zero friction on all colliders so blocks never snag on terrain seams
         PhysicsMaterial glideMaterial = new PhysicsMaterial("GlideMaterial")
@@ -107,35 +107,34 @@ public class VehicleController : MonoBehaviour
     {
         if (_rb == null) return;
 
-        // --- DOWNFORCE: keeps wheels on ground at high speed ---
+        // --- DOWNFORCE: keeps wheels on ground at speed ---
         float speed = _rb.linearVelocity.magnitude;
-        _rb.AddForce(-transform.up * speed * speed * 0.8f * _rb.mass * Time.fixedDeltaTime,
+        _rb.AddForce(-transform.up * speed * speed * 2.5f * _rb.mass * Time.fixedDeltaTime,
                      ForceMode.Force);
 
+        // --- EXTRA GRAVITY WHEN AIRBORNE: heavy stomp feel ---
+        // Count grounded wheels before the loop below
+        int groundedNow = 0;
+        foreach (var w in registeredWheels)
+            if (w.isGrounded) groundedNow++;
+
+        if (registeredWheels.Count > 0 && groundedNow == 0)
+        {
+            // 3G extra downward force — mech falls fast like something very heavy
+            _rb.AddForce(Vector3.down * _rb.mass * 29.4f, ForceMode.Force);
+        }
+
         // --- ANTI-FLIP GYROSCOPE ---
-        // Only fires at significant tilt — avoids fighting normal terrain bumps
         float angle = Vector3.Angle(Vector3.up, transform.up);
         if (angle > 20f)
         {
             Vector3 cross = Vector3.Cross(transform.up, Vector3.up);
-            _rb.AddTorque(cross * angle * _rb.mass * 2f);
+            _rb.AddTorque(cross * angle * _rb.mass * 3f); // stronger for heavy mech
         }
 
-        // 1. UPDATE GROUNDED WHEELS
-        groundedWheelCount = 0;
-        foreach (var w in registeredWheels)
-        {
-            if (w.isGrounded) groundedWheelCount++;
-        }
-
-        if (groundedWheelCount > 0 && !wasGrounded)
-        {
-            wasGrounded = true;
-        }
-        else if (groundedWheelCount == 0 && wasGrounded)
-        {
-            wasGrounded = false;
-        }
+        // Sync grounded wheel count (already counted above)
+        groundedWheelCount = groundedNow;
+        wasGrounded = groundedWheelCount > 0;
 
         if (!isBeingControlled) return;
 
@@ -161,8 +160,8 @@ public class VehicleController : MonoBehaviour
 
         float forceMultiplier = registeredWheels.Count > 0 ? totalWheelForce : 1f;
 
-        float actualForce = bruteStrengthForce * forceMultiplier;
-        float actualTorque = bruteStrengthTorque * forceMultiplier * 0.5f;
+        float actualForce  = bruteStrengthForce  * forceMultiplier;
+        float actualTorque = bruteStrengthTorque  * forceMultiplier; // no 0.5 penalty
 
         float currentForwardSpeed = Vector3.Dot(_rb.linearVelocity, transform.forward);
 

@@ -122,6 +122,12 @@ public class VehicleSpawner : MonoBehaviour
                     var mr = blockGO.GetComponent<MeshRenderer>();
                     if (mr != null) mr.material.color = GetDebugColor(entry.blockTypeID);
                 }
+
+                // Apply correct procedural texture and face UVs for building blocks (ID < 10)
+                if (entry.blockTypeID < 10)
+                {
+                    ApplyVoxelTexture(blockGO, (byte)entry.blockTypeID);
+                }
             }
 
             blockGO.name = $"Block_{entry.blockTypeID}_{entry.localPosition}";
@@ -191,6 +197,64 @@ public class VehicleSpawner : MonoBehaviour
 
         Debug.Log($"[VehicleSpawner] Vehicle spawned with {blueprint.blocks.Count} blocks " +
                   $"at {blueprint.worldOrigin}. HasControlBlock={hasControlBlock}");
+    }
+
+    private void ApplyVoxelTexture(GameObject go, byte blockTypeID)
+    {
+        MeshFilter mf = go.GetComponentInChildren<MeshFilter>();
+        MeshRenderer mr = go.GetComponentInChildren<MeshRenderer>();
+
+        if (mf != null && mr != null && VoxelWorld.Instance != null)
+        {
+            mf.sharedMesh = CreateVoxelMesh(blockTypeID);
+            mr.sharedMaterial = VoxelWorld.Instance.chunkMaterial;
+        }
+    }
+
+    private static Mesh CreateVoxelMesh(byte blockType)
+    {
+        Mesh mesh = new Mesh();
+        mesh.name = "VoxelCube_" + blockType;
+
+        List<Vector3> vertices = new List<Vector3>();
+        List<int> triangles = new List<int>();
+        List<Vector2> uvs = new List<Vector2>();
+
+        int vertexIndex = 0;
+
+        // 6 faces
+        for (int p = 0; p < 6; p++)
+        {
+            // Vertices for this face
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 vert = VoxelData.voxelVerts[VoxelData.voxelTris[p, i]];
+                vert -= new Vector3(0.5f, 0.5f, 0.5f); // Center pivot
+                vertices.Add(vert);
+            }
+
+            // UVs for this face based on blockType
+            Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, blockType);
+            uvs.AddRange(faceUVs);
+
+            // Triangles
+            triangles.Add(vertexIndex);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 3);
+
+            vertexIndex += 4;
+        }
+
+        mesh.vertices = vertices.ToArray();
+        mesh.triangles = triangles.ToArray();
+        mesh.uv = uvs.ToArray();
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        return mesh;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -195,9 +195,40 @@ public class VoxelWorld : MonoBehaviour
         if (blockID == 0)
         {
             byte existing = chunk.GetVoxel(lx, ly, lz);
-            if (existing != 0 && existing < 10 && blockDrops != null && existing < blockDrops.Length)
+            if (existing != 0 && existing < 10)
             {
-                Item drop = blockDrops[existing];
+                Item drop = null;
+                if (blockDrops != null && existing < blockDrops.Length)
+                {
+                    drop = blockDrops[existing];
+                }
+
+                // Robust fallback for Wood (1), Plank (2), Stone (3)
+                if (drop == null)
+                {
+                    if (existing == 1)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Wood";
+                        drop.blockTypeID = 1;
+                        drop.icon = Resources.Load<Sprite>("Sprites/wood_block");
+                    }
+                    else if (existing == 2)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Plank";
+                        drop.blockTypeID = 2;
+                        drop.icon = Resources.Load<Sprite>("Sprites/plank_block");
+                    }
+                    else if (existing == 3)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Stone";
+                        drop.blockTypeID = 3;
+                        drop.icon = Resources.Load<Sprite>("Sprites/stone_block");
+                    }
+                }
+
                 if (drop != null) DroppedItem.Spawn(drop, 1, pos, existing);
             }
         }

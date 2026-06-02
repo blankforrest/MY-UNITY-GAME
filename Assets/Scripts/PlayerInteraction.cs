@@ -82,7 +82,7 @@ public class PlayerInteraction : MonoBehaviour
 
                 // Prevent placing block inside the player
                 Bounds blockBounds = new Bounds(voxelCenter, Vector3.one);
-                if (blockType == 3) // Slab
+                if (blockType == 6) // Slab
                 {
                     blockBounds = new Bounds(new Vector3(gridPos.x + 0.5f, gridPos.y + 0.25f, gridPos.z + 0.5f), new Vector3(1f, 0.5f, 1f));
                 }

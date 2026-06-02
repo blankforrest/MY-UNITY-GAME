@@ -13,4 +13,6 @@ MonoBehaviour:
   m_Name: GrassBlock
   m_EditorClassIdentifier: Assembly-CSharp::Item
   itemName: Grass Block
-  icon: {fileID: 21300000, guid: 24f300fdfb25f204eaf590f77dffdfd4, type: 3}
+  icon: {fileID: 21300000, guid: 71084c5679bbcb748b4598de961e83d0, type: 3}
+  itemID: 0
+  blockTypeID: 0

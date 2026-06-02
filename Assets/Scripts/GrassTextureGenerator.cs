@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 4;  // top, side, bottom, stone
+    public const int TILE_COUNT = 7;  // grass top, grass side, dirt, stone, wood top, wood side, plank
 
     public static Texture2D Create()
     {
@@ -30,7 +30,10 @@ public static class GrassTextureGenerator
                 px[y * w + x] = tile == 0 ? GrassTop(lx, y)
                               : tile == 1 ? GrassSide(lx, y)
                               : tile == 2 ? Dirt(lx, y)
-                                          : Stone(lx, y);
+                              : tile == 3 ? Stone(lx, y)
+                              : tile == 4 ? WoodTop(lx, y)
+                              : tile == 5 ? WoodSide(lx, y)
+                                          : Plank(lx, y);
             }
         }
 
@@ -101,19 +104,62 @@ public static class GrassTextureGenerator
         return new Color(0.52f + t - cd, 0.52f + t - cd, 0.54f + t - cd);
     }
 
+    static Color WoodTop(int x, int y)
+    {
+        float dx = x - 7.5f;
+        float dy = y - 7.5f;
+        float dist = Mathf.Sqrt(dx * dx + dy * dy);
+
+        bool isRing = ((int)dist % 3 == 0);
+        if (isRing)
+            return new Color(0.40f, 0.28f, 0.15f); // darker brown ring
+        else
+            return new Color(0.60f, 0.46f, 0.30f); // lighter wood body
+    }
+
+    static Color WoodSide(int x, int y)
+    {
+        float n = Mathf.PerlinNoise(x * 0.9f, y * 0.1f);
+        float stripe = Mathf.PerlinNoise(x * 1.5f, 0.5f);
+        bool isDark = stripe > 0.6f || (x % 4 == 0 && n > 0.4f);
+
+        if (isDark)
+            return new Color(0.28f, 0.18f, 0.08f); // dark brown bark
+        else
+            return new Color(0.38f, 0.26f, 0.14f); // lighter bark
+    }
+
+    static Color Plank(int x, int y)
+    {
+        bool isLine = (y % 4 == 0);
+        bool isSeam = (y / 4 % 2 == 0) ? (x == 4 || x == 12) : (x == 0 || x == 8);
+
+        if (isLine || isSeam)
+            return new Color(0.48f, 0.35f, 0.18f); // dark seams
+        else
+        {
+            float n = Mathf.PerlinNoise(x * 0.5f, y * 0.5f) * 0.06f;
+            return new Color(0.72f + n, 0.58f + n * 0.8f, 0.37f + n * 0.5f); // nice warm plank color
+        }
+    }
+
     // ── UV helpers ────────────────────────────────────────────────────────────
 
     /// <summary>Returns the 4 atlas UVs for a given face and block type.</summary>
     /// <param name="face">0=back,1=front,2=top,3=bottom,4=left,5=right</param>
-    /// <param name="blockType">1=Grass, 2=Dirt, 3=Stone</param>
+    /// <param name="blockType">1=Wood, 2=Plank, 3=Stone, 4=Grass, 5=Dirt, 6=Grass Slab</param>
     public static Vector2[] GetBlockUVs(int face, byte blockType)
     {
         int tile;
-        if (blockType == 2)      // Dirt: all faces dirt
-            tile = 2;
+        if (blockType == 1)      // Wood: top/bottom uses WoodTop, sides use WoodSide
+            tile = (face == 2 || face == 3) ? 4 : 5;
+        else if (blockType == 2) // Plank: all faces planks
+            tile = 6;
         else if (blockType == 3) // Stone: all faces stone
             tile = 3;
-        else                     // Grass (blockType == 1)
+        else if (blockType == 5) // Dirt: all faces dirt
+            tile = 2;
+        else                     // Grass (blockType == 4 or 6)
             tile = (face == 2) ? 0   // top    → grass top
                  : (face == 3) ? 2   // bottom → dirt
                  :               1;  // sides  → grass side
@@ -129,6 +175,7 @@ public static class GrassTextureGenerator
             new Vector2(u1, 1f),
         };
     }
+
 
     // Keep old name as alias so existing callers don't break
     public static Vector2[] GetGrassUVs(int face) => GetBlockUVs(face, 1);

@@ -14,3 +14,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Item
   itemName: Iron bar
   icon: {fileID: 21300000, guid: c585895127e532544b0e15e0877e6cbc, type: 3}
+  itemID: 0
+  blockTypeID: 0

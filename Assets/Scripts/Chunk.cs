@@ -58,9 +58,9 @@ public class Chunk : MonoBehaviour
                     bool isHalfBlock = (exactHeight - floorY) < 0.5f;
 
                     if      (y > floorY)         voxelMap[x, y, z] = 0; // Air
-                    else if (y == floorY)        voxelMap[x, y, z] = isHalfBlock ? (byte)3 : (byte)1; // Grass Slab (3) or Grass Full (1)
-                    else if (y >= floorY - 4)    voxelMap[x, y, z] = 2; // Dirt (3 layers)
-                    else                         voxelMap[x, y, z] = 2; // Dirt (deep)
+                    else if (y == floorY)        voxelMap[x, y, z] = isHalfBlock ? (byte)6 : (byte)4; // Grass Slab (6) or Grass Full (4)
+                    else if (y >= floorY - 4)    voxelMap[x, y, z] = 5; // Dirt (3 layers)
+                    else                         voxelMap[x, y, z] = 5; // Dirt (deep)
                 }
             }
         }
@@ -118,8 +118,8 @@ public class Chunk : MonoBehaviour
 
     void UpdateVoxelMeshData(Vector3 pos, byte blockType)
     {
-        bool isSlab = (blockType == 3);
-        byte uvBlockType = isSlab ? (byte)1 : blockType; // Use grass texture for slab
+        bool isSlab = (blockType == 6);
+        byte uvBlockType = isSlab ? (byte)4 : blockType; // Use grass texture for slab
 
         for (int p = 0; p < 6; p++)
         {
@@ -179,14 +179,14 @@ public class Chunk : MonoBehaviour
         if (neighbor == 0) return false;
 
         // If neighbor is a full block, it culls our face
-        if (neighbor != 3) return true;
+        if (neighbor != 6) return true;
 
-        // If neighbor is a slab (ID = 3):
+        // If neighbor is a slab (ID = 6):
         // If we are looking UP at a slab above us (faceIndex = 2), its bottom rests on our top, culling it.
         if (faceIndex == 2) return true;
 
         // If we are a slab and neighbor is a slab, side faces match perfectly, culling each other.
-        if (currentBlockType == 3 && (faceIndex == 0 || faceIndex == 1 || faceIndex == 4 || faceIndex == 5)) return true;
+        if (currentBlockType == 6 && (faceIndex == 0 || faceIndex == 1 || faceIndex == 4 || faceIndex == 5)) return true;
 
         // Otherwise (e.g. looking DOWN at a slab below us), don't cull.
         return false;
