@@ -68,7 +68,7 @@ public class StarterItems : MonoBehaviour
     }
 
     // ── Fallback: procedural block icon ───────────────────────────────────────
-    private static Sprite MakeBlockIcon(Color baseColor)
+    public static Sprite MakeBlockIcon(Color baseColor)
     {
         const int SZ = 64;
         Color[] px = new Color[SZ * SZ];

@@ -16,6 +16,16 @@ public class Chunk : MonoBehaviour
     List<int> triangles = new List<int>();
     List<Vector2> uvs = new List<Vector2>();
 
+    // Water rendering lists
+    private List<Vector3> waterVertices = new List<Vector3>();
+    private List<int> waterTriangles = new List<int>();
+    private List<Vector2> waterUvs = new List<Vector2>();
+    private List<Color> waterColors = new List<Color>();
+    private int waterVertexIndex = 0;
+
+    private MeshFilter waterMeshFilter;
+    private MeshRenderer waterMeshRenderer;
+
     public void Initialize(Vector2 pos, Material mat)
     {
         chunkPos = pos;
@@ -26,6 +36,24 @@ public class Chunk : MonoBehaviour
 
         PopulateVoxelMap();
         UpdateChunk();
+
+        // Update neighboring chunks if they exist, so they can cull their boundary faces
+        UpdateNeighbor(new Vector2(chunkPos.x + 1, chunkPos.y));
+        UpdateNeighbor(new Vector2(chunkPos.x - 1, chunkPos.y));
+        UpdateNeighbor(new Vector2(chunkPos.x, chunkPos.y + 1));
+        UpdateNeighbor(new Vector2(chunkPos.x, chunkPos.y - 1));
+    }
+
+    void UpdateNeighbor(Vector2 pos)
+    {
+        if (VoxelWorld.Instance != null)
+        {
+            Chunk neighbor = VoxelWorld.Instance.GetChunkFromChunkPos(pos);
+            if (neighbor != null)
+            {
+                neighbor.UpdateChunk();
+            }
+        }
     }
 
     void PopulateVoxelMap()
@@ -54,13 +82,75 @@ public class Chunk : MonoBehaviour
                     
                     // Use float exact height to determine slabs
                     float exactHeight = finalNoise * VoxelData.ChunkHeight * 0.25f + (VoxelData.ChunkHeight / 5f);
+
+                    // ── River Carving (Realistic Meandering & Dynamic Width) ──
+                    float seaLevel = 14f;
+                    
+                    // Domain warp using noise to bend/wiggle the river coordinates
+                    float warpX = Mathf.PerlinNoise(globalX * 0.015f + 10f, globalZ * 0.015f + 20f) * 60f;
+                    float warpZ = Mathf.PerlinNoise(globalX * 0.015f + 30f, globalZ * 0.015f + 40f) * 60f;
+                    
+                    float riverNoise = Mathf.PerlinNoise((globalX + warpX) * 0.006f + 400f, (globalZ + warpZ) * 0.006f + 800f);
+                    float riverCenterDist = Mathf.Abs(riverNoise - 0.5f);
+                    
+                    // Dynamic width variation
+                    float widthNoise = Mathf.PerlinNoise(globalX * 0.01f + 150f, globalZ * 0.01f + 250f);
+                    float riverWidth = 0.04f + widthNoise * 0.04f; // ranges from 0.04 to 0.08
+                    
+                    if (riverCenterDist < riverWidth)
+                    {
+                        float riverFactor = Mathf.Clamp01(riverCenterDist / riverWidth);
+                        // S-curve interpolation for flatter riverbed and sloped banks
+                        riverFactor = Mathf.SmoothStep(0f, 1f, riverFactor);
+                        
+                        float riverDepth = 3.5f; // slightly deeper river
+                        float riverbedHeight = seaLevel - riverDepth;
+                        
+                        float carvedHeight = Mathf.Lerp(riverbedHeight, exactHeight, riverFactor);
+                        exactHeight = Mathf.Min(exactHeight, carvedHeight);
+                    }
+
                     int floorY = Mathf.FloorToInt(exactHeight);
                     bool isHalfBlock = (exactHeight - floorY) < 0.5f;
 
-                    if      (y > floorY)         voxelMap[x, y, z] = 0; // Air
-                    else if (y == floorY)        voxelMap[x, y, z] = isHalfBlock ? (byte)6 : (byte)4; // Grass Slab (6) or Grass Full (4)
-                    else if (y >= floorY - 4)    voxelMap[x, y, z] = 5; // Dirt (3 layers)
-                    else                         voxelMap[x, y, z] = 5; // Dirt (deep)
+                    // Determine dirt thickness dynamically using noise (between 3 and 5 blocks)
+                    float dirtNoise = Mathf.PerlinNoise(globalX * 0.1f, globalZ * 0.1f);
+                    int dirtThickness = 3 + Mathf.FloorToInt(dirtNoise * 3f); // 3, 4, or 5 layers of dirt
+
+                    if (y > seaLevel && y > floorY)
+                    {
+                        voxelMap[x, y, z] = 0; // Air
+                    }
+                    else if (y <= seaLevel && y > floorY)
+                    {
+                        voxelMap[x, y, z] = 7; // Water
+                    }
+                    else if (y == floorY)
+                    {
+                        if (floorY <= seaLevel + 1)
+                        {
+                            voxelMap[x, y, z] = 8; // Sand beach/riverbed
+                        }
+                        else
+                        {
+                            voxelMap[x, y, z] = isHalfBlock ? (byte)6 : (byte)4; // Grass Slab or Grass Full
+                        }
+                    }
+                    else if (y >= floorY - dirtThickness)
+                    {
+                        if (floorY <= seaLevel + 1)
+                        {
+                            voxelMap[x, y, z] = 8; // Sand deep beach
+                        }
+                        else
+                        {
+                            voxelMap[x, y, z] = 5; // Dirt
+                        }
+                    }
+                    else
+                    {
+                        voxelMap[x, y, z] = 3; // Stone (deep)
+                    }
                 }
             }
         }
@@ -114,12 +204,73 @@ public class Chunk : MonoBehaviour
         vertices.Clear();
         triangles.Clear();
         uvs.Clear();
+
+        waterVertexIndex = 0;
+        waterVertices.Clear();
+        waterTriangles.Clear();
+        waterUvs.Clear();
+        waterColors.Clear();
+    }
+
+    void EnsureWaterChild()
+    {
+        Transform waterTrans = transform.Find("Water");
+        GameObject waterGO;
+        if (waterTrans == null)
+        {
+            waterGO = new GameObject("Water");
+            waterGO.transform.SetParent(transform, false);
+        }
+        else
+        {
+            waterGO = waterTrans.gameObject;
+        }
+
+        waterMeshFilter = waterGO.GetComponent<MeshFilter>();
+        if (waterMeshFilter == null) waterMeshFilter = waterGO.AddComponent<MeshFilter>();
+
+        waterMeshRenderer = waterGO.GetComponent<MeshRenderer>();
+        if (waterMeshRenderer == null) waterMeshRenderer = waterGO.AddComponent<MeshRenderer>();
+
+        if (VoxelWorld.Instance != null && VoxelWorld.Instance.waterMaterial != null)
+        {
+            waterMeshRenderer.material = VoxelWorld.Instance.waterMaterial;
+        }
+        else
+        {
+            waterMeshRenderer.material = meshRenderer.material;
+        }
+    }
+
+    int GetWaterDepth(int x, int y, int z)
+    {
+        int depth = 0;
+        for (int dy = y; dy >= 0; dy--)
+        {
+            byte block = voxelMap[x, dy, z];
+            if (block == 7) // Water
+            {
+                depth++;
+            }
+            else if (block != 0) // Solid block
+            {
+                break;
+            }
+        }
+        return Mathf.Max(1, depth);
     }
 
     void UpdateVoxelMeshData(Vector3 pos, byte blockType)
     {
         bool isSlab = (blockType == 6);
+        bool isWater = (blockType == 7);
         byte uvBlockType = isSlab ? (byte)4 : blockType; // Use grass texture for slab
+
+        int depth = 1;
+        if (isWater)
+        {
+            depth = GetWaterDepth(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y), Mathf.FloorToInt(pos.z));
+        }
 
         for (int p = 0; p < 6; p++)
         {
@@ -129,30 +280,62 @@ public class Chunk : MonoBehaviour
                 {
                     Vector3 vert = VoxelData.voxelVerts[VoxelData.voxelTris[p, i]];
                     
-                    // Squash the top vertices down if this is a slab
+                    // Squash the top vertices down if this is a slab or water
                     if (isSlab && vert.y > 0.5f)
                     {
                         vert.y = 0.5f;
                     }
+                    else if (isWater && vert.y > 0.5f)
+                    {
+                        vert.y = 0.85f; // Water is slightly lower
+                    }
                     
-                    vertices.Add(pos + vert);
+                    if (isWater)
+                    {
+                        waterVertices.Add(pos + vert);
+                        // Shallow water (depth 1) is transparent (low alpha); deeper water is opaque/reflective
+                        float alpha;
+                        if (depth == 1) alpha = 0.85f;
+                        else if (depth == 2) alpha = 0.92f;
+                        else if (depth == 3) alpha = 0.96f;
+                        else alpha = 0.99f;
+
+                        waterColors.Add(new Color(1f, 1f, 1f, alpha));
+                    }
+                    else
+                    {
+                        vertices.Add(pos + vert);
+                    }
                 }
 
                 // Per-face atlas UVs based on block type
                 Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, uvBlockType);
-                uvs.Add(faceUVs[0]);
-                uvs.Add(faceUVs[1]);
-                uvs.Add(faceUVs[2]);
-                uvs.Add(faceUVs[3]);
+                if (isWater)
+                {
+                    waterUvs.AddRange(faceUVs);
 
-                triangles.Add(vertexIndex);
-                triangles.Add(vertexIndex + 1);
-                triangles.Add(vertexIndex + 2);
-                triangles.Add(vertexIndex + 2);
-                triangles.Add(vertexIndex + 1);
-                triangles.Add(vertexIndex + 3);
+                    waterTriangles.Add(waterVertexIndex);
+                    waterTriangles.Add(waterVertexIndex + 1);
+                    waterTriangles.Add(waterVertexIndex + 2);
+                    waterTriangles.Add(waterVertexIndex + 2);
+                    waterTriangles.Add(waterVertexIndex + 1);
+                    waterTriangles.Add(waterVertexIndex + 3);
 
-                vertexIndex += 4;
+                    waterVertexIndex += 4;
+                }
+                else
+                {
+                    uvs.AddRange(faceUVs);
+
+                    triangles.Add(vertexIndex);
+                    triangles.Add(vertexIndex + 1);
+                    triangles.Add(vertexIndex + 2);
+                    triangles.Add(vertexIndex + 2);
+                    triangles.Add(vertexIndex + 1);
+                    triangles.Add(vertexIndex + 3);
+
+                    vertexIndex += 4;
+                }
             }
         }
     }
@@ -178,18 +361,32 @@ public class Chunk : MonoBehaviour
 
         if (neighbor == 0) return false;
 
-        // If neighbor is a full block, it culls our face
-        if (neighbor != 6) return true;
+        bool currentIsWater = (currentBlockType == 7);
+        bool neighborIsWater = (neighbor == 7);
 
-        // If neighbor is a slab (ID = 6):
-        // If we are looking UP at a slab above us (faceIndex = 2), its bottom rests on our top, culling it.
-        if (faceIndex == 2) return true;
+        if (currentIsWater)
+        {
+            // Water culls against solid blocks and other water
+            return true;
+        }
+        else
+        {
+            // Solid blocks cull against solid blocks, but NOT water or air
+            if (neighborIsWater) return false;
 
-        // If we are a slab and neighbor is a slab, side faces match perfectly, culling each other.
-        if (currentBlockType == 6 && (faceIndex == 0 || faceIndex == 1 || faceIndex == 4 || faceIndex == 5)) return true;
+            // If neighbor is a full block, it culls our face
+            if (neighbor != 6) return true;
 
-        // Otherwise (e.g. looking DOWN at a slab below us), don't cull.
-        return false;
+            // If neighbor is a slab (ID = 6):
+            // If we are looking UP at a slab above us (faceIndex = 2), its bottom rests on our top, culling it.
+            if (faceIndex == 2) return true;
+
+            // If we are a slab and neighbor is a slab, side faces match perfectly, culling each other.
+            if (currentBlockType == 6 && (faceIndex == 0 || faceIndex == 1 || faceIndex == 4 || faceIndex == 5)) return true;
+
+            // Otherwise (e.g. looking DOWN at a slab below us), don't cull.
+            return false;
+        }
     }
 
     void CreateMesh()
@@ -203,5 +400,27 @@ public class Chunk : MonoBehaviour
 
         meshFilter.mesh = mesh;
         meshCollider.sharedMesh = mesh;
+
+        // Water mesh creation
+        if (waterVertices.Count > 0)
+        {
+            EnsureWaterChild();
+            Mesh waterMesh = new Mesh();
+            waterMesh.vertices = waterVertices.ToArray();
+            waterMesh.triangles = waterTriangles.ToArray();
+            waterMesh.uv = waterUvs.ToArray();
+            waterMesh.colors = waterColors.ToArray(); // Apply vertex colors for transparent depth!
+            waterMesh.RecalculateNormals();
+
+            waterMeshFilter.mesh = waterMesh;
+            waterMeshRenderer.gameObject.SetActive(true);
+        }
+        else
+        {
+            if (waterMeshRenderer != null)
+            {
+                waterMeshRenderer.gameObject.SetActive(false);
+            }
+        }
     }
 }

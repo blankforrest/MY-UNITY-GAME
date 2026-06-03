@@ -60,7 +60,10 @@ public static class BlueprintGenerator
     {
         { 1, 1.0f  },  // wood
         { 2, 1.2f  },  // plank
+        { 3, 2.5f  },  // stone
         { 5, 5.0f  },  // iron
+        { 7, 1.0f  },  // water
+        { 8, 1.5f  },  // sand
     };
 
     /// <summary>
@@ -71,7 +74,10 @@ public static class BlueprintGenerator
     {
         { 1, 10f  },  // wood
         { 2, 12f  },  // plank
+        { 3, 35f  },  // stone
         { 5, 80f  },  // iron
+        { 7, 1f   },  // water
+        { 8, 8f   },  // sand
     };
 
     /// <summary>Fallback mass for block types not in <see cref="BlockMassTable"/>.</summary>

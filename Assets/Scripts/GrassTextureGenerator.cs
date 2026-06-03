@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 7;  // grass top, grass side, dirt, stone, wood top, wood side, plank
+    public const int TILE_COUNT = 9;  // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand
 
     public static Texture2D Create()
     {
@@ -33,7 +33,9 @@ public static class GrassTextureGenerator
                               : tile == 3 ? Stone(lx, y)
                               : tile == 4 ? WoodTop(lx, y)
                               : tile == 5 ? WoodSide(lx, y)
-                                          : Plank(lx, y);
+                              : tile == 6 ? Plank(lx, y)
+                              : tile == 7 ? Water(lx, y)
+                                          : Sand(lx, y);
             }
         }
 
@@ -143,11 +145,37 @@ public static class GrassTextureGenerator
         }
     }
 
+    static Color Water(int x, int y)
+    {
+        // Dark blue base with lighter cyan ripples
+        float n = Mathf.PerlinNoise(x * 0.4f, y * 0.4f);
+        float ripple = Mathf.PerlinNoise(x * 0.8f + 5f, y * 0.8f + 10f);
+        
+        float r = 0.12f + n * 0.05f;
+        float g = 0.42f + n * 0.08f + ripple * 0.05f;
+        float b = 0.78f + n * 0.12f + ripple * 0.08f;
+        
+        return new Color(r, g, b);
+    }
+
+    static Color Sand(int x, int y)
+    {
+        // Sandy beige with slight noise for graininess
+        float n = Mathf.PerlinNoise(x * 0.6f + 3f, y * 0.6f + 6f);
+        float grain = Mathf.PerlinNoise(x * 1.5f + 12f, y * 1.5f + 8f);
+        
+        float r = 0.86f + n * 0.05f;
+        float g = 0.78f + n * 0.04f;
+        float b = 0.58f + n * 0.06f - grain * 0.03f;
+        
+        return new Color(r, g, b);
+    }
+
     // ── UV helpers ────────────────────────────────────────────────────────────
 
     /// <summary>Returns the 4 atlas UVs for a given face and block type.</summary>
     /// <param name="face">0=back,1=front,2=top,3=bottom,4=left,5=right</param>
-    /// <param name="blockType">1=Wood, 2=Plank, 3=Stone, 4=Grass, 5=Dirt, 6=Grass Slab</param>
+    /// <param name="blockType">1=Wood, 2=Plank, 3=Stone, 4=Grass, 5=Dirt, 6=Grass Slab, 7=Water, 8=Sand</param>
     public static Vector2[] GetBlockUVs(int face, byte blockType)
     {
         int tile;
@@ -159,6 +187,10 @@ public static class GrassTextureGenerator
             tile = 3;
         else if (blockType == 5) // Dirt: all faces dirt
             tile = 2;
+        else if (blockType == 7) // Water: all faces water
+            tile = 7;
+        else if (blockType == 8) // Sand: all faces sand
+            tile = 8;
         else                     // Grass (blockType == 4 or 6)
             tile = (face == 2) ? 0   // top    → grass top
                  : (face == 3) ? 2   // bottom → dirt

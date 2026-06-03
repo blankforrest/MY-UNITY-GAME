@@ -7,6 +7,7 @@ public class VoxelWorld : MonoBehaviour
     public static VoxelWorld Instance { get; private set; }
 
     public Material chunkMaterial;
+    public Material waterMaterial;
 
     [Header("Streaming")]
     [Range(3, 16)]
@@ -43,6 +44,79 @@ public class VoxelWorld : MonoBehaviour
         Texture2D grassAtlas = GrassTextureGenerator.Create();
         chunkMaterial.mainTexture = grassAtlas;
         chunkMaterial.color       = Color.white; // don't tint the texture
+
+        // Initialize water material if not assigned
+        if (waterMaterial == null)
+        {
+            // Try URP Particle shaders first as they are specifically built for vertex-colored transparency in URP
+            Shader waterShader = Shader.Find("Universal Render Pipeline/Particles/Simple Lit") ?? 
+                                 Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            
+            if (waterShader != null)
+            {
+                waterMaterial = new Material(waterShader);
+                waterMaterial.SetFloat("_Surface", 1f); // Transparent
+                waterMaterial.SetInt("_Blend", 0); // Alpha Blend
+                waterMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                waterMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                waterMaterial.SetInt("_ZWrite", 0);
+                waterMaterial.SetInt("_Cull", 0); // Render both sides (visible from underwater)
+                waterMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            }
+            else
+            {
+                // Fallback to standard URP Lit with runtime transparency setup
+                waterShader = Shader.Find("Universal Render Pipeline/Lit");
+                if (waterShader != null)
+                {
+                    waterMaterial = new Material(waterShader);
+                    waterMaterial.SetFloat("_Surface", 1f); // Transparent
+                    waterMaterial.SetFloat("_Blend", 0f); // Alpha blend
+                    waterMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    waterMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    waterMaterial.SetInt("_ZWrite", 0);
+                    waterMaterial.SetInt("_Cull", 0); // Render both sides
+                    waterMaterial.DisableKeyword("_ALPHATEST_ON");
+                    waterMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                    waterMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                    waterMaterial.SetFloat("_Smoothness", 0.85f);
+                }
+                else
+                {
+                    // Built-in Render Pipeline fallback
+                    waterShader = Shader.Find("Legacy Shaders/Transparent/Diffuse") ?? 
+                                  Shader.Find("Particles/Standard Unlit");
+                    if (waterShader != null)
+                    {
+                        waterMaterial = new Material(waterShader);
+                    }
+                    else
+                    {
+                        waterShader = Shader.Find("Standard");
+                        if (waterShader != null)
+                        {
+                            waterMaterial = new Material(waterShader);
+                            waterMaterial.SetFloat("_Mode", 3f); // Transparent
+                            waterMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                            waterMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                            waterMaterial.SetInt("_ZWrite", 0);
+                            waterMaterial.DisableKeyword("_ALPHATEST_ON");
+                            waterMaterial.EnableKeyword("_ALPHABLEND_ON");
+                            waterMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                            waterMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                            waterMaterial.SetFloat("_Glossiness", 0.85f);
+                        }
+                        else
+                        {
+                            waterMaterial = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("UI/Default"));
+                        }
+                    }
+                }
+            }
+        }
+        waterMaterial.mainTexture = grassAtlas;
+        waterMaterial.color       = Color.white;
+        waterMaterial.SetInt("_Cull", 0); // Always ensure double-sided regardless of which shader was chosen
 
         // Auto-find player
         if (playerTransform == null)
@@ -162,6 +236,12 @@ public class VoxelWorld : MonoBehaviour
 
     // ── Public API ────────────────────────────────────────────────────────────
 
+    public Chunk GetChunkFromChunkPos(Vector2 pos)
+    {
+        chunks.TryGetValue(pos, out Chunk c);
+        return c;
+    }
+
     public Chunk GetChunkFromVector3(Vector3 pos)
     {
         int x = Mathf.FloorToInt(pos.x / VoxelData.ChunkWidth);
@@ -226,6 +306,13 @@ public class VoxelWorld : MonoBehaviour
                         drop.itemName = "Stone";
                         drop.blockTypeID = 3;
                         drop.icon = Resources.Load<Sprite>("Sprites/stone_block");
+                    }
+                    else if (existing == 8)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Sand";
+                        drop.blockTypeID = 8;
+                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.86f, 0.78f, 0.58f));
                     }
                 }
 
