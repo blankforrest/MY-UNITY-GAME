@@ -31,6 +31,19 @@ public class VehicleController : MonoBehaviour
     public int groundedWheelCount = 0;
     private bool wasGrounded = false;
 
+    [Header("Step Climbing")]
+    [Tooltip("Max step height the vehicle can climb (in world units). 1.05 = one full voxel block.")]
+    public float maxStepHeight = 1.05f;
+    [Tooltip("Upward velocity (m/s) injected when climbing a full block. Mass-independent.")]
+    public float stepClimbSpeed = 10f;
+    [Tooltip("How far ahead (m) to probe for a step wall. Larger = detects earlier = smoother.")]
+    public float stepProbeDistance = 1.8f;
+
+    // True while the vehicle is actively climbing a step this FixedUpdate
+    private bool _isClimbing = false;
+    // Cached layer mask — excludes the vehicle itself so wheels don't detect their own colliders
+    private int _stepLayerMask = ~0;
+
     private void Awake()
     {
         _rb = GetComponent<Rigidbody>();
@@ -89,8 +102,11 @@ public class VehicleController : MonoBehaviour
         _rb.sleepThreshold   = 0.0f;
         _rb.maxAngularVelocity = 1.0f; // nearly impossible to tip permanently
 
-        // Zero friction on all colliders so blocks never snag on terrain seams
-        PhysicsMaterial glideMaterial = new PhysicsMaterial("GlideMaterial")
+        // ── Friction materials ────────────────────────────────────────────────
+        // Wheels (SphereColliders) get zero friction so they glide over terrain seams.
+        // Body blocks (BoxColliders) keep normal friction so the player CharacterController
+        // can register solid contact and NOT pass through the vehicle.
+        PhysicsMaterial glideMaterial = new PhysicsMaterial("VehicleGlide")
         {
             dynamicFriction = 0.0f,
             staticFriction  = 0.0f,
@@ -99,8 +115,64 @@ public class VehicleController : MonoBehaviour
             bounceCombine   = PhysicsMaterialCombine.Minimum
         };
 
+        PhysicsMaterial bodyMaterial = new PhysicsMaterial("VehicleBody")
+        {
+            dynamicFriction = 0.5f,
+            staticFriction  = 0.5f,
+            bounciness      = 0.0f,
+            frictionCombine = PhysicsMaterialCombine.Average,
+            bounceCombine   = PhysicsMaterialCombine.Minimum
+        };
+
         foreach (var col in allColliders)
-            col.material = glideMaterial;
+        {
+            if (col is SphereCollider)
+                col.sharedMaterial = glideMaterial;  // wheels — slide on terrain
+            else
+                col.sharedMaterial = bodyMaterial;   // body blocks — player can stand on these
+        }
+
+        // ── Root body collider (player collision) ─────────────────────────────
+        // The CharacterController is unreliable against compound child colliders on a
+        // dynamic Rigidbody, so we add a root-level BoxCollider that the CC always hits.
+        //
+        // CLIMBING SAFETY: the collider's bottom is raised to localMinY + maxStepHeight + buffer
+        // so it sits entirely in the vehicle BODY zone and never contacts a terrain step face.
+        // The step-climb raycasts probe below this level independently.
+        {
+            Bounds tb    = new Bounds(Vector3.zero, Vector3.zero);
+            bool   first = true;
+            foreach (var col in allColliders)
+            {
+                Bounds lb = new Bounds(
+                    transform.InverseTransformPoint(col.bounds.center),
+                    col.bounds.size);
+                if (first) { tb = lb; first = false; }
+                else tb.Encapsulate(lb);
+            }
+
+            if (!first)
+            {
+                // Bottom of root collider = above every climbable step
+                float safeBottom = tb.min.y + maxStepHeight + 0.2f;
+                float safeTop    = tb.max.y;
+                float safeHeight = safeTop - safeBottom;
+
+                if (safeHeight > 0.1f)   // only add when there is real body above the wheels
+                {
+                    BoxCollider rootBox  = gameObject.AddComponent<BoxCollider>();
+                    rootBox.center       = new Vector3(tb.center.x,
+                                                       (safeBottom + safeTop) * 0.5f,
+                                                       tb.center.z);
+                    rootBox.size         = new Vector3(tb.size.x, safeHeight, tb.size.z);
+                    rootBox.sharedMaterial = bodyMaterial;  // friction so CC grips the surface
+                }
+            }
+        }
+
+        // Build step-climb layer mask: exclude this vehicle's own layer
+        int vehicleLayer = LayerMask.NameToLayer("Vehicle");
+        _stepLayerMask = (vehicleLayer != -1) ? ~(1 << vehicleLayer) : ~0;
     }
 
     private void FixedUpdate()
@@ -108,9 +180,13 @@ public class VehicleController : MonoBehaviour
         if (_rb == null) return;
 
         // --- DOWNFORCE: keeps wheels on ground at speed ---
-        float speed = _rb.linearVelocity.magnitude;
-        _rb.AddForce(-transform.up * speed * speed * 2.5f * _rb.mass * Time.fixedDeltaTime,
-                     ForceMode.Force);
+        // Suppressed while climbing so gravity doesn't fight the upward lift.
+        if (!_isClimbing)
+        {
+            float speed = _rb.linearVelocity.magnitude;
+            _rb.AddForce(-transform.up * speed * speed * 2.5f * _rb.mass * Time.fixedDeltaTime,
+                         ForceMode.Force);
+        }
 
         // --- EXTRA GRAVITY WHEN AIRBORNE: heavy stomp feel ---
         // Count grounded wheels before the loop below
@@ -135,6 +211,9 @@ public class VehicleController : MonoBehaviour
         // Sync grounded wheel count (already counted above)
         groundedWheelCount = groundedNow;
         wasGrounded = groundedWheelCount > 0;
+
+        // --- STEP CLIMBING ---
+        TryClimbStep();
 
         if (!isBeingControlled) return;
 
@@ -183,5 +262,82 @@ public class VehicleController : MonoBehaviour
         // Steer
         if (left)     _rb.AddTorque(-Vector3.up * actualTorque);
         if (right)    _rb.AddTorque(Vector3.up * actualTorque);
+    }
+
+    // ── Step Climbing ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fires a fan of horizontal raycasts at 4 heights between the wheel base and
+    /// maxStepHeight. If any hit a wall whose top surface is within maxStepHeight,
+    /// injects upward + forward velocity (both VelocityChange, mass-independent)
+    /// so the vehicle glides over the step without bumping.
+    /// </summary>
+    private void TryClimbStep()
+    {
+        // Need some horizontal movement
+        Vector3 velFlat = new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z);
+        if (velFlat.sqrMagnitude < 0.04f) { _isClimbing = false; return; }
+        Vector3 moveDir = velFlat.normalized;
+
+        // Lowest world-Y of all colliders = wheel contact plane
+        float lowestY = float.MaxValue;
+        foreach (var col in GetComponentsInChildren<Collider>())
+            lowestY = Mathf.Min(lowestY, col.bounds.min.y);
+        if (lowestY == float.MaxValue) lowestY = transform.position.y;
+
+        // ── Multi-height wall probes ──────────────────────────────────────────
+        bool       hitWall    = false;
+        RaycastHit wallHit    = default;
+        float      lowestHitY = float.MaxValue;
+
+        const int probes = 4;
+        for (int i = 0; i < probes; i++)
+        {
+            float dy  = Mathf.Lerp(0.06f, maxStepHeight * 0.85f, (float)i / (probes - 1));
+            Vector3 org = new Vector3(transform.position.x, lowestY + dy, transform.position.z);
+
+            if (Physics.Raycast(org, moveDir, out RaycastHit h, stepProbeDistance, _stepLayerMask))
+            {
+                if (!hitWall || h.point.y < lowestHitY)
+                {
+                    lowestHitY = h.point.y;
+                    wallHit    = h;
+                    hitWall    = true;
+                }
+            }
+        }
+
+        if (!hitWall) { _isClimbing = false; return; }
+
+        // ── Step-top detection ────────────────────────────────────────────────
+        float   topOriginY = lowestY + maxStepHeight + 0.2f;
+        Vector3 topOrg     = new Vector3(
+            wallHit.point.x + moveDir.x * 0.2f,
+            topOriginY,
+            wallHit.point.z + moveDir.z * 0.2f);
+
+        if (!Physics.Raycast(topOrg, Vector3.down, out RaycastHit topHit,
+                             maxStepHeight + 0.4f, _stepLayerMask))
+        { _isClimbing = false; return; }
+
+        float stepH = topHit.point.y - lowestY;
+        if (stepH < 0.05f || stepH > maxStepHeight) { _isClimbing = false; return; }
+
+        // ── Climbing confirmed — inject velocity ──────────────────────────────
+        _isClimbing = true;
+
+        float ratio = Mathf.Clamp01(stepH / maxStepHeight);
+
+        // 1. Upward: lift vehicle over the step
+        float targetUpVel = stepClimbSpeed * ratio;
+        if (_rb.linearVelocity.y < targetUpVel)
+            _rb.AddForce(Vector3.up * (targetUpVel - _rb.linearVelocity.y), ForceMode.VelocityChange);
+
+        // 2. Forward: prevent horizontal momentum from dying on the block face
+        //    Ensure the vehicle keeps at least a gentle crawl speed while climbing.
+        float currentFwd = Vector3.Dot(_rb.linearVelocity, moveDir);
+        float minFwdDuringClimb = 2.5f;   // m/s — just enough to carry it over
+        if (currentFwd < minFwdDuringClimb)
+            _rb.AddForce(moveDir * (minFwdDuringClimb - currentFwd), ForceMode.VelocityChange);
     }
 }

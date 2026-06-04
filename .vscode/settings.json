@@ -69,5 +69,12 @@
     },
     "dotnet.defaultSolution": "My project.slnx",
     "dotnet.enableWorkspaceBasedDevelopment": false,
-    "dotrush.debugger.automaticSourcelinkDownload": false
+
+    // ── DotRush: disable automatic Samsung netcoredbg installer ───────────────
+    "dotrush.debugger.automaticSourcelinkDownload": false,
+    "dotrush.debugger.automaticRuntimeDownload": false,
+    "dotrush.roslyn.automaticRuntimeDownload": false,
+
+    // Suppress VS Code extension install recommendations globally for this workspace
+    "extensions.ignoreRecommendations": true
 }

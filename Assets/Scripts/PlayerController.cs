@@ -28,6 +28,12 @@ public class PlayerController : MonoBehaviour
         controller = GetComponent<CharacterController>();
 
         controller.radius = 0.3f; // slim for 1-block-wide gaps
+
+        // Ignore collision with all existing chunk foliage colliders
+        foreach (var chunk in FindObjectsByType<Chunk>())
+        {
+            chunk.IgnorePlayerCollision();
+        }
         // height/center left at Inspector values — CharacterController self-positions correctly
 
         Camera cam = GetComponentInChildren<Camera>();

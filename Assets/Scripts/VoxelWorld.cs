@@ -8,6 +8,7 @@ public class VoxelWorld : MonoBehaviour
 
     public Material chunkMaterial;
     public Material waterMaterial;
+    public Material foliageMaterial;
 
     [Header("Streaming")]
     [Range(3, 16)]
@@ -29,9 +30,11 @@ public class VoxelWorld : MonoBehaviour
     {
         if (Instance == null) Instance = this;
         else { Destroy(gameObject); return; }
+
+        InitializeMaterials();
     }
 
-    void Start()
+    void InitializeMaterials()
     {
         // Auto-find material
         if (chunkMaterial == null)
@@ -118,6 +121,52 @@ public class VoxelWorld : MonoBehaviour
         waterMaterial.color       = Color.white;
         waterMaterial.SetInt("_Cull", 0); // Always ensure double-sided regardless of which shader was chosen
 
+        // ── Foliage material (alpha-cutout, double-sided) ─────────────────────
+        // Configured as Opaque with Alpha Clipping (Cutout) to avoid transparent depth sorting issues
+        // and eliminate the visible square borders/shadows.
+        if (foliageMaterial == null)
+        {
+            // Try URP Unlit first so flowers are vibrant pixel art unaffected by blue ambient sky light
+            Shader foliageShader = Shader.Find("Universal Render Pipeline/Unlit")
+                                ?? chunkMaterial.shader
+                                ?? Shader.Find("Universal Render Pipeline/Lit")
+                                ?? Shader.Find("Standard");
+
+            foliageMaterial = new Material(foliageShader);
+            
+            if (foliageShader.name.Contains("Standard"))
+            {
+                foliageMaterial.SetFloat("_Mode", 1f); // 1 = Cutout
+                foliageMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                foliageMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+                foliageMaterial.SetInt("_ZWrite", 1);
+                foliageMaterial.EnableKeyword("_ALPHATEST_ON");
+                foliageMaterial.DisableKeyword("_ALPHABLEND_ON");
+                foliageMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                foliageMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
+            }
+            else
+            {
+                foliageMaterial.SetFloat("_Surface", 0f);       // 0 = Opaque
+                foliageMaterial.SetFloat("_AlphaClip", 1f);     // 1 = On
+                foliageMaterial.SetFloat("_Cutoff", 0.5f);      // Threshold
+                foliageMaterial.EnableKeyword("_ALPHATEST_ON");
+                foliageMaterial.SetInt("_Cull", 0);             // Double-sided
+                foliageMaterial.SetInt("_ZWrite", 1);           // Write to depth
+                foliageMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
+            }
+        }
+        // Re-bake atlas as RGBA32 so magenta key pixels become alpha=0
+        Texture2D rgbaAtlas = ConvertFlowerAtlasToRGBA(grassAtlas);
+        foliageMaterial.mainTexture = rgbaAtlas;           // sets _MainTex
+        foliageMaterial.SetTexture("_BaseMap", rgbaAtlas); // URP Particles/Lit use _BaseMap
+        foliageMaterial.color       = Color.white;
+        foliageMaterial.SetColor("_BaseColor", Color.white);
+        foliageMaterial.SetInt("_Cull", 0);                 // Ensure culling is off (double-sided rendering) on all shaders
+    }
+
+    void Start()
+    {
         // Auto-find player
         if (playerTransform == null)
         {
@@ -307,12 +356,42 @@ public class VoxelWorld : MonoBehaviour
                         drop.blockTypeID = 3;
                         drop.icon = Resources.Load<Sprite>("Sprites/stone_block");
                     }
+                    else if (existing == 4)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Grass";
+                        drop.blockTypeID = 4;
+                        Sprite loaded = Resources.Load<Sprite>("Sprites/grass_block");
+                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.35f, 0.65f, 0.25f));
+                    }
+                    else if (existing == 5)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Dirt";
+                        drop.blockTypeID = 5;
+                        Sprite loaded = Resources.Load<Sprite>("Sprites/dirt_block");
+                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.45f, 0.30f, 0.18f));
+                    }
+                    else if (existing == 6)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Grass Slab";
+                        drop.blockTypeID = 6;
+                        drop.icon = MakeSlabIcon(new Color(0.35f, 0.65f, 0.25f));
+                    }
                     else if (existing == 8)
                     {
                         drop = ScriptableObject.CreateInstance<Item>();
                         drop.itemName = "Sand";
                         drop.blockTypeID = 8;
                         drop.icon = StarterItems.MakeBlockIcon(new Color(0.86f, 0.78f, 0.58f));
+                    }
+                    else if (existing == 9)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Flower";
+                        drop.blockTypeID = 9;
+                        drop.icon = MakeFlowerIcon();
                     }
                 }
 
@@ -322,6 +401,130 @@ public class VoxelWorld : MonoBehaviour
 
         chunk.EditVoxel(local, blockID);
         UpdateNeighbors(local, chunk.chunkPos);
+
+        // If we broke a block, break any flower sitting directly on top of it
+        if (blockID == 0)
+        {
+            Vector3 abovePos = pos + Vector3.up;
+            if (GetBlock(abovePos) == 9) // Flower block type
+            {
+                ModifyBlock(abovePos, 0);
+            }
+        }
+    }
+
+    /// <summary>Procedurally generates a small sprite icon representing a flower.</summary>
+    public static Sprite MakeFlowerIcon()
+    {
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        Color stem   = new Color(0.22f, 0.58f, 0.12f);
+        Color petal  = new Color(1.00f, 0.28f, 0.55f);
+        Color centre = new Color(1.00f, 0.92f, 0.20f);
+
+        void Set(int x, int y, Color c)
+        { if (x >= 0 && x < SZ && y >= 0 && y < SZ) px[y * SZ + x] = c; }
+
+        // Stem
+        for (int y = 4; y < 30; y++) { Set(31, y, stem); Set(32, y, stem); }
+        // Petals
+        for (int dx = -10; dx <= 10; dx++)
+            for (int dy = -10; dy <= 10; dy++)
+            {
+                float d = dx * dx + dy * dy;
+                if (d <= 110 && d >= 50)
+                    Set(32 + dx, 40 + dy, petal);
+            }
+        // Centre
+        for (int dx = -5; dx <= 5; dx++)
+            for (int dy = -5; dy <= 5; dy++)
+                if (dx * dx + dy * dy <= 30)
+                    Set(32 + dx, 40 + dy, centre);
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    /// <summary>Procedurally generates a half-height slab block sprite icon.</summary>
+    public static Sprite MakeSlabIcon(Color baseColor)
+    {
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        float r = baseColor.r, g = baseColor.g, b = baseColor.b, a = baseColor.a;
+        Color top     = new Color(Mathf.Clamp01(r + 0.25f), Mathf.Clamp01(g + 0.25f), Mathf.Clamp01(b + 0.25f), a);
+        Color front   = baseColor;
+        Color side    = new Color(Mathf.Clamp01(r - 0.20f), Mathf.Clamp01(g - 0.20f), Mathf.Clamp01(b - 0.20f), a);
+        Color outline = new Color(Mathf.Clamp01(r - 0.45f), Mathf.Clamp01(g - 0.45f), Mathf.Clamp01(b - 0.45f), a);
+
+        void Set(int x, int y, Color c)
+        { if (x >= 0 && x < SZ && y >= 0 && y < SZ) px[y * SZ + x] = c; }
+
+        void FillRect(int x, int y, int w, int h, Color c)
+        { for (int dy = 0; dy < h; dy++) for (int dx = 0; dx < w; dx++) Set(x+dx, y+dy, c); }
+
+        // Top is lowered from y=38 to y=26 (38 - 12)
+        FillRect(16, 26, 32, 14, top);
+        // Front/side height is 12 instead of 24
+        FillRect(8,  14, 24, 12, front);
+        FillRect(32, 14, 24, 12, side);
+
+        // Outlines
+        for (int x = 8;  x < 40; x++) Set(x, 13, outline);
+        for (int x = 32; x < 56; x++) Set(x, 13, outline);
+        for (int y = 13; y < 26; y++) Set(7,  y,  outline);
+        for (int y = 13; y < 26; y++) Set(56, y,  outline);
+        for (int x = 8;  x < 32; x++) Set(x, 26, outline);
+        for (int x = 32; x < 56; x++) Set(x, 26, outline);
+        for (int y = 26; y < 40; y++) Set(16, y,  outline);
+        for (int y = 26; y < 40; y++) Set(47, y,  outline);
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    /// <summary>
+    /// Returns a new RGBA32 copy of the atlas where magenta (R≈1, G≈0, B≈1) pixels
+    /// in the flower tile (tile 9) have alpha=0 so the alpha-cutout shader clips them.
+    /// All other pixels keep alpha=1.
+    /// </summary>
+    static Texture2D ConvertFlowerAtlasToRGBA(Texture2D source)
+    {
+        int w = source.width;
+        int h = source.height;
+        Texture2D dst = new Texture2D(w, h, TextureFormat.RGBA32, false);
+        dst.filterMode = FilterMode.Point;
+        dst.wrapMode   = TextureWrapMode.Clamp;
+
+        Color[] src = source.GetPixels();
+        Color[] out_ = new Color[src.Length];
+        int tileSize  = GrassTextureGenerator.TILE_SIZE;
+        int flowerTileX = 9 * tileSize; // pixel x start of flower tile
+
+        for (int i = 0; i < src.Length; i++)
+        {
+            int px = i % w;
+            Color c = src[i];
+            // Check if this pixel is in the flower tile and is magenta (key colour)
+            bool inFlowerTile = (px >= flowerTileX && px < flowerTileX + tileSize);
+            bool isMagenta    = (c.r > 0.8f && c.g < 0.2f && c.b > 0.8f);
+            out_[i] = inFlowerTile && isMagenta
+                ? new Color(c.r, c.g, c.b, 0f)  // transparent
+                : new Color(c.r, c.g, c.b, 1f);  // opaque
+        }
+
+        dst.SetPixels(out_);
+        dst.Apply();
+        return dst;
     }
 
     void UpdateNeighbors(Vector3 local, Vector2 cp)

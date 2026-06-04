@@ -202,9 +202,11 @@ public class Hotbar : MonoBehaviour
     /// <summary>Try to add an item — stacks if already in bar, else uses first empty slot.</summary>
     public bool TryAddItem(Item item, int amount)
     {
+        if (item == null) return false;
+
         for (int i = 0; i < SLOT_COUNT; i++)
         {
-            if (hotbarSlots[i] != null && hotbarSlots[i].item == item)
+            if (hotbarSlots[i] != null && hotbarSlots[i].item != null && hotbarSlots[i].item.itemName == item.itemName)
             {
                 hotbarSlots[i].amount += amount;
                 RefreshSlotVisual(i);

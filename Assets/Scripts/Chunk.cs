@@ -26,6 +26,17 @@ public class Chunk : MonoBehaviour
     private MeshFilter waterMeshFilter;
     private MeshRenderer waterMeshRenderer;
 
+    // Foliage (flowers, etc.) rendering lists — separate child mesh, alpha-cutout
+    private List<Vector3> foliageVertices  = new List<Vector3>();
+    private List<int>     foliageTriangles = new List<int>();
+    private List<Vector2> foliageUvs       = new List<Vector2>();
+    private List<Color>   foliageColors    = new List<Color>();
+    private int foliageVertexIndex = 0;
+
+    private MeshFilter   foliageMeshFilter;
+    private MeshRenderer foliageMeshRenderer;
+    private MeshCollider foliageMeshCollider;
+
     public void Initialize(Vector2 pos, Material mat)
     {
         chunkPos = pos;
@@ -151,6 +162,26 @@ public class Chunk : MonoBehaviour
                     {
                         voxelMap[x, y, z] = 3; // Stone (deep)
                     }
+
+                    // ── Flower spawning on full grass blocks ──────────────────────
+                    // Only place flower one block above a *full* grass block (not slab)
+                    // and only above sea level so flowers don't appear on the sea floor.
+                    if (y == floorY + 1                       // cell directly above surface
+                        && voxelMap[x, floorY, z] == 4        // surface is full grass (not slab/sand)
+                        && floorY > seaLevel + 1)             // strictly above sea level
+                    {
+                        float flowerNoise = Mathf.PerlinNoise(
+                            globalX * 0.18f + 77.3f,
+                            globalZ * 0.18f + 53.1f);
+                        // Second octave for clustering variety
+                        float flowerNoise2 = Mathf.PerlinNoise(
+                            globalX * 0.42f + 200f,
+                            globalZ * 0.42f + 300f);
+                        if (flowerNoise > 0.62f && flowerNoise2 > 0.45f)
+                        {
+                            voxelMap[x, y, z] = 9; // Flower
+                        }
+                    }
                 }
             }
         }
@@ -210,6 +241,12 @@ public class Chunk : MonoBehaviour
         waterTriangles.Clear();
         waterUvs.Clear();
         waterColors.Clear();
+
+        foliageVertexIndex = 0;
+        foliageVertices.Clear();
+        foliageTriangles.Clear();
+        foliageUvs.Clear();
+        foliageColors.Clear();
     }
 
     void EnsureWaterChild()
@@ -242,6 +279,51 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    void EnsureFoliageChild()
+    {
+        Transform t = transform.Find("Foliage");
+        GameObject go;
+        if (t == null)
+        {
+            go = new GameObject("Foliage");
+            go.transform.SetParent(transform, false);
+        }
+        else
+        {
+            go = t.gameObject;
+        }
+
+        foliageMeshFilter = go.GetComponent<MeshFilter>();
+        if (foliageMeshFilter == null) foliageMeshFilter = go.AddComponent<MeshFilter>();
+
+        foliageMeshRenderer = go.GetComponent<MeshRenderer>();
+        if (foliageMeshRenderer == null) foliageMeshRenderer = go.AddComponent<MeshRenderer>();
+
+        if (VoxelWorld.Instance != null && VoxelWorld.Instance.foliageMaterial != null)
+            foliageMeshRenderer.material = VoxelWorld.Instance.foliageMaterial;
+        else
+            foliageMeshRenderer.material = meshRenderer.material;
+
+        // Standard non-convex collider so raycasts hit flowers without trigger warnings
+        foliageMeshCollider = go.GetComponent<MeshCollider>();
+        if (foliageMeshCollider == null) foliageMeshCollider = go.AddComponent<MeshCollider>();
+        foliageMeshCollider.convex     = false;
+        foliageMeshCollider.isTrigger  = false;
+    }
+
+    public void IgnorePlayerCollision()
+    {
+        if (foliageMeshCollider == null) return;
+        if (VoxelWorld.Instance != null && VoxelWorld.Instance.playerTransform != null)
+        {
+            var cc = VoxelWorld.Instance.playerTransform.GetComponent<CharacterController>();
+            if (cc != null)
+            {
+                Physics.IgnoreCollision(cc, foliageMeshCollider, true);
+            }
+        }
+    }
+
     int GetWaterDepth(int x, int y, int z)
     {
         int depth = 0;
@@ -262,7 +344,14 @@ public class Chunk : MonoBehaviour
 
     void UpdateVoxelMeshData(Vector3 pos, byte blockType)
     {
-        bool isSlab = (blockType == 6);
+        // ── Flower: render as two crossed quads (X-billboard) ──────────────────
+        if (blockType == 9)
+        {
+            AddFlowerQuads(pos);
+            return;
+        }
+
+        bool isSlab  = (blockType == 6);
         bool isWater = (blockType == 7);
         byte uvBlockType = isSlab ? (byte)4 : blockType; // Use grass texture for slab
 
@@ -340,6 +429,50 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Emits two crossed quads into the foliage mesh lists for a flower at <paramref name="pos"/>.
+    /// Each quad spans the full block cell. Two quads at 90° give the classic SurvivalCraft X look.
+    /// </summary>
+    void AddFlowerQuads(Vector3 pos)
+    {
+        Vector2[] uvs9 = GrassTextureGenerator.GetBlockUVs(0, 9); // flower tile UVs
+
+        // Two diagonal crossed quads — SurvivalCraft X-billboard style
+        Vector3[][] quads = new Vector3[2][];
+        quads[0] = new Vector3[]
+        {
+            pos + new Vector3(0.05f, 0f, 0.05f),
+            pos + new Vector3(0.05f, 1f, 0.05f),
+            pos + new Vector3(0.95f, 0f, 0.95f),
+            pos + new Vector3(0.95f, 1f, 0.95f),
+        };
+        quads[1] = new Vector3[]
+        {
+            pos + new Vector3(0.95f, 0f, 0.05f),
+            pos + new Vector3(0.95f, 1f, 0.05f),
+            pos + new Vector3(0.05f, 0f, 0.95f),
+            pos + new Vector3(0.05f, 1f, 0.95f),
+        };
+
+        foreach (var quad in quads)
+        {
+            // Front winding
+            foliageVertices.AddRange(quad);
+            foliageUvs.AddRange(uvs9);
+            for (int i = 0; i < 4; i++)
+            {
+                foliageColors.Add(Color.white);
+            }
+            foliageTriangles.Add(foliageVertexIndex);
+            foliageTriangles.Add(foliageVertexIndex + 1);
+            foliageTriangles.Add(foliageVertexIndex + 2);
+            foliageTriangles.Add(foliageVertexIndex + 2);
+            foliageTriangles.Add(foliageVertexIndex + 1);
+            foliageTriangles.Add(foliageVertexIndex + 3);
+            foliageVertexIndex += 4;
+        }
+    }
+
     bool CheckVoxelFace(Vector3 pos, int faceIndex, byte currentBlockType)
     {
         Vector3 neighborPos = pos + VoxelData.faceChecks[faceIndex];
@@ -361,8 +494,10 @@ public class Chunk : MonoBehaviour
 
         if (neighbor == 0) return false;
 
-        bool currentIsWater = (currentBlockType == 7);
+        bool currentIsWater  = (currentBlockType == 7);
         bool neighborIsWater = (neighbor == 7);
+        // Flowers are transparent billboards — treat like air for culling purposes
+        bool neighborIsFlower = (neighbor == 9);
 
         if (currentIsWater)
         {
@@ -371,8 +506,8 @@ public class Chunk : MonoBehaviour
         }
         else
         {
-            // Solid blocks cull against solid blocks, but NOT water or air
-            if (neighborIsWater) return false;
+            // Solid blocks cull against solid blocks, but NOT water, air, or flowers
+            if (neighborIsWater || neighborIsFlower) return false;
 
             // If neighbor is a full block, it culls our face
             if (neighbor != 6) return true;
@@ -392,24 +527,23 @@ public class Chunk : MonoBehaviour
     void CreateMesh()
     {
         Mesh mesh = new Mesh();
-        mesh.vertices = vertices.ToArray();
+        mesh.vertices  = vertices.ToArray();
         mesh.triangles = triangles.ToArray();
-        mesh.uv = uvs.ToArray();
-
+        mesh.uv        = uvs.ToArray();
         mesh.RecalculateNormals();
 
-        meshFilter.mesh = mesh;
+        meshFilter.mesh        = mesh;
         meshCollider.sharedMesh = mesh;
 
-        // Water mesh creation
+        // ── Water mesh ────────────────────────────────────────────────────────
         if (waterVertices.Count > 0)
         {
             EnsureWaterChild();
             Mesh waterMesh = new Mesh();
-            waterMesh.vertices = waterVertices.ToArray();
+            waterMesh.vertices  = waterVertices.ToArray();
             waterMesh.triangles = waterTriangles.ToArray();
-            waterMesh.uv = waterUvs.ToArray();
-            waterMesh.colors = waterColors.ToArray(); // Apply vertex colors for transparent depth!
+            waterMesh.uv        = waterUvs.ToArray();
+            waterMesh.colors    = waterColors.ToArray();
             waterMesh.RecalculateNormals();
 
             waterMeshFilter.mesh = waterMesh;
@@ -418,9 +552,29 @@ public class Chunk : MonoBehaviour
         else
         {
             if (waterMeshRenderer != null)
-            {
                 waterMeshRenderer.gameObject.SetActive(false);
-            }
+        }
+
+        // ── Foliage mesh (flowers) ─────────────────────────────────────────────
+        if (foliageVertices.Count > 0)
+        {
+            EnsureFoliageChild();
+            Mesh foliageMesh = new Mesh();
+            foliageMesh.vertices  = foliageVertices.ToArray();
+            foliageMesh.triangles = foliageTriangles.ToArray();
+            foliageMesh.uv        = foliageUvs.ToArray();
+            foliageMesh.colors    = foliageColors.ToArray();
+            foliageMesh.RecalculateNormals();
+
+            foliageMeshFilter.mesh   = foliageMesh;
+            foliageMeshCollider.sharedMesh = foliageMesh; // allows raycast hits on flowers
+            IgnorePlayerCollision(); // Ignore player physics collision so player walks through them
+            foliageMeshRenderer.gameObject.SetActive(true);
+        }
+        else
+        {
+            if (foliageMeshRenderer != null)
+                foliageMeshRenderer.gameObject.SetActive(false);
         }
     }
 }

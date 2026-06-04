@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 9;  // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand
+    public const int TILE_COUNT = 10; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower
 
     public static Texture2D Create()
     {
@@ -35,7 +35,8 @@ public static class GrassTextureGenerator
                               : tile == 5 ? WoodSide(lx, y)
                               : tile == 6 ? Plank(lx, y)
                               : tile == 7 ? Water(lx, y)
-                                          : Sand(lx, y);
+                              : tile == 8 ? Sand(lx, y)
+                                          : Flower(lx, y);
             }
         }
 
@@ -171,11 +172,54 @@ public static class GrassTextureGenerator
         return new Color(r, g, b);
     }
 
+    static Color Flower(int x, int y)
+    {
+        // SurvivalCraft-style: thin green stem, coloured cross petals, transparent background.
+        // Background is pure magenta (1,0,1) → alpha=0 in RGBA conversion.
+        Color key    = new Color(1f,    0f,    1f   );  // pure magenta → alpha=0 (transparent)
+        Color stem   = new Color(0.20f, 0.55f, 0.10f);  // dark green stem
+        Color leaf   = new Color(0.28f, 0.68f, 0.15f);  // lighter green leaf
+        Color petal  = new Color(0.95f, 0.25f, 0.50f);  // rose-pink petal
+        Color petal2 = new Color(1.00f, 0.50f, 0.10f);  // warm orange side petals
+        Color centre = new Color(1.00f, 0.90f, 0.15f);  // bright yellow centre
+
+        // ── Stem: 2 pixels wide, centre of tile, y=0..8 ──
+        bool isStem = (x == 7 || x == 8) && y <= 8;
+        if (isStem) return stem;
+
+        // ── Leaf: small bump off the stem at y=4-5 ──
+        if ((x == 9 || x == 10) && (y == 5 || y == 4)) return leaf;
+        if ((x == 6 || x == 5) && (y == 3 || y == 2)) return leaf;
+
+        // ── Petals: 5-pixel cross centred at (7,11) ──
+        //  top arm:   (7,14)(8,14)
+        //  bottom arm:(7,9) (8,9)
+        //  left arm:  (5,11)(5,12)
+        //  right arm: (10,11)(10,12)
+        //  diagonals (orange accent):
+        //    top-left (6,13), top-right (9,13), bot-left (6,10), bot-right (9,10)
+        //  centre fill: x 6..9, y 10..13
+        bool topArm    = (x == 7 || x == 8) && (y == 14 || y == 15);
+        bool botArm    = (x == 7 || x == 8) && (y == 8  || y == 9 );
+        bool leftArm   = (x == 4 || x == 5) && (y == 11 || y == 12);
+        bool rightArm  = (x == 10|| x == 11) && (y == 11 || y == 12);
+        bool centFill  = x >= 6 && x <= 9 && y >= 10 && y <= 13;
+        bool diag      = ((x == 5 || x == 10) && (y == 13 || y == 10));
+        bool isCentre  = (x == 7 || x == 8) && (y == 11 || y == 12);
+
+        if (isCentre)  return centre;
+        if (centFill)  return petal;
+        if (topArm || botArm || leftArm || rightArm) return petal;
+        if (diag)      return petal2;
+
+        return key;
+    }
+
     // ── UV helpers ────────────────────────────────────────────────────────────
 
     /// <summary>Returns the 4 atlas UVs for a given face and block type.</summary>
     /// <param name="face">0=back,1=front,2=top,3=bottom,4=left,5=right</param>
-    /// <param name="blockType">1=Wood, 2=Plank, 3=Stone, 4=Grass, 5=Dirt, 6=Grass Slab, 7=Water, 8=Sand</param>
+    /// <param name="blockType">1=Wood, 2=Plank, 3=Stone, 4=Grass, 5=Dirt, 6=Grass Slab, 7=Water, 8=Sand, 9=Flower</param>
     public static Vector2[] GetBlockUVs(int face, byte blockType)
     {
         int tile;
@@ -191,6 +235,8 @@ public static class GrassTextureGenerator
             tile = 7;
         else if (blockType == 8) // Sand: all faces sand
             tile = 8;
+        else if (blockType == 9) // Flower: all quads use flower tile
+            tile = 9;
         else                     // Grass (blockType == 4 or 6)
             tile = (face == 2) ? 0   // top    → grass top
                  : (face == 3) ? 2   // bottom → dirt

@@ -38,8 +38,9 @@ public class PlayerInteraction : MonoBehaviour
             Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) // Left click - Break block
         {
             RaycastHit hit;
+            // Use Collide so trigger MeshColliders on flowers (foliage child) register hits
             if (Physics.Raycast(playerCam.transform.position, playerCam.transform.forward,
-                                out hit, reach, ~0, QueryTriggerInteraction.Ignore))
+                                out hit, reach, ~0, QueryTriggerInteraction.Collide))
             {
                 // Tiny nudge to land just inside the hit block, then floor to voxel coords,
                 // then pass the CENTER of that voxel so FloorToInt is never ambiguous.
@@ -68,9 +69,23 @@ public class PlayerInteraction : MonoBehaviour
 
             byte blockType = (byte)selectedSlot.item.blockTypeID;
 
-            RaycastHit hit;
-            if (Physics.Raycast(playerCam.transform.position, playerCam.transform.forward,
-                                out hit, reach, ~0, QueryTriggerInteraction.Ignore))
+            RaycastHit[] hits = Physics.RaycastAll(playerCam.transform.position, playerCam.transform.forward, reach, ~0, QueryTriggerInteraction.Ignore);
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+            RaycastHit hit = default;
+            bool foundSolid = false;
+
+            foreach (var h in hits)
+            {
+                if (h.collider.name != "Foliage")
+                {
+                    hit = h;
+                    foundSolid = true;
+                    break;
+                }
+            }
+
+            if (foundSolid)
             {
                 // Tiny nudge outward to land in the empty space adjacent to the hit face.
                 Vector3 p = hit.point + hit.normal * 0.001f;
@@ -111,7 +126,19 @@ public class PlayerInteraction : MonoBehaviour
                 }
 
                 if (VoxelWorld.Instance != null)
+                {
+                    if (blockType == 9) // Flower
+                    {
+                        Vector3 belowPos = voxelCenter + Vector3.down;
+                        byte blockBelow = VoxelWorld.Instance.GetBlock(belowPos);
+                        // Flower can only be placed on Grass (4), Dirt (5), or Sand (8)
+                        if (blockBelow != 4 && blockBelow != 5 && blockBelow != 8)
+                        {
+                            return;
+                        }
+                    }
                     VoxelWorld.Instance.ModifyBlock(voxelCenter, blockType);
+                }
 
                 // Register as player-placed for structure detection
                 PlacedBlockRegistry.Instance?.Register(gridPos);

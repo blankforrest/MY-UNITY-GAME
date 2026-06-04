@@ -91,21 +91,40 @@ public class DroppedItem : MonoBehaviour
         }
         else
         {
-            // Default: mini voxel cube
-            const float SIZE = 0.175f;
-            mf.mesh = BuildCubeMesh(SIZE);
-
-            Material mat = null;
-            if (VoxelWorld.Instance != null && VoxelWorld.Instance.chunkMaterial != null)
-                mat = new Material(VoxelWorld.Instance.chunkMaterial);
+            if (blockType == 9) // Flower
+            {
+                mf.mesh = BuildCrossedQuadsMesh(0.18f);
+                if (VoxelWorld.Instance != null && VoxelWorld.Instance.foliageMaterial != null)
+                {
+                    mr.material = VoxelWorld.Instance.foliageMaterial;
+                }
+                else
+                {
+                    Shader s = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                    Material mat = new Material(s);
+                    mat.mainTexture = GrassTextureGenerator.Create();
+                    mat.color = Color.white;
+                    mr.material = mat;
+                }
+            }
             else
             {
-                Shader s = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                mat = new Material(s);
-                mat.mainTexture = GrassTextureGenerator.Create();
-                mat.color = Color.white;
+                // Default: mini voxel cube
+                const float SIZE = 0.175f;
+                mf.mesh = BuildCubeMesh(SIZE);
+
+                Material mat = null;
+                if (VoxelWorld.Instance != null && VoxelWorld.Instance.chunkMaterial != null)
+                    mat = new Material(VoxelWorld.Instance.chunkMaterial);
+                else
+                {
+                    Shader s = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                    mat = new Material(s);
+                    mat.mainTexture = GrassTextureGenerator.Create();
+                    mat.color = Color.white;
+                }
+                mr.material = mat;
             }
-            mr.material = mat;
         }
     }
 
@@ -143,6 +162,62 @@ public class DroppedItem : MonoBehaviour
             tris.Add(vi); tris.Add(vi+1); tris.Add(vi+2);
             tris.Add(vi+2); tris.Add(vi+1); tris.Add(vi+3);
         }
+
+        var mesh = new Mesh();
+        mesh.SetVertices(verts);
+        mesh.SetUVs(0, uvs2);
+        mesh.SetTriangles(tris, 0);
+        mesh.RecalculateNormals();
+        return mesh;
+    }
+
+    Mesh BuildCrossedQuadsMesh(float s)
+    {
+        var verts = new System.Collections.Generic.List<Vector3>();
+        var uvs2  = new System.Collections.Generic.List<Vector2>();
+        var tris  = new System.Collections.Generic.List<int>();
+
+        // Two vertical crossed quads, centered on X/Z (y from -s to s)
+        Vector3[] q1 = new Vector3[]
+        {
+            new Vector3(-s, -s, -s), // bottom-left
+            new Vector3(-s,  s, -s), // top-left
+            new Vector3( s, -s,  s), // bottom-right
+            new Vector3( s,  s,  s)  // top-right
+        };
+        Vector3[] q2 = new Vector3[]
+        {
+            new Vector3( s, -s, -s),
+            new Vector3( s,  s, -s),
+            new Vector3(-s, -s,  s),
+            new Vector3(-s,  s,  s)
+        };
+
+        Vector2[] uvFlow = GrassTextureGenerator.GetBlockUVs(0, 9); // flower tile
+
+        // Quad 1 Front
+        int v0 = verts.Count;
+        verts.AddRange(q1); uvs2.AddRange(uvFlow);
+        tris.Add(v0); tris.Add(v0+1); tris.Add(v0+2);
+        tris.Add(v0+2); tris.Add(v0+1); tris.Add(v0+3);
+
+        // Quad 1 Back
+        int v1 = verts.Count;
+        verts.AddRange(q1); uvs2.AddRange(uvFlow);
+        tris.Add(v1+2); tris.Add(v1+1); tris.Add(v1);
+        tris.Add(v1+3); tris.Add(v1+1); tris.Add(v1+2);
+
+        // Quad 2 Front
+        int v2 = verts.Count;
+        verts.AddRange(q2); uvs2.AddRange(uvFlow);
+        tris.Add(v2); tris.Add(v2+1); tris.Add(v2+2);
+        tris.Add(v2+2); tris.Add(v2+1); tris.Add(v2+3);
+
+        // Quad 2 Back
+        int v3 = verts.Count;
+        verts.AddRange(q2); uvs2.AddRange(uvFlow);
+        tris.Add(v3+2); tris.Add(v3+1); tris.Add(v3);
+        tris.Add(v3+3); tris.Add(v3+1); tris.Add(v3+2);
 
         var mesh = new Mesh();
         mesh.SetVertices(verts);
@@ -202,7 +277,7 @@ public class DroppedItem : MonoBehaviour
         // ── Stack same-type items ─────────────────────────────────────────────
         DroppedItem other = collision.gameObject.GetComponent<DroppedItem>();
         if (other == null) other = collision.gameObject.GetComponentInParent<DroppedItem>();
-        if (other != null && other != this && other.item == item && other.blockType == blockType)
+        if (other != null && other != this && other.item != null && item != null && other.item.itemName == item.itemName && other.blockType == blockType)
         {
             // Older item absorbs newer one
             if (aliveTime >= other.aliveTime)

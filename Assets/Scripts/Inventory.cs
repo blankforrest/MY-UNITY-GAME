@@ -32,12 +32,14 @@ public class Inventory : MonoBehaviour
 
     public bool Add(Item item, int amount)
     {
+        if (item == null) return false;
+
         for (int i = 0; i < slots.Length; i++)
-            if (slots[i] != null && slots[i].item == item)
+            if (slots[i] != null && slots[i].item != null && slots[i].item.itemName == item.itemName)
             { slots[i].amount += amount; onInventoryChangedCallback?.Invoke(); return true; }
 
         for (int i = 0; i < slots.Length; i++)
-            if (slots[i] == null)
+            if (slots[i] == null || slots[i].item == null)
             { slots[i] = new InventorySlot(item, amount); onInventoryChangedCallback?.Invoke(); return true; }
 
         return false;

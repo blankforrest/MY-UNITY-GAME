@@ -34,9 +34,10 @@ public class StarterItems : MonoBehaviour
             yield break;
         }
 
-        GiveItem("Wood",  blockTypeID: 1, fallbackColor: new Color(0.55f, 0.38f, 0.17f), amount: 64);
-        GiveItem("Plank", blockTypeID: 2, fallbackColor: new Color(0.72f, 0.58f, 0.37f), amount: 64);
-        GiveItem("Stone", blockTypeID: 3, fallbackColor: new Color(0.52f, 0.52f, 0.54f), amount: 64);
+        GiveItem("Wood",   blockTypeID: 1, fallbackColor: new Color(0.55f, 0.38f, 0.17f), amount: 64);
+        GiveItem("Plank",  blockTypeID: 2, fallbackColor: new Color(0.72f, 0.58f, 0.37f), amount: 64);
+        GiveItem("Stone",  blockTypeID: 3, fallbackColor: new Color(0.52f, 0.52f, 0.54f), amount: 64);
+        GiveItem("Flower", blockTypeID: 9, fallbackColor: new Color(1.00f, 0.28f, 0.55f), amount: 64);
     }
 
     private void GiveItem(string itemName, int blockTypeID, Color fallbackColor, int amount)
@@ -57,7 +58,14 @@ public class StarterItems : MonoBehaviour
             }
         }
 
-        item.icon = loaded != null ? loaded : MakeBlockIcon(fallbackColor);
+        if (itemName.Equals("Flower", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.icon = VoxelWorld.MakeFlowerIcon();
+        }
+        else
+        {
+            item.icon = loaded != null ? loaded : MakeBlockIcon(fallbackColor);
+        }
 
         bool added = Hotbar.Instance.TryAddItem(item, amount);
         if (!added)
