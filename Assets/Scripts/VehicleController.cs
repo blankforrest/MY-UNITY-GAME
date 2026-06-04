@@ -41,6 +41,8 @@ public class VehicleController : MonoBehaviour
 
     // True while the vehicle is actively climbing a step this FixedUpdate
     private bool _isClimbing = false;
+    // Root BoxCollider used for player collision — disabled while driving so step-climb works
+    private BoxCollider _rootCollider;
     // Cached layer mask — excludes the vehicle itself so wheels don't detect their own colliders
     private int _stepLayerMask = ~0;
 
@@ -124,21 +126,21 @@ public class VehicleController : MonoBehaviour
             bounceCombine   = PhysicsMaterialCombine.Minimum
         };
 
+        // ALL child colliders (wheels + body blocks) get zero-friction glide material.
+        // Body block BoxColliders would otherwise create horizontal contact forces when
+        // hitting terrain step faces, blocking climbing even with _rb.position lift.
+        // Player collision is handled exclusively by the root BoxCollider below.
         foreach (var col in allColliders)
-        {
-            if (col is SphereCollider)
-                col.sharedMaterial = glideMaterial;  // wheels — slide on terrain
-            else
-                col.sharedMaterial = bodyMaterial;   // body blocks — player can stand on these
-        }
+            col.sharedMaterial = glideMaterial;
 
         // ── Root body collider (player collision) ─────────────────────────────
-        // The CharacterController is unreliable against compound child colliders on a
-        // dynamic Rigidbody, so we add a root-level BoxCollider that the CC always hits.
+        // CharacterController is unreliable against compound child colliders on a
+        // dynamic Rigidbody. A root-level BoxCollider gives the CC a single solid
+        // surface it always detects. Uses bodyMaterial so the CC grips it.
         //
-        // CLIMBING SAFETY: the collider's bottom is raised to localMinY + maxStepHeight + buffer
-        // so it sits entirely in the vehicle BODY zone and never contacts a terrain step face.
-        // The step-climb raycasts probe below this level independently.
+        // Climbing is handled via direct _rb.position teleport in TryClimbStep,
+        // which bypasses the physics collision solver entirely, so this collider
+        // can never block the vehicle from stepping up.
         {
             Bounds tb    = new Bounds(Vector3.zero, Vector3.zero);
             bool   first = true;
@@ -153,20 +155,11 @@ public class VehicleController : MonoBehaviour
 
             if (!first)
             {
-                // Bottom of root collider = above every climbable step
-                float safeBottom = tb.min.y + maxStepHeight + 0.2f;
-                float safeTop    = tb.max.y;
-                float safeHeight = safeTop - safeBottom;
-
-                if (safeHeight > 0.1f)   // only add when there is real body above the wheels
-                {
-                    BoxCollider rootBox  = gameObject.AddComponent<BoxCollider>();
-                    rootBox.center       = new Vector3(tb.center.x,
-                                                       (safeBottom + safeTop) * 0.5f,
-                                                       tb.center.z);
-                    rootBox.size         = new Vector3(tb.size.x, safeHeight, tb.size.z);
-                    rootBox.sharedMaterial = bodyMaterial;  // friction so CC grips the surface
-                }
+                BoxCollider rootBox    = gameObject.AddComponent<BoxCollider>();
+                rootBox.center         = tb.center;
+                rootBox.size           = tb.size;
+                rootBox.sharedMaterial = bodyMaterial; // friction so player CC grips it
+                _rootCollider          = rootBox;      // stored so we can toggle it
             }
         }
 
@@ -179,14 +172,17 @@ public class VehicleController : MonoBehaviour
     {
         if (_rb == null) return;
 
+        // Toggle root BoxCollider:
+        //   PARKED  (isBeingControlled=false) → enabled  → player can't walk through vehicle
+        //   DRIVING (isBeingControlled=true)  → disabled → root box can't block step climbing
+        //   (player is inside the vehicle while driving, so they don't need to collide with it)
+        if (_rootCollider != null)
+            _rootCollider.enabled = !isBeingControlled;
+
         // --- DOWNFORCE: keeps wheels on ground at speed ---
-        // Suppressed while climbing so gravity doesn't fight the upward lift.
-        if (!_isClimbing)
-        {
-            float speed = _rb.linearVelocity.magnitude;
-            _rb.AddForce(-transform.up * speed * speed * 2.5f * _rb.mass * Time.fixedDeltaTime,
-                         ForceMode.Force);
-        }
+        float speed = _rb.linearVelocity.magnitude;
+        _rb.AddForce(-transform.up * speed * speed * 2.5f * _rb.mass * Time.fixedDeltaTime,
+                     ForceMode.Force);
 
         // --- EXTRA GRAVITY WHEN AIRBORNE: heavy stomp feel ---
         // Count grounded wheels before the loop below
@@ -296,14 +292,19 @@ public class VehicleController : MonoBehaviour
             float dy  = Mathf.Lerp(0.06f, maxStepHeight * 0.85f, (float)i / (probes - 1));
             Vector3 org = new Vector3(transform.position.x, lowestY + dy, transform.position.z);
 
-            if (Physics.Raycast(org, moveDir, out RaycastHit h, stepProbeDistance, _stepLayerMask))
+            if (!Physics.Raycast(org, moveDir, out RaycastHit h, stepProbeDistance, _stepLayerMask))
+                continue;
+
+            // Skip hits on the vehicle's own colliders — prevents detecting our own
+            // front blocks as a fake "step wall" which was locking _isClimbing = true
+            if (h.transform == transform || h.transform.IsChildOf(transform))
+                continue;
+
+            if (!hitWall || h.point.y < lowestHitY)
             {
-                if (!hitWall || h.point.y < lowestHitY)
-                {
-                    lowestHitY = h.point.y;
-                    wallHit    = h;
-                    hitWall    = true;
-                }
+                lowestHitY = h.point.y;
+                wallHit    = h;
+                hitWall    = true;
             }
         }
 
@@ -323,20 +324,18 @@ public class VehicleController : MonoBehaviour
         float stepH = topHit.point.y - lowestY;
         if (stepH < 0.05f || stepH > maxStepHeight) { _isClimbing = false; return; }
 
-        // ── Climbing confirmed — inject velocity ──────────────────────────────
+        // ── Climbing confirmed — lift via direct position ─────────────────────
+        // _rb.position bypasses the physics collision solver, so the root BoxCollider
+        // can never block the vehicle from rising. Capped per-frame so it looks smooth.
         _isClimbing = true;
 
-        float ratio = Mathf.Clamp01(stepH / maxStepHeight);
-
-        // 1. Upward: lift vehicle over the step
-        float targetUpVel = stepClimbSpeed * ratio;
-        if (_rb.linearVelocity.y < targetUpVel)
-            _rb.AddForce(Vector3.up * (targetUpVel - _rb.linearVelocity.y), ForceMode.VelocityChange);
+        // 1. Upward: teleport up by up to stepClimbSpeed * dt per frame
+        float liftThisFrame = Mathf.Min(stepH, stepClimbSpeed * Time.fixedDeltaTime);
+        _rb.position += Vector3.up * liftThisFrame;
 
         // 2. Forward: prevent horizontal momentum from dying on the block face
-        //    Ensure the vehicle keeps at least a gentle crawl speed while climbing.
-        float currentFwd = Vector3.Dot(_rb.linearVelocity, moveDir);
-        float minFwdDuringClimb = 2.5f;   // m/s — just enough to carry it over
+        float currentFwd       = Vector3.Dot(_rb.linearVelocity, moveDir);
+        float minFwdDuringClimb = 2.5f;
         if (currentFwd < minFwdDuringClimb)
             _rb.AddForce(moveDir * (minFwdDuringClimb - currentFwd), ForceMode.VelocityChange);
     }
