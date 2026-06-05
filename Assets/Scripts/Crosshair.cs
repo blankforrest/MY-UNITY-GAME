@@ -14,6 +14,8 @@ public class Crosshair : MonoBehaviour
     private const float BAR_THICKNESS = 2f;
     private const float GAP           = 4f; // gap in center
 
+    private GameObject crosshairRoot;
+
     void Awake()
     {
         if (Instance == null) Instance = this;
@@ -39,10 +41,10 @@ public class Crosshair : MonoBehaviour
         }
 
         // Root container — centered on screen
-        GameObject root = new GameObject("Crosshair", typeof(RectTransform));
-        root.transform.SetParent(canvas.transform, false);
+        crosshairRoot = new GameObject("Crosshair", typeof(RectTransform));
+        crosshairRoot.transform.SetParent(canvas.transform, false);
 
-        RectTransform rootRT = root.GetComponent<RectTransform>();
+        RectTransform rootRT = crosshairRoot.GetComponent<RectTransform>();
         rootRT.anchorMin        = new Vector2(0.5f, 0.5f);
         rootRT.anchorMax        = new Vector2(0.5f, 0.5f);
         rootRT.pivot            = new Vector2(0.5f, 0.5f);
@@ -50,22 +52,22 @@ public class Crosshair : MonoBehaviour
         rootRT.sizeDelta        = Vector2.zero;
 
         // Horizontal left bar
-        CreateBar(root, "H_Left",
+        CreateBar(crosshairRoot, "H_Left",
             new Vector2(-(GAP / 2f + BAR_LENGTH / 2f), 0f),
             new Vector2(BAR_LENGTH, BAR_THICKNESS));
 
         // Horizontal right bar
-        CreateBar(root, "H_Right",
+        CreateBar(crosshairRoot, "H_Right",
             new Vector2(GAP / 2f + BAR_LENGTH / 2f, 0f),
             new Vector2(BAR_LENGTH, BAR_THICKNESS));
 
         // Vertical top bar
-        CreateBar(root, "V_Top",
+        CreateBar(crosshairRoot, "V_Top",
             new Vector2(0f, GAP / 2f + BAR_LENGTH / 2f),
             new Vector2(BAR_THICKNESS, BAR_LENGTH));
 
         // Vertical bottom bar
-        CreateBar(root, "V_Bottom",
+        CreateBar(crosshairRoot, "V_Bottom",
             new Vector2(0f, -(GAP / 2f + BAR_LENGTH / 2f)),
             new Vector2(BAR_THICKNESS, BAR_LENGTH));
     }
@@ -89,6 +91,9 @@ public class Crosshair : MonoBehaviour
     /// <summary>Show or hide the crosshair (e.g., hide when inventory is open).</summary>
     public void SetVisible(bool visible)
     {
-        gameObject.SetActive(visible);
+        if (crosshairRoot != null)
+        {
+            crosshairRoot.SetActive(visible);
+        }
     }
 }

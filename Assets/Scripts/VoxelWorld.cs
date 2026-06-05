@@ -310,7 +310,7 @@ public class VoxelWorld : MonoBehaviour
             Mathf.FloorToInt(local.z));
     }
 
-    public void ModifyBlock(Vector3 pos, byte blockID)
+    public void ModifyBlock(Vector3 pos, byte blockID, bool suppressDrop = false)
     {
         Chunk chunk = GetChunkFromVector3(pos);
         if (chunk == null) return;
@@ -320,11 +320,11 @@ public class VoxelWorld : MonoBehaviour
         int ly = Mathf.FloorToInt(local.y);
         int lz = Mathf.FloorToInt(local.z);
 
-        // Spawn drop when breaking — skip vehicle/special blocks (ID >= 10)
-        if (blockID == 0)
+        // Spawn drop when breaking — skip if suppressed (e.g. vehicle conversion) or vehicle/special blocks
+        if (blockID == 0 && !suppressDrop)
         {
             byte existing = chunk.GetVoxel(lx, ly, lz);
-            if (existing != 0 && existing < 10)
+            if (existing != 0 && (existing <= 12 || existing == 20 || existing == 21 || existing == 50))
             {
                 Item drop = null;
                 if (blockDrops != null && existing < blockDrops.Length)
@@ -372,13 +372,7 @@ public class VoxelWorld : MonoBehaviour
                         Sprite loaded = Resources.Load<Sprite>("Sprites/dirt_block");
                         drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.45f, 0.30f, 0.18f));
                     }
-                    else if (existing == 6)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Grass Slab";
-                        drop.blockTypeID = 6;
-                        drop.icon = MakeSlabIcon(new Color(0.35f, 0.65f, 0.25f));
-                    }
+
                     else if (existing == 8)
                     {
                         drop = ScriptableObject.CreateInstance<Item>();
@@ -393,6 +387,48 @@ public class VoxelWorld : MonoBehaviour
                         drop.blockTypeID = 9;
                         drop.icon = MakeFlowerIcon();
                     }
+                    else if (existing == 10)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Dandelion";
+                        drop.blockTypeID = 10;
+                        drop.icon = MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.95f, 0.85f, 0.10f), new Color(0.95f, 0.65f, 0.05f));
+                    }
+                    else if (existing == 11)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Iris";
+                        drop.blockTypeID = 11;
+                        drop.icon = MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.40f, 0.20f, 0.90f), new Color(1.00f, 0.80f, 0.10f));
+                    }
+                    else if (existing == 12)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Leaves";
+                        drop.blockTypeID = 12;
+                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.20f, 0.50f, 0.10f));
+                    }
+                    else if (existing == 20)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Small Wheel";
+                        drop.blockTypeID = 20;
+                        drop.icon = VehicleSpawner.CreateWheelIcon(false);
+                    }
+                    else if (existing == 21)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Large Wheel";
+                        drop.blockTypeID = 21;
+                        drop.icon = VehicleSpawner.CreateWheelIcon(true);
+                    }
+                    else if (existing == 50)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Control Block";
+                        drop.blockTypeID = 50;
+                        drop.icon = VehicleSpawner.CreateControlBlockIcon();
+                    }
                 }
 
                 if (drop != null) DroppedItem.Spawn(drop, 1, pos, existing);
@@ -406,23 +442,54 @@ public class VoxelWorld : MonoBehaviour
         if (blockID == 0)
         {
             Vector3 abovePos = pos + Vector3.up;
-            if (GetBlock(abovePos) == 9) // Flower block type
+            byte aboveBlock = GetBlock(abovePos);
+            if (aboveBlock == 9 || aboveBlock == 10 || aboveBlock == 11) // Flower block types
             {
                 ModifyBlock(abovePos, 0);
             }
         }
     }
 
+    private static Sprite _cachedRoseIcon;
+    private static Sprite _cachedDandelionIcon;
+    private static Sprite _cachedIrisIcon;
+
     /// <summary>Procedurally generates a small sprite icon representing a flower.</summary>
     public static Sprite MakeFlowerIcon()
+    {
+        return MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(1.00f, 0.28f, 0.55f), new Color(1.00f, 0.92f, 0.20f));
+    }
+
+    /// <summary>Procedurally generates a small sprite icon representing a flower with custom colors.</summary>
+    public static Sprite MakeFlowerIcon(Color stem, Color petal, Color centre)
+    {
+        // Rose-pink/red
+        if (petal.r > 0.9f && petal.g < 0.4f && petal.b > 0.4f)
+        {
+            if (_cachedRoseIcon == null) _cachedRoseIcon = GenerateFlowerIcon(stem, petal, centre);
+            return _cachedRoseIcon;
+        }
+        // Dandelion yellow
+        if (petal.r > 0.9f && petal.g > 0.8f && petal.b < 0.2f)
+        {
+            if (_cachedDandelionIcon == null) _cachedDandelionIcon = GenerateFlowerIcon(stem, petal, centre);
+            return _cachedDandelionIcon;
+        }
+        // Iris violet
+        if (petal.r > 0.3f && petal.r < 0.5f && petal.g < 0.3f && petal.b > 0.8f)
+        {
+            if (_cachedIrisIcon == null) _cachedIrisIcon = GenerateFlowerIcon(stem, petal, centre);
+            return _cachedIrisIcon;
+        }
+
+        return GenerateFlowerIcon(stem, petal, centre);
+    }
+
+    private static Sprite GenerateFlowerIcon(Color stem, Color petal, Color centre)
     {
         const int SZ = 64;
         Color[] px = new Color[SZ * SZ];
         for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
-
-        Color stem   = new Color(0.22f, 0.58f, 0.12f);
-        Color petal  = new Color(1.00f, 0.28f, 0.55f);
-        Color centre = new Color(1.00f, 0.92f, 0.20f);
 
         void Set(int x, int y, Color c)
         { if (x >= 0 && x < SZ && y >= 0 && y < SZ) px[y * SZ + x] = c; }
@@ -508,14 +575,15 @@ public class VoxelWorld : MonoBehaviour
         Color[] src = source.GetPixels();
         Color[] out_ = new Color[src.Length];
         int tileSize  = GrassTextureGenerator.TILE_SIZE;
-        int flowerTileX = 9 * tileSize; // pixel x start of flower tile
+        int flowerTileXStart = 9 * tileSize; // pixel x start of flower tiles
+        int flowerTileXEnd   = 12 * tileSize; // end of flower tiles (9, 10, 11)
 
         for (int i = 0; i < src.Length; i++)
         {
             int px = i % w;
             Color c = src[i];
-            // Check if this pixel is in the flower tile and is magenta (key colour)
-            bool inFlowerTile = (px >= flowerTileX && px < flowerTileX + tileSize);
+            // Check if this pixel is in the flower tiles and is magenta (key colour)
+            bool inFlowerTile = (px >= flowerTileXStart && px < flowerTileXEnd);
             bool isMagenta    = (c.r > 0.8f && c.g < 0.2f && c.b > 0.8f);
             out_[i] = inFlowerTile && isMagenta
                 ? new Color(c.r, c.g, c.b, 0f)  // transparent

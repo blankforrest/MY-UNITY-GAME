@@ -37,22 +37,28 @@ public class ControlBlock : MonoBehaviour
             if (Physics.Raycast(ray, out RaycastHit hit, 5f, ~0, QueryTriggerInteraction.Ignore))
             {
                 // Use GetComponentInParent in case the collider is on a child object of the block prefab
-                if (hit.collider != null && hit.collider.GetComponentInParent<ControlBlock>() == this)
+                if (hit.collider != null)
                 {
-                    isLookedAt = true;
-
-                    // Dynamically fetch VC if it was missed in Start
                     if (vc == null) vc = GetComponentInParent<VehicleController>();
 
-                    bool interactPressed = false;
-                    if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
-                    {
-                        interactPressed = true;
-                    }
+                    bool isTarget = hit.collider.GetComponentInParent<ControlBlock>() == this ||
+                                    (vc != null && hit.collider.GetComponentInParent<VehicleController>() == vc) ||
+                                    hit.collider.GetComponentInChildren<ControlBlock>() == this;
 
-                    if (interactPressed && vc != null)
+                    if (isTarget)
                     {
-                        VehicleHUD.Instance.OpenHUD(vc);
+                        isLookedAt = true;
+
+                        bool interactPressed = false;
+                        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+                        {
+                            interactPressed = true;
+                        }
+
+                        if (interactPressed && vc != null)
+                        {
+                            VehicleHUD.Instance.OpenHUD(vc);
+                        }
                     }
                 }
             }

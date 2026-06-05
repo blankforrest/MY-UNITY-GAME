@@ -97,10 +97,6 @@ public class PlayerInteraction : MonoBehaviour
 
                 // Prevent placing block inside the player
                 Bounds blockBounds = new Bounds(voxelCenter, Vector3.one);
-                if (blockType == 6) // Slab
-                {
-                    blockBounds = new Bounds(new Vector3(gridPos.x + 0.5f, gridPos.y + 0.25f, gridPos.z + 0.5f), new Vector3(1f, 0.5f, 1f));
-                }
                 
                 // Shrink bounds slightly so you can place blocks while standing flush against the grid
                 blockBounds.Expand(-0.1f);
@@ -127,7 +123,7 @@ public class PlayerInteraction : MonoBehaviour
 
                 if (VoxelWorld.Instance != null)
                 {
-                    if (blockType == 9) // Flower
+                    if (blockType == 9 || blockType == 10 || blockType == 11) // Flower varieties (Rose, Dandelion, Iris)
                     {
                         Vector3 belowPos = voxelCenter + Vector3.down;
                         byte blockBelow = VoxelWorld.Instance.GetBlock(belowPos);

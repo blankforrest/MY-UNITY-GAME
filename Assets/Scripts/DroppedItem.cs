@@ -91,20 +91,19 @@ public class DroppedItem : MonoBehaviour
         }
         else
         {
-            if (blockType == 9) // Flower
+            if (blockType == 9 || blockType == 10 || blockType == 11) // Flower varieties (Rose, Dandelion, Iris)
             {
                 mf.mesh = BuildCrossedQuadsMesh(0.18f);
                 if (VoxelWorld.Instance != null && VoxelWorld.Instance.foliageMaterial != null)
                 {
-                    mr.material = VoxelWorld.Instance.foliageMaterial;
+                    mr.sharedMaterial = VoxelWorld.Instance.foliageMaterial;
                 }
                 else
                 {
                     Shader s = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
                     Material mat = new Material(s);
                     mat.mainTexture = GrassTextureGenerator.Create();
-                    mat.color = Color.white;
-                    mr.material = mat;
+                    mr.sharedMaterial = mat;
                 }
             }
             else
@@ -113,17 +112,18 @@ public class DroppedItem : MonoBehaviour
                 const float SIZE = 0.175f;
                 mf.mesh = BuildCubeMesh(SIZE);
 
-                Material mat = null;
                 if (VoxelWorld.Instance != null && VoxelWorld.Instance.chunkMaterial != null)
-                    mat = new Material(VoxelWorld.Instance.chunkMaterial);
+                {
+                    mr.sharedMaterial = VoxelWorld.Instance.chunkMaterial;
+                }
                 else
                 {
                     Shader s = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-                    mat = new Material(s);
+                    Material mat = new Material(s);
                     mat.mainTexture = GrassTextureGenerator.Create();
                     mat.color = Color.white;
+                    mr.sharedMaterial = mat;
                 }
-                mr.material = mat;
             }
         }
     }
@@ -193,7 +193,7 @@ public class DroppedItem : MonoBehaviour
             new Vector3(-s,  s,  s)
         };
 
-        Vector2[] uvFlow = GrassTextureGenerator.GetBlockUVs(0, 9); // flower tile
+        Vector2[] uvFlow = GrassTextureGenerator.GetBlockUVs(0, blockType); // flower tile
 
         // Quad 1 Front
         int v0 = verts.Count;

@@ -42,37 +42,185 @@ public class VehicleSpawner : MonoBehaviour
         {
             Item controlBlockItem = ScriptableObject.CreateInstance<Item>();
             controlBlockItem.itemName = "Control Block";
-            controlBlockItem.itemID = 10;
-            controlBlockItem.blockTypeID = 10;
-            controlBlockItem.icon = CreateColorIcon(Color.yellow);
+            controlBlockItem.itemID = 50;
+            controlBlockItem.blockTypeID = 50;
+            controlBlockItem.icon = CreateControlBlockIcon();
             Hotbar.Instance.TryAddItem(controlBlockItem, 64);
 
             Item smallWheel = ScriptableObject.CreateInstance<Item>();
             smallWheel.itemName = "Small Wheel";
             smallWheel.itemID = 20;
             smallWheel.blockTypeID = 20;
-            smallWheel.icon = CreateColorIcon(Color.black);
+            smallWheel.icon = CreateWheelIcon(isLarge: false);
             Hotbar.Instance.TryAddItem(smallWheel, 64);
 
             Item largeWheel = ScriptableObject.CreateInstance<Item>();
             largeWheel.itemName = "Large Wheel";
             largeWheel.itemID = 21;
             largeWheel.blockTypeID = 21;
-            largeWheel.icon = CreateColorIcon(Color.gray);
+            largeWheel.icon = CreateWheelIcon(isLarge: true);
             Hotbar.Instance.TryAddItem(largeWheel, 64);
 
             Debug.Log("[VehicleSpawner] Gave player Control Blocks and Wheels!");
         }
     }
 
-    private Sprite CreateColorIcon(Color c)
+    private static Sprite _cachedControlBlockIcon;
+    private static Sprite _cachedSmallWheelIcon;
+    private static Sprite _cachedLargeWheelIcon;
+
+    public static Sprite CreateControlBlockIcon()
     {
-        Texture2D tex = new Texture2D(64, 64);
-        Color[] colors = new Color[64 * 64];
-        for (int i = 0; i < colors.Length; i++) colors[i] = c;
-        tex.SetPixels(colors);
+        if (_cachedControlBlockIcon != null) return _cachedControlBlockIcon;
+
+        const int SZ = 64;
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        Color[] px = new Color[SZ * SZ];
+
+        Color baseYellow = new Color(0.95f, 0.82f, 0.10f, 1f);
+        Color borderGray = new Color(0.35f, 0.35f, 0.35f, 1f);
+        Color lightGray  = new Color(0.6f, 0.6f, 0.6f, 1f);
+        Color darkGray   = new Color(0.2f, 0.2f, 0.2f, 1f);
+        Color screenBlue = new Color(0.1f, 0.6f, 0.95f, 1f);
+        Color coreWhite  = new Color(1f, 1f, 1f, 1f);
+
+        for (int y = 0; y < SZ; y++)
+        {
+            for (int x = 0; x < SZ; x++)
+            {
+                Color c = Color.clear;
+                
+                // Border
+                if (x < 4 || x >= SZ - 4 || y < 4 || y >= SZ - 4)
+                {
+                    c = borderGray;
+                }
+                else if (x < 6 || x >= SZ - 6 || y < 6 || y >= SZ - 6)
+                {
+                    c = darkGray;
+                }
+                // Central monitor / control screen
+                else if (x >= 18 && x < SZ - 18 && y >= 22 && y < SZ - 22)
+                {
+                    bool grid = (x == 32 || y == 32);
+                    c = grid ? coreWhite : screenBlue;
+                }
+                // Screen border
+                else if (x >= 16 && x < SZ - 16 && y >= 20 && y < SZ - 20)
+                {
+                    c = lightGray;
+                }
+                // Warning stripes
+                else
+                {
+                    bool stripe = ((x + y) / 6) % 2 == 0;
+                    c = stripe ? baseYellow : new Color(0.15f, 0.15f, 0.15f, 1f);
+                }
+
+                px[y * SZ + x] = c;
+            }
+        }
+
+        tex.SetPixels(px);
         tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, 64, 64), new Vector2(0.5f, 0.5f));
+        _cachedControlBlockIcon = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+        return _cachedControlBlockIcon;
+    }
+
+    public static Sprite CreateWheelIcon(bool isLarge)
+    {
+        if (isLarge && _cachedLargeWheelIcon != null) return _cachedLargeWheelIcon;
+        if (!isLarge && _cachedSmallWheelIcon != null) return _cachedSmallWheelIcon;
+
+        const int SZ = 64;
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        Color[] px = new Color[SZ * SZ];
+
+        Color darkTire   = new Color(0.15f, 0.15f, 0.15f, 1f);
+        Color lightTire  = new Color(0.25f, 0.25f, 0.25f, 1f);
+        Color metallicRim= new Color(0.7f, 0.7f, 0.72f, 1f);
+        Color darkRim    = new Color(0.4f, 0.4f, 0.42f, 1f);
+        Color highlight  = new Color(0.9f, 0.9f, 0.95f, 1f);
+        Color shadowColor= new Color(0.08f, 0.08f, 0.08f, 0.5f);
+
+        float centerX = SZ / 2f;
+        float centerY = SZ / 2f;
+        float tireRadius = isLarge ? 28f : 20f;
+        float rimRadius  = isLarge ? 14f : 10f;
+        float hubRadius  = isLarge ? 5f : 3.5f;
+
+        for (int y = 0; y < SZ; y++)
+        {
+            for (int x = 0; x < SZ; x++)
+            {
+                float dx = x - centerX;
+                float dy = y - centerY;
+                float distSq = dx * dx + dy * dy;
+                float dist = Mathf.Sqrt(distSq);
+
+                Color c = Color.clear;
+
+                if (dist > tireRadius && dist <= tireRadius + 3f && dy < -5f)
+                {
+                    c = shadowColor;
+                }
+                else if (dist <= tireRadius)
+                {
+                    if (dist > rimRadius)
+                    {
+                        bool isTread = false;
+                        if (isLarge)
+                        {
+                            float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
+                            isTread = Mathf.Abs(angle % 30f) < 4f && dist > tireRadius - 4f;
+                        }
+
+                        if (isTread)
+                        {
+                            c = new Color(0.08f, 0.08f, 0.08f, 1f);
+                        }
+                        else
+                        {
+                            float shade = Mathf.Clamp01((dx - dy) / (tireRadius * 1.5f));
+                            c = Color.Lerp(lightTire, darkTire, shade);
+                        }
+                    }
+                    else if (dist > hubRadius)
+                    {
+                        float shade = Mathf.Clamp01((dx - dy) / (rimRadius * 1.5f));
+                        c = Color.Lerp(highlight, darkRim, shade);
+
+                        float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
+                        int spokes = isLarge ? 6 : 4;
+                        float angleStep = 360f / spokes;
+                        bool onSpoke = Mathf.Abs((angle + 180f) % angleStep) < (isLarge ? 8f : 12f);
+                        if (onSpoke && dist > hubRadius + 2f)
+                        {
+                            // Spoke metal color
+                        }
+                        else if (dist > hubRadius + 1f)
+                        {
+                            c = new Color(0.2f, 0.2f, 0.22f, 1f);
+                        }
+                    }
+                    else
+                    {
+                        c = darkTire;
+                    }
+                }
+
+                px[y * SZ + x] = c;
+            }
+        }
+
+        tex.SetPixels(px);
+        tex.Apply();
+        Sprite result = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+        if (isLarge) _cachedLargeWheelIcon = result;
+        else _cachedSmallWheelIcon = result;
+        return result;
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -123,8 +271,8 @@ public class VehicleSpawner : MonoBehaviour
                     if (mr != null) mr.material.color = GetDebugColor(entry.blockTypeID);
                 }
 
-                // Apply correct procedural texture and face UVs for building blocks (ID < 10)
-                if (entry.blockTypeID < 10)
+                // Apply correct procedural texture and face UVs for blocks (IDs 1–12, 50)
+                if ((entry.blockTypeID >= 1 && entry.blockTypeID <= 12) || entry.blockTypeID == 50)
                 {
                     ApplyVoxelTexture(blockGO, (byte)entry.blockTypeID);
                 }
@@ -150,7 +298,7 @@ public class VehicleSpawner : MonoBehaviour
                 blockGO.AddComponent<BoxCollider>();
             }
 
-            if (entry.blockTypeID == 10)
+            if (entry.blockTypeID == 50) // Control Block
             {
                 blockGO.AddComponent<ControlBlock>();
             }
@@ -187,9 +335,9 @@ public class VehicleSpawner : MonoBehaviour
         vehicleGO.AddComponent<VehicleController>();
 
         // Warn if no Control Block present (E key won't work without one)
-        bool hasControlBlock = blueprint.blocks.Exists(b => b.blockTypeID == 10);
+        bool hasControlBlock = blueprint.blocks.Exists(b => b.blockTypeID == 50);
         if (!hasControlBlock)
-            Debug.LogWarning("[VehicleSpawner] No Control Block (ID 10) found! " +
+            Debug.LogWarning("[VehicleSpawner] No Control Block (ID 50) found! " +
                              "Include the yellow Control Block in your structure so you can press E to drive.");
 
         // ── e. Remove original voxels ─────────────────────────────────────────
@@ -296,7 +444,7 @@ public class VehicleSpawner : MonoBehaviour
                 worldGrid.y + 0.5f,
                 worldGrid.z + 0.5f);
 
-            VoxelWorld.Instance.ModifyBlock(voxelCentre, 0); // 0 = air
+            VoxelWorld.Instance.ModifyBlock(voxelCentre, 0, suppressDrop: true); // erase silently — no item drops during conversion
             PlacedBlockRegistry.Instance?.Unregister(worldGrid);
         }
     }

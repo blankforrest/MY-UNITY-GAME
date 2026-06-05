@@ -64,6 +64,13 @@ public static class BlueprintGenerator
         { 5, 5.0f  },  // iron
         { 7, 1.0f  },  // water
         { 8, 1.5f  },  // sand
+        { 9, 0.1f  },  // rose flower
+        { 10, 0.1f },  // dandelion
+        { 11, 0.1f },  // iris
+        { 12, 0.3f },  // leaves
+        { 20, 2.0f },  // small wheel
+        { 21, 4.0f },  // large wheel
+        { 50, 1.5f },  // control block
     };
 
     /// <summary>
@@ -78,6 +85,13 @@ public static class BlueprintGenerator
         { 5, 80f  },  // iron
         { 7, 1f   },  // water
         { 8, 8f   },  // sand
+        { 9, 1f   },  // rose flower
+        { 10, 1f  },  // dandelion
+        { 11, 1f  },  // iris
+        { 12, 3f  },  // leaves
+        { 20, 20f },  // small wheel
+        { 21, 40f },  // large wheel
+        { 50, 15f },  // control block
     };
 
     /// <summary>Fallback mass for block types not in <see cref="BlockMassTable"/>.</summary>

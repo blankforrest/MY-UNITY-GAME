@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 10; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower
+    public const int TILE_COUNT = 18; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel
 
     public static Texture2D Create()
     {
@@ -36,7 +36,15 @@ public static class GrassTextureGenerator
                               : tile == 6 ? Plank(lx, y)
                               : tile == 7 ? Water(lx, y)
                               : tile == 8 ? Sand(lx, y)
-                                          : Flower(lx, y);
+                              : tile == 9 ? Flower(lx, y)
+                              : tile == 10 ? Dandelion(lx, y)
+                              : tile == 11 ? Iris(lx, y)
+                              : tile == 12 ? Leaves(lx, y)
+                              : tile == 13 ? ControlBlockSide(lx, y)
+                              : tile == 14 ? ControlBlockFront(lx, y)
+                              : tile == 15 ? TireTread(lx, y)
+                              : tile == 16 ? WheelSide(lx, y, false)
+                                           : WheelSide(lx, y, true);
             }
         }
 
@@ -58,7 +66,26 @@ public static class GrassTextureGenerator
         bool patch = Mathf.PerlinNoise(x * 0.25f + 5f, y * 0.25f + 3f) > 0.72f;
         float pd = patch ? 0.06f : 0f;
 
-        return new Color(0.28f + t - pd, 0.62f + t * 0.4f - pd, 0.10f + t * 0.2f);
+        // ── Soft edge shading (simulates Ambient Occlusion organically) ──
+        int distToXEdge = Mathf.Min(x, 15 - x);
+        int distToYEdge = Mathf.Min(y, 15 - y);
+        int distToEdge = Mathf.Min(distToXEdge, distToYEdge);
+
+        float edgeShadow = 0f;
+        if (distToEdge < 3)
+        {
+            // Calculate a soft shadow factor (strongest at the very edge, fading to 0 by pixel 3)
+            float fade = (3f - distToEdge) / 3f;
+            
+            // Mix in some high-frequency Perlin noise to make the shadow look irregular and natural
+            float edgeNoise = Mathf.PerlinNoise(x * 0.8f + 15f, y * 0.8f + 25f);
+            edgeShadow = fade * (0.04f + edgeNoise * 0.06f); // very subtle shadow (4% to 10% max)
+        }
+
+        return new Color(
+            Mathf.Clamp01(0.28f + t - pd - edgeShadow),
+            Mathf.Clamp01(0.62f + t * 0.4f - pd - edgeShadow * 0.8f),
+            Mathf.Clamp01(0.10f + t * 0.2f - edgeShadow * 0.5f));
     }
 
     static Color GrassSide(int x, int y)
@@ -169,7 +196,23 @@ public static class GrassTextureGenerator
         float g = 0.78f + n * 0.04f;
         float b = 0.58f + n * 0.06f - grain * 0.03f;
         
-        return new Color(r, g, b);
+        // ── Soft edge shading (simulates Ambient Occlusion organically) ──
+        int distToXEdge = Mathf.Min(x, 15 - x);
+        int distToYEdge = Mathf.Min(y, 15 - y);
+        int distToEdge = Mathf.Min(distToXEdge, distToYEdge);
+
+        float edgeShadow = 0f;
+        if (distToEdge < 3)
+        {
+            float fade = (3f - distToEdge) / 3f;
+            float edgeNoise = Mathf.PerlinNoise(x * 0.7f + 33f, y * 0.7f + 44f);
+            edgeShadow = fade * (0.03f + edgeNoise * 0.05f); // very subtle shadow (3% to 8% max)
+        }
+
+        return new Color(
+            Mathf.Clamp01(r - edgeShadow),
+            Mathf.Clamp01(g - edgeShadow * 0.9f),
+            Mathf.Clamp01(b - edgeShadow * 0.8f));
     }
 
     static Color Flower(int x, int y)
@@ -215,6 +258,215 @@ public static class GrassTextureGenerator
         return key;
     }
 
+    static Color Dandelion(int x, int y)
+    {
+        Color key    = new Color(1f,    0f,    1f   );  // pure magenta
+        Color stem   = new Color(0.18f, 0.50f, 0.08f);  // slightly different dark green stem
+        Color leaf   = new Color(0.25f, 0.62f, 0.12f);  // jagged leaves
+        Color yellow = new Color(0.95f, 0.85f, 0.10f);  // bright yellow dandelion petals
+        Color gold   = new Color(0.95f, 0.65f, 0.05f);  // golden/orange shading
+        Color center = new Color(1.00f, 0.95f, 0.40f);  // bright center highlight
+
+        // ── Stem: center of tile, y=0..9 ──
+        bool isStem = (x == 7 || x == 8) && y <= 9;
+        if (isStem) return stem;
+
+        // ── Jagged Leaves (toothed, dandelion style) ──
+        if (x == 9 && (y == 3 || y == 4)) return leaf;
+        if (x == 10 && y == 4) return leaf;
+        if (x == 6 && (y == 2 || y == 3)) return leaf;
+        if (x == 5 && y == 3) return leaf;
+
+        // ── Flower Head: circular puff at (7.5, 11.5) ──
+        float dx = x - 7.5f;
+        float dy = y - 11.5f;
+        float distSq = dx * dx + dy * dy;
+
+        if (distSq <= 2.5f) return center;      // tight center
+        if (distSq <= 8.5f) return yellow;      // yellow puff body
+        if (distSq <= 16.5f)                    // outer petals/fluff
+        {
+            // add some jaggedness
+            bool isPetalPattern = (x + y) % 2 == 0;
+            if (isPetalPattern) return gold;
+        }
+
+        return key;
+    }
+
+    static Color Iris(int x, int y)
+    {
+        Color key    = new Color(1f,    0f,    1f   );  // pure magenta
+        Color stem   = new Color(0.22f, 0.52f, 0.15f);  // tall green stem
+        Color leaf   = new Color(0.28f, 0.65f, 0.20f);  // sword-like leaves
+        Color violet = new Color(0.40f, 0.20f, 0.90f);  // rich violet/purple
+        Color blue   = new Color(0.20f, 0.40f, 0.95f);  // deep blue accent
+        Color yellow = new Color(1.00f, 0.80f, 0.10f);  // yellow beard/center
+
+        // ── Stem: center of tile, y=0..7 ──
+        bool isStem = (x == 7 || x == 8) && y <= 7;
+        if (isStem) return stem;
+
+        // ── Sword Leaves: tall, growing upwards from bottom-sides ──
+        if (x == 5 && y >= 2 && y <= 8) return leaf;
+        if (x == 6 && y >= 4 && y <= 6) return leaf;
+        if (x == 10 && y >= 1 && y <= 6) return leaf;
+        if (x == 9 && y >= 3 && y <= 5) return leaf;
+
+        // ── Iris Flower Head: at (7.5, 11) ──
+        // Standards (upper petals, vertical/pointing up):
+        bool upperPetals = (x >= 6 && x <= 9) && (y >= 12 && y <= 15);
+        // Falls (lower petals, drooping down to the sides):
+        bool lowerLeft   = (x >= 3 && x <= 5) && (y >= 8 && y <= 10);
+        bool lowerRight  = (x >= 10 && x <= 12) && (y >= 8 && y <= 10);
+        // Center/Beard:
+        bool isCenter    = (x == 7 || x == 8) && (y == 10 || y == 11);
+        bool isBeard     = (x == 6 || x == 9) && (y == 9 || y == 10);
+
+        if (isCenter) return yellow;
+        if (isBeard) return yellow;
+        if (upperPetals)
+        {
+            // Shader effect: blue highlights on top edges
+            if (y == 15 || x == 6 || x == 9) return blue;
+            return violet;
+        }
+        if (lowerLeft || lowerRight)
+        {
+            // Shading on drooping petals
+            if (y == 8) return blue;
+            return violet;
+        }
+
+        return key;
+    }
+
+    static Color Leaves(int x, int y)
+    {
+        // Organic leaf texture: shades of green with small dark gaps
+        float n = Mathf.PerlinNoise(x * 0.7f + 8.1f, y * 0.7f + 9.3f);
+        float n2 = Mathf.PerlinNoise(x * 1.4f + 3.2f, y * 1.4f + 1.1f);
+        
+        bool gap = (n2 > 0.82f); // small transparent/dark gaps
+        if (gap)
+            return new Color(0.12f, 0.28f, 0.08f); // dark gap color
+            
+        float t = n * 0.15f + n2 * 0.05f;
+        Color c = new Color(0.18f + t, 0.48f + t * 0.6f, 0.08f + t * 0.2f);
+        
+        // Soft edge shading to match the other blocks
+        int distToXEdge = Mathf.Min(x, 15 - x);
+        int distToYEdge = Mathf.Min(y, 15 - y);
+        int distToEdge = Mathf.Min(distToXEdge, distToYEdge);
+        if (distToEdge < 2)
+        {
+            c = new Color(c.r * 0.82f, c.g * 0.82f, c.b * 0.82f);
+        }
+        
+        return c;
+    }
+
+    static Color ControlBlockSide(int x, int y)
+    {
+        Color baseYellow = new Color(0.95f, 0.82f, 0.10f);
+        Color stripeDark = new Color(0.12f, 0.12f, 0.12f);
+        Color borderGray = new Color(0.35f, 0.35f, 0.35f);
+
+        if (x == 0 || x == 15 || y == 0 || y == 15)
+            return borderGray;
+
+        bool stripe = ((x + y) / 2) % 2 == 0;
+        return stripe ? baseYellow : stripeDark;
+    }
+
+    static Color ControlBlockFront(int x, int y)
+    {
+        Color baseYellow = new Color(0.95f, 0.82f, 0.10f);
+        Color stripeDark = new Color(0.12f, 0.12f, 0.12f);
+        Color borderGray = new Color(0.35f, 0.35f, 0.35f);
+        Color lightGray  = new Color(0.6f, 0.6f, 0.62f);
+        Color screenBlue = new Color(0.1f, 0.6f, 0.95f);
+        Color coreWhite  = new Color(0.9f, 0.95f, 1.0f);
+
+        if (x == 0 || x == 15 || y == 0 || y == 15)
+            return borderGray;
+
+        // Screen area
+        if (x >= 3 && x <= 12 && y >= 4 && y <= 11)
+        {
+            if (x == 3 || x == 12 || y == 4 || y == 11)
+                return lightGray;
+            
+            bool isCenter = (x == 7 || x == 8) && (y == 7 || y == 8);
+            return isCenter ? coreWhite : screenBlue;
+        }
+
+        bool stripe = ((x + y) / 2) % 2 == 0;
+        return stripe ? baseYellow : stripeDark;
+    }
+
+    static Color TireTread(int x, int y)
+    {
+        Color darkTire  = new Color(0.15f, 0.15f, 0.15f);
+        Color treadLine = new Color(0.08f, 0.08f, 0.08f);
+        Color grayDust  = new Color(0.22f, 0.22f, 0.22f);
+
+        bool isTread = (x % 4 == 0 && y >= 2 && y <= 13) || (y % 4 == 0 && x >= 2 && x <= 13);
+        if (isTread) return treadLine;
+
+        float n = Mathf.PerlinNoise(x * 0.9f, y * 0.9f);
+        return Color.Lerp(darkTire, grayDust, n * 0.3f);
+    }
+
+    static Color WheelSide(int x, int y, bool isLarge)
+    {
+        Color darkTire   = new Color(0.15f, 0.15f, 0.15f);
+        Color metallicRim= new Color(0.7f, 0.7f, 0.72f);
+        Color darkRim    = new Color(0.4f, 0.4f, 0.42f);
+        Color highlight  = new Color(0.9f, 0.9f, 0.95f);
+        Color centerCap  = new Color(0.1f, 0.1f, 0.1f);
+
+        float centerX = 7.5f;
+        float centerY = 7.5f;
+        float tireRadius = isLarge ? 7.2f : 6.0f;
+        float rimRadius  = isLarge ? 4.5f : 3.5f;
+        float hubRadius  = isLarge ? 1.8f : 1.2f;
+
+        float dx = x - centerX;
+        float dy = y - centerY;
+        float dist = Mathf.Sqrt(dx * dx + dy * dy);
+
+        if (dist > tireRadius)
+        {
+            return new Color(0.1f, 0.1f, 0.1f);
+        }
+
+        if (dist > rimRadius)
+        {
+            float shade = Mathf.Clamp01((dx - dy) / 10f);
+            return Color.Lerp(new Color(0.25f, 0.25f, 0.25f), darkTire, shade);
+        }
+        else if (dist > hubRadius)
+        {
+            float shade = Mathf.Clamp01((dx - dy) / 6f);
+            Color baseRim = Color.Lerp(highlight, darkRim, shade);
+
+            float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
+            int spokes = isLarge ? 6 : 4;
+            float angleStep = 360f / spokes;
+            bool onSpoke = Mathf.Abs((angle + 180f) % angleStep) < (isLarge ? 12f : 16f);
+            if (onSpoke && dist > hubRadius + 0.5f)
+            {
+                return baseRim;
+            }
+            return new Color(0.18f, 0.18f, 0.2f);
+        }
+        else
+        {
+            return centerCap;
+        }
+    }
+
     // ── UV helpers ────────────────────────────────────────────────────────────
 
     /// <summary>Returns the 4 atlas UVs for a given face and block type.</summary>
@@ -237,6 +489,18 @@ public static class GrassTextureGenerator
             tile = 8;
         else if (blockType == 9) // Flower: all quads use flower tile
             tile = 9;
+        else if (blockType == 10) // Dandelion: all quads use dandelion tile
+            tile = 10;
+        else if (blockType == 11) // Iris: all quads use iris tile
+            tile = 11;
+        else if (blockType == 12) // Leaves: all faces leaves
+            tile = 12;
+        else if (blockType == 20) // Small Wheel: sides are wheel side, others are tire tread
+            tile = (face == 4 || face == 5) ? 16 : 15;
+        else if (blockType == 21) // Large Wheel: sides are wheel side, others are tire tread
+            tile = (face == 4 || face == 5) ? 17 : 15;
+        else if (blockType == 50) // Control Block: front is screen, others are striped sides
+            tile = (face == 1) ? 14 : 13;
         else                     // Grass (blockType == 4 or 6)
             tile = (face == 2) ? 0   // top    → grass top
                  : (face == 3) ? 2   // bottom → dirt

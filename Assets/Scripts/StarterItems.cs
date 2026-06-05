@@ -25,7 +25,7 @@ public class StarterItems : MonoBehaviour
 
     private IEnumerator Start()
     {
-        // Wait one frame so Hotbar.Start() has built its slot UI first
+        // Wait one frame so Hotbar and Inventory have finished their Awake/Start
         yield return null;
 
         if (Hotbar.Instance == null)
@@ -34,10 +34,15 @@ public class StarterItems : MonoBehaviour
             yield break;
         }
 
-        GiveItem("Wood",   blockTypeID: 1, fallbackColor: new Color(0.55f, 0.38f, 0.17f), amount: 64);
-        GiveItem("Plank",  blockTypeID: 2, fallbackColor: new Color(0.72f, 0.58f, 0.37f), amount: 64);
-        GiveItem("Stone",  blockTypeID: 3, fallbackColor: new Color(0.52f, 0.52f, 0.54f), amount: 64);
-        GiveItem("Flower", blockTypeID: 9, fallbackColor: new Color(1.00f, 0.28f, 0.55f), amount: 64);
+        // ── Hotbar: building blocks (quick-access) ────────────────────────────
+        GiveItem("Wood",  blockTypeID: 1, fallbackColor: new Color(0.55f, 0.38f, 0.17f), amount: 64);
+        GiveItem("Plank", blockTypeID: 2, fallbackColor: new Color(0.72f, 0.58f, 0.37f), amount: 64);
+        GiveItem("Stone", blockTypeID: 3, fallbackColor: new Color(0.52f, 0.52f, 0.54f), amount: 64);
+
+        // ── Inventory bag: flowers (decorative items) ─────────────────────────
+        GiveInventoryItem("Flower",    blockTypeID: 9,  fallbackColor: new Color(1.00f, 0.28f, 0.55f), amount: 64);
+        GiveInventoryItem("Dandelion", blockTypeID: 10, fallbackColor: new Color(0.95f, 0.85f, 0.10f), amount: 64);
+        GiveInventoryItem("Iris",      blockTypeID: 11, fallbackColor: new Color(0.40f, 0.20f, 0.90f), amount: 64);
     }
 
     private void GiveItem(string itemName, int blockTypeID, Color fallbackColor, int amount)
@@ -62,6 +67,14 @@ public class StarterItems : MonoBehaviour
         {
             item.icon = VoxelWorld.MakeFlowerIcon();
         }
+        else if (itemName.Equals("Dandelion", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.icon = VoxelWorld.MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.95f, 0.85f, 0.10f), new Color(0.95f, 0.65f, 0.05f));
+        }
+        else if (itemName.Equals("Iris", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.icon = VoxelWorld.MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.40f, 0.20f, 0.90f), new Color(1.00f, 0.80f, 0.10f));
+        }
         else
         {
             item.icon = loaded != null ? loaded : MakeBlockIcon(fallbackColor);
@@ -71,13 +84,50 @@ public class StarterItems : MonoBehaviour
         if (!added)
             Debug.LogWarning($"[StarterItems] Hotbar full — could not add '{itemName}'.");
         else
-            Debug.Log($"[StarterItems] Added {amount}x {itemName} " +
+            Debug.Log($"[StarterItems] Added {amount}x {itemName} to hotbar " +
                       $"(icon={(loaded != null ? "sprite" : "procedural")}).");
     }
+
+    /// <summary>Adds an item directly to the Inventory bag (not the hotbar).</summary>
+    private void GiveInventoryItem(string itemName, int blockTypeID, Color fallbackColor, int amount)
+    {
+        if (Inventory.Instance == null)
+        {
+            Debug.LogWarning($"[StarterItems] Inventory.Instance is null — cannot add '{itemName}'.");
+            return;
+        }
+
+        Item item        = ScriptableObject.CreateInstance<Item>();
+        item.itemName    = itemName;
+        item.itemID      = 0;
+        item.blockTypeID = blockTypeID;
+
+        if (itemName.Equals("Flower", System.StringComparison.OrdinalIgnoreCase))
+            item.icon = VoxelWorld.MakeFlowerIcon();
+        else if (itemName.Equals("Dandelion", System.StringComparison.OrdinalIgnoreCase))
+            item.icon = VoxelWorld.MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.95f, 0.85f, 0.10f), new Color(0.95f, 0.65f, 0.05f));
+        else if (itemName.Equals("Iris", System.StringComparison.OrdinalIgnoreCase))
+            item.icon = VoxelWorld.MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.40f, 0.20f, 0.90f), new Color(1.00f, 0.80f, 0.10f));
+        else
+            item.icon = MakeBlockIcon(fallbackColor);
+
+        bool added = Inventory.Instance.Add(item, amount);
+        if (!added)
+            Debug.LogWarning($"[StarterItems] Inventory full — could not add '{itemName}'.");
+        else
+            Debug.Log($"[StarterItems] Added {amount}x {itemName} to inventory bag.");
+    }
+
+    private static Dictionary<Color, Sprite> _blockIconCache = new Dictionary<Color, Sprite>();
 
     // ── Fallback: procedural block icon ───────────────────────────────────────
     public static Sprite MakeBlockIcon(Color baseColor)
     {
+        if (_blockIconCache.TryGetValue(baseColor, out Sprite cached))
+        {
+            return cached;
+        }
+
         const int SZ = 64;
         Color[] px = new Color[SZ * SZ];
         for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
@@ -109,7 +159,9 @@ public class StarterItems : MonoBehaviour
         tex.filterMode = FilterMode.Point;
         tex.SetPixels(px);
         tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+        Sprite result = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+        _blockIconCache[baseColor] = result;
+        return result;
     }
 
     private static Color Brighten(Color c, float amt) =>

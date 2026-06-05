@@ -166,6 +166,12 @@ public class VehicleController : MonoBehaviour
         // Build step-climb layer mask: exclude this vehicle's own layer
         int vehicleLayer = LayerMask.NameToLayer("Vehicle");
         _stepLayerMask = (vehicleLayer != -1) ? ~(1 << vehicleLayer) : ~0;
+
+        // Ignore physics collision with all foliage MeshColliders in already-loaded chunks.
+        // New chunks call IgnorePlayerCollision() when built, which now covers active vehicles too.
+        Collider[] vehicleColliders = GetComponentsInChildren<Collider>();
+        foreach (var chunk in Object.FindObjectsByType<Chunk>(FindObjectsSortMode.None))
+            chunk.IgnoreFoliageCollisionWith(vehicleColliders);
     }
 
     private void FixedUpdate()
@@ -178,6 +184,20 @@ public class VehicleController : MonoBehaviour
         //   (player is inside the vehicle while driving, so they don't need to collide with it)
         if (_rootCollider != null)
             _rootCollider.enabled = !isBeingControlled;
+
+        // Adjust damping based on control state:
+        //   When controlled: apply heavy damping for stable, heavyweight handling.
+        //   When parked/exited: reduce damping to a minimal value so it rolls down slopes naturally.
+        if (isBeingControlled)
+        {
+            _rb.linearDamping = 1.0f;
+            _rb.angularDamping = 3.5f;
+        }
+        else
+        {
+            _rb.linearDamping = 0.05f;
+            _rb.angularDamping = 0.05f;
+        }
 
         // --- DOWNFORCE: keeps wheels on ground at speed ---
         float speed = _rb.linearVelocity.magnitude;
@@ -273,7 +293,13 @@ public class VehicleController : MonoBehaviour
         // Need some horizontal movement
         Vector3 velFlat = new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z);
         if (velFlat.sqrMagnitude < 0.04f) { _isClimbing = false; return; }
-        Vector3 moveDir = velFlat.normalized;
+
+        // Determine direction based on the vehicle's heading/chassis direction
+        // instead of the raw velocity vector, which avoids sliding sideways when hitting walls at an angle.
+        float localFwdSpeed = Vector3.Dot(_rb.linearVelocity, transform.forward);
+        Vector3 climbPushDir = (localFwdSpeed >= 0f) ? transform.forward : -transform.forward;
+        climbPushDir.y = 0f;
+        climbPushDir.Normalize();
 
         // Lowest world-Y of all colliders = wheel contact plane
         float lowestY = float.MaxValue;
@@ -292,12 +318,18 @@ public class VehicleController : MonoBehaviour
             float dy  = Mathf.Lerp(0.06f, maxStepHeight * 0.85f, (float)i / (probes - 1));
             Vector3 org = new Vector3(transform.position.x, lowestY + dy, transform.position.z);
 
-            if (!Physics.Raycast(org, moveDir, out RaycastHit h, stepProbeDistance, _stepLayerMask))
+            // Explicitly ignore trigger colliders (e.g. foliage MeshColliders on flowers)
+            if (!Physics.Raycast(org, climbPushDir, out RaycastHit h, stepProbeDistance,
+                                 _stepLayerMask, QueryTriggerInteraction.Ignore))
                 continue;
 
             // Skip hits on the vehicle's own colliders — prevents detecting our own
             // front blocks as a fake "step wall" which was locking _isClimbing = true
             if (h.transform == transform || h.transform.IsChildOf(transform))
+                continue;
+
+            // Skip foliage (flower) mesh colliders — they are not solid walls
+            if (h.collider.gameObject.name == "Foliage")
                 continue;
 
             if (!hitWall || h.point.y < lowestHitY)
@@ -313,12 +345,12 @@ public class VehicleController : MonoBehaviour
         // ── Step-top detection ────────────────────────────────────────────────
         float   topOriginY = lowestY + maxStepHeight + 0.2f;
         Vector3 topOrg     = new Vector3(
-            wallHit.point.x + moveDir.x * 0.2f,
+            wallHit.point.x + climbPushDir.x * 0.2f,
             topOriginY,
-            wallHit.point.z + moveDir.z * 0.2f);
+            wallHit.point.z + climbPushDir.z * 0.2f);
 
         if (!Physics.Raycast(topOrg, Vector3.down, out RaycastHit topHit,
-                             maxStepHeight + 0.4f, _stepLayerMask))
+                             maxStepHeight + 0.4f, _stepLayerMask, QueryTriggerInteraction.Ignore))
         { _isClimbing = false; return; }
 
         float stepH = topHit.point.y - lowestY;
@@ -334,9 +366,9 @@ public class VehicleController : MonoBehaviour
         _rb.position += Vector3.up * liftThisFrame;
 
         // 2. Forward: prevent horizontal momentum from dying on the block face
-        float currentFwd       = Vector3.Dot(_rb.linearVelocity, moveDir);
+        float currentFwd       = Vector3.Dot(_rb.linearVelocity, climbPushDir);
         float minFwdDuringClimb = 2.5f;
         if (currentFwd < minFwdDuringClimb)
-            _rb.AddForce(moveDir * (minFwdDuringClimb - currentFwd), ForceMode.VelocityChange);
+            _rb.AddForce(climbPushDir * (minFwdDuringClimb - currentFwd), ForceMode.VelocityChange);
     }
 }

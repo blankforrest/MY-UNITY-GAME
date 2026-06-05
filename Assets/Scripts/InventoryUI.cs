@@ -173,6 +173,11 @@ public class InventoryUI : MonoBehaviour
         panel.SetActive(IsInventoryOpen);
         if (IsInventoryOpen) RefreshAll();
 
+        if (Crosshair.Instance != null)
+        {
+            Crosshair.Instance.SetVisible(!IsInventoryOpen);
+        }
+
         // Keep cursor always visible so UI and drag-drop always work
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible   = true;

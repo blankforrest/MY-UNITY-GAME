@@ -67,6 +67,21 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    private static void GetTreeNoise(float gX, float gZ, out float forestZone, out float clusterNoise, out float gapNoise)
+    {
+        forestZone   = Mathf.PerlinNoise(gX * 0.025f + 500f, gZ * 0.025f + 700f);
+        clusterNoise = Mathf.PerlinNoise(gX * 0.10f + 900f,  gZ * 0.10f + 1100f);
+        gapNoise     = Mathf.PerlinNoise(gX * 0.28f + 333f,  gZ * 0.28f + 444f);
+    }
+
+    private static bool WouldSpawnTree(float gX, float gZ, out float priority)
+    {
+        GetTreeNoise(gX, gZ, out float f, out float c, out float g);
+        // High-frequency noise for local packing peaks
+        priority = Mathf.PerlinNoise(gX * 0.75f + 123.4f, gZ * 0.75f + 567.8f);
+        return (f >= 0.58f && c >= 0.52f && g <= 0.68f);
+    }
+
     void PopulateVoxelMap()
     {
         voxelMap = new byte[VoxelData.ChunkWidth, VoxelData.ChunkHeight, VoxelData.ChunkWidth];
@@ -122,7 +137,6 @@ public class Chunk : MonoBehaviour
                     }
 
                     int floorY = Mathf.FloorToInt(exactHeight);
-                    bool isHalfBlock = (exactHeight - floorY) < 0.5f;
 
                     // Determine dirt thickness dynamically using noise (between 3 and 5 blocks)
                     float dirtNoise = Mathf.PerlinNoise(globalX * 0.1f, globalZ * 0.1f);
@@ -144,7 +158,7 @@ public class Chunk : MonoBehaviour
                         }
                         else
                         {
-                            voxelMap[x, y, z] = isHalfBlock ? (byte)6 : (byte)4; // Grass Slab or Grass Full
+                            voxelMap[x, y, z] = 4; // Grass
                         }
                     }
                     else if (y >= floorY - dirtThickness)
@@ -179,10 +193,127 @@ public class Chunk : MonoBehaviour
                             globalZ * 0.42f + 300f);
                         if (flowerNoise > 0.62f && flowerNoise2 > 0.45f)
                         {
-                            voxelMap[x, y, z] = 9; // Flower
+                            float typeNoise = Mathf.PerlinNoise(globalX * 0.7f + 50f, globalZ * 0.7f + 90f);
+                            if (typeNoise < 0.33f)
+                                voxelMap[x, y, z] = 9; // Rose
+                            else if (typeNoise < 0.66f)
+                                voxelMap[x, y, z] = 10; // Dandelion
+                            else
+                                voxelMap[x, y, z] = 11; // Iris
                         }
                     }
                 }
+            }
+        }
+
+        // ── Tree spawning in grouped clusters ────────────────────────────────────
+        // Layer 1 (forestZone, low freq):  picks large biome-scale forest blobs.
+        // Layer 2 (clusterNoise, mid freq): high density inside the zone — forms groups.
+        // Layer 3 (gapNoise, high freq):   punches natural small clearings between groups.
+        // Spacing check (radius 3):        canopies stay separate, trunks 3+ blocks apart.
+        for (int x = 1; x < VoxelData.ChunkWidth - 1; x++)
+        {
+            for (int z = 1; z < VoxelData.ChunkWidth - 1; z++)
+            {
+                float globalX = x + chunkPos.x * VoxelData.ChunkWidth;
+                float globalZ = z + chunkPos.y * VoxelData.ChunkWidth;
+
+                float myPriority;
+                if (!WouldSpawnTree(globalX, globalZ, out myPriority)) continue;
+
+                // Enforce boundary-proof spacing using local-maxima comparison on high-frequency priority.
+                // Trunks must be at least 4 blocks apart so canopies (radius 2) don't touch.
+                bool isLocalMax = true;
+                for (int dx = -4; dx <= 4 && isLocalMax; dx++)
+                {
+                    for (int dz = -4; dz <= 4 && isLocalMax; dz++)
+                    {
+                        if (dx == 0 && dz == 0) continue;
+                        if (dx * dx + dz * dz > 16) continue; // circular radius 4
+
+                        float nGlobalX = globalX + dx;
+                        float nGlobalZ = globalZ + dz;
+                        float neighborPriority;
+                        if (WouldSpawnTree(nGlobalX, nGlobalZ, out neighborPriority))
+                        {
+                            // Yield to neighbor with higher priority
+                            if (neighborPriority > myPriority)
+                            {
+                                isLocalMax = false;
+                            }
+                            else if (Mathf.Approximately(neighborPriority, myPriority))
+                            {
+                                // Tie breaker
+                                if (nGlobalX < globalX || (Mathf.Approximately(nGlobalX, globalX) && nGlobalZ < globalZ))
+                                {
+                                    isLocalMax = false;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (!isLocalMax) continue;
+
+                // Find the surface y for this (x,z) — walk down from top
+                int surfaceY = -1;
+                for (int sy = VoxelData.ChunkHeight - 1; sy > 0; sy--)
+                {
+                    byte b = voxelMap[x, sy, z];
+                    if (b == 4) { surfaceY = sy; break; } // full grass block only
+                }
+                if (surfaceY < 0) continue; // no grass surface found
+                if (surfaceY + 7 >= VoxelData.ChunkHeight) continue; // not enough vertical space
+
+                // Randomised tree height between 4 and 6
+                float heightNoise = Mathf.PerlinNoise(globalX * 0.9f + 888f, globalZ * 0.9f + 333f);
+                int trunkHeight   = 4 + Mathf.FloorToInt(heightNoise * 3f); // 4, 5, or 6
+
+                // ── Trunk ──
+                for (int ty = 1; ty <= trunkHeight; ty++)
+                {
+                    int ty_abs = surfaceY + ty;
+                    if (ty_abs >= VoxelData.ChunkHeight) break;
+                    voxelMap[x, ty_abs, z] = 1; // Wood
+                }
+
+                // ── Canopy: a rough rounded blob of leaves ──
+                int topY = surfaceY + trunkHeight;
+                for (int lx = -2; lx <= 2; lx++)
+                {
+                    for (int lz = -2; lz <= 2; lz++)
+                    {
+                        for (int ly = -1; ly <= 2; ly++)
+                        {
+                            int cx = x + lx;
+                            int cy = topY + ly;
+                            int cz = z + lz;
+                            if (cx < 0 || cx >= VoxelData.ChunkWidth ||
+                                cz < 0 || cz >= VoxelData.ChunkWidth ||
+                                cy < 0 || cy >= VoxelData.ChunkHeight) continue;
+
+                            // Skip if already has trunk/wood
+                            if (voxelMap[cx, cy, cz] == 1) continue;
+
+                            // Round the canopy: exclude the far corner diagonals
+                            int dist2 = lx * lx + lz * lz;
+                            bool isTip = (ly == 2);
+                            if (isTip && dist2 > 1) continue;    // top tier is just a cross
+                            if (ly < -1 && dist2 > 1) continue;  // only directly under for low leaves
+                            if (dist2 > 5) continue;             // trim outer corners
+
+                            // Add slight natural noise to avoid a perfectly flat canopy
+                            float leafNoise = Mathf.PerlinNoise((globalX + lx) * 0.4f + 22f, (globalZ + lz) * 0.4f + 55f);
+                            if (dist2 == 5 && leafNoise < 0.45f) continue; // thin out outermost ring
+
+                            voxelMap[cx, cy, cz] = 12; // Leaves
+                        }
+                    }
+                }
+
+                // Remove flower that got buried under trunk
+                byte above = voxelMap[x, surfaceY + 1, z];
+                if (above >= 9 && above <= 11)
+                    voxelMap[x, surfaceY + 1, z] = 1; // replaced by trunk
             }
         }
     }
@@ -311,17 +442,29 @@ public class Chunk : MonoBehaviour
         foliageMeshCollider.isTrigger  = false;
     }
 
+    /// <summary>Ignores physics collision between the foliage MeshCollider and all provided colliders.</summary>
+    public void IgnoreFoliageCollisionWith(Collider[] others)
+    {
+        if (foliageMeshCollider == null) return;
+        foreach (var col in others)
+            if (col != null) Physics.IgnoreCollision(col, foliageMeshCollider, true);
+    }
+
     public void IgnorePlayerCollision()
     {
         if (foliageMeshCollider == null) return;
+
+        // Player CharacterController
         if (VoxelWorld.Instance != null && VoxelWorld.Instance.playerTransform != null)
         {
             var cc = VoxelWorld.Instance.playerTransform.GetComponent<CharacterController>();
             if (cc != null)
-            {
                 Physics.IgnoreCollision(cc, foliageMeshCollider, true);
-            }
         }
+
+        // Any active vehicle
+        foreach (var vc in Object.FindObjectsByType<VehicleController>(FindObjectsSortMode.None))
+            IgnoreFoliageCollisionWith(vc.GetComponentsInChildren<Collider>());
     }
 
     int GetWaterDepth(int x, int y, int z)
@@ -345,15 +488,21 @@ public class Chunk : MonoBehaviour
     void UpdateVoxelMeshData(Vector3 pos, byte blockType)
     {
         // ── Flower: render as two crossed quads (X-billboard) ──────────────────
-        if (blockType == 9)
+        if (blockType == 9 || blockType == 10 || blockType == 11)
         {
-            AddFlowerQuads(pos);
+            AddFlowerQuads(pos, blockType);
             return;
         }
 
-        bool isSlab  = (blockType == 6);
+        // ── Leaves: render as solid faces but on the foliage (alpha-cutout) mesh ─
+        if (blockType == 12)
+        {
+            AddLeavesBlock(pos);
+            return;
+        }
+
         bool isWater = (blockType == 7);
-        byte uvBlockType = isSlab ? (byte)4 : blockType; // Use grass texture for slab
+        byte uvBlockType = blockType;
 
         int depth = 1;
         if (isWater)
@@ -369,12 +518,8 @@ public class Chunk : MonoBehaviour
                 {
                     Vector3 vert = VoxelData.voxelVerts[VoxelData.voxelTris[p, i]];
                     
-                    // Squash the top vertices down if this is a slab or water
-                    if (isSlab && vert.y > 0.5f)
-                    {
-                        vert.y = 0.5f;
-                    }
-                    else if (isWater && vert.y > 0.5f)
+                    // Squash the top vertices down if this is water
+                    if (isWater && vert.y > 0.5f)
                     {
                         vert.y = 0.85f; // Water is slightly lower
                     }
@@ -433,9 +578,9 @@ public class Chunk : MonoBehaviour
     /// Emits two crossed quads into the foliage mesh lists for a flower at <paramref name="pos"/>.
     /// Each quad spans the full block cell. Two quads at 90° give the classic SurvivalCraft X look.
     /// </summary>
-    void AddFlowerQuads(Vector3 pos)
+    void AddFlowerQuads(Vector3 pos, byte blockType)
     {
-        Vector2[] uvs9 = GrassTextureGenerator.GetBlockUVs(0, 9); // flower tile UVs
+        Vector2[] uvs9 = GrassTextureGenerator.GetBlockUVs(0, blockType); // flower tile UVs
 
         // Two diagonal crossed quads — SurvivalCraft X-billboard style
         Vector3[][] quads = new Vector3[2][];
@@ -473,6 +618,57 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Emits standard solid cube faces for a leaves block into the foliage
+    /// (alpha-cutout) mesh so the chunky leaf texture renders with the gap pixels
+    /// clipped out rather than opaque black squares.
+    /// </summary>
+    void AddLeavesBlock(Vector3 pos)
+    {
+        for (int p = 0; p < 6; p++)
+        {
+            // Cull against solid neighbours but not against other leaves / air
+            Vector3 neighborPos = pos + VoxelData.faceChecks[p];
+            int nx = Mathf.FloorToInt(neighborPos.x);
+            int ny = Mathf.FloorToInt(neighborPos.y);
+            int nz = Mathf.FloorToInt(neighborPos.z);
+
+            byte neighbor = 0;
+            if (!IsVoxelInChunk(nx, ny, nz))
+            {
+                if (VoxelWorld.Instance != null)
+                    neighbor = VoxelWorld.Instance.GetBlock(neighborPos + transform.position);
+            }
+            else
+            {
+                neighbor = voxelMap[nx, ny, nz];
+            }
+
+            // Skip face if neighbour is another leaves block (cull) or any solid block
+            if (neighbor == 12) continue;  // adjacent leaves cull each other
+            // Skip if neighbour is fully opaque solid (not air/water/flowers/leaves)
+            if (neighbor != 0 && neighbor != 7 && neighbor != 9 &&
+                neighbor != 10 && neighbor != 11 && neighbor != 12) continue;
+
+            Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, 12);
+
+            for (int i = 0; i < 4; i++)
+            {
+                foliageVertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, i]]);
+                foliageColors.Add(Color.white);
+            }
+            foliageUvs.AddRange(faceUVs);
+
+            foliageTriangles.Add(foliageVertexIndex);
+            foliageTriangles.Add(foliageVertexIndex + 1);
+            foliageTriangles.Add(foliageVertexIndex + 2);
+            foliageTriangles.Add(foliageVertexIndex + 2);
+            foliageTriangles.Add(foliageVertexIndex + 1);
+            foliageTriangles.Add(foliageVertexIndex + 3);
+            foliageVertexIndex += 4;
+        }
+    }
+
     bool CheckVoxelFace(Vector3 pos, int faceIndex, byte currentBlockType)
     {
         Vector3 neighborPos = pos + VoxelData.faceChecks[faceIndex];
@@ -496,8 +692,8 @@ public class Chunk : MonoBehaviour
 
         bool currentIsWater  = (currentBlockType == 7);
         bool neighborIsWater = (neighbor == 7);
-        // Flowers are transparent billboards — treat like air for culling purposes
-        bool neighborIsFlower = (neighbor == 9);
+        // Flowers and leaves are transparent billboards — treat like air for culling purposes
+        bool neighborIsFlower = (neighbor == 9 || neighbor == 10 || neighbor == 11 || neighbor == 12);
 
         if (currentIsWater)
         {
@@ -509,18 +705,8 @@ public class Chunk : MonoBehaviour
             // Solid blocks cull against solid blocks, but NOT water, air, or flowers
             if (neighborIsWater || neighborIsFlower) return false;
 
-            // If neighbor is a full block, it culls our face
-            if (neighbor != 6) return true;
-
-            // If neighbor is a slab (ID = 6):
-            // If we are looking UP at a slab above us (faceIndex = 2), its bottom rests on our top, culling it.
-            if (faceIndex == 2) return true;
-
-            // If we are a slab and neighbor is a slab, side faces match perfectly, culling each other.
-            if (currentBlockType == 6 && (faceIndex == 0 || faceIndex == 1 || faceIndex == 4 || faceIndex == 5)) return true;
-
-            // Otherwise (e.g. looking DOWN at a slab below us), don't cull.
-            return false;
+            // Any remaining solid neighbor culls our face
+            return true;
         }
     }
 
