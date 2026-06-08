@@ -9,9 +9,12 @@ public class VehicleHUD : MonoBehaviour
     public static VehicleHUD Instance;
 
     public bool IsOpen { get; private set; }
+    /// <summary>The frame number on which CloseHUD() was last called. Used by
+    /// ControlBlock to prevent same-frame re-open after the player presses E to exit.</summary>
+    public int JustClosedFrame { get; private set; } = -1;
     private VehicleController currentVC;
     private PlayerController playerController;
-    private int justOpenedFrame = -1; // guard against same-frame open+close
+    private int justOpenedFrame = -1;
 
     private GameObject hudContainer;
     private Text powerText;
@@ -125,6 +128,7 @@ public class VehicleHUD : MonoBehaviour
 
     public void CloseHUD()
     {
+        JustClosedFrame = Time.frameCount; // stamp so ControlBlock skips this frame
         if (currentVC != null)
         {
             currentVC.isBeingControlled = false;
@@ -142,13 +146,9 @@ public class VehicleHUD : MonoBehaviour
     {
         if (!IsOpen || currentVC == null) return;
 
-        // E key closes HUD — but skip the frame it was opened (same-frame open+close bug)
-        if (Time.frameCount > justOpenedFrame &&
-            Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
-        {
-            CloseHUD();
-            return;
-        }
+        // E key exit is now handled by VehicleController.Update() to avoid
+        // race conditions with ControlBlock running in the same frame.
+        // VehicleHUD only manages HUD visuals here.
 
         // Read input for visual feedback
         bool w = false, a = false, s = false, d = false;

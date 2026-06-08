@@ -499,6 +499,8 @@ public static class GrassTextureGenerator
             tile = (face == 4 || face == 5) ? 16 : 15;
         else if (blockType == 21) // Large Wheel: sides are wheel side, others are tire tread
             tile = (face == 4 || face == 5) ? 17 : 15;
+        else if (blockType == 22) // Propeller Block: render as wood planks in the world
+            tile = 6;
         else if (blockType == 50) // Control Block: front is screen, others are striped sides
             tile = (face == 1) ? 14 : 13;
         else                     // Grass (blockType == 4 or 6)

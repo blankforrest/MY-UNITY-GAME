@@ -70,6 +70,7 @@ public static class BlueprintGenerator
         { 12, 0.3f },  // leaves
         { 20, 2.0f },  // small wheel
         { 21, 4.0f },  // large wheel
+        { 22, 2.5f },  // propeller
         { 50, 1.5f },  // control block
     };
 
@@ -91,6 +92,7 @@ public static class BlueprintGenerator
         { 12, 3f  },  // leaves
         { 20, 20f },  // small wheel
         { 21, 40f },  // large wheel
+        { 22, 20f },  // propeller
         { 50, 15f },  // control block
     };
 

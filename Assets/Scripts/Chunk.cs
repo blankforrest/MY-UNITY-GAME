@@ -105,9 +105,36 @@ public class Chunk : MonoBehaviour
 
                     // Combine and lower the overall multiplier to make it less mountainy
                     float finalNoise = baseNoise + detailNoise;
-                    
-                    // Use float exact height to determine slabs
+                                       // Use float exact height to determine slabs
                     float exactHeight = finalNoise * VoxelData.ChunkHeight * 0.25f + (VoxelData.ChunkHeight / 5f);
+ 
+                    // ── Macro Continent & Oceans ──
+                    // continentNoise:
+                    //   < 0.45f: Dry land (height boosted, no oceans)
+                    //   > 0.55f: Ocean (height lowered, deep water)
+                    //   0.45f - 0.55f: Transition/Coastline
+                    float continentNoise = Mathf.PerlinNoise(globalX * 0.00015f + 1234.5f, globalZ * 0.00015f + 5678.9f);
+
+                    // Smoothly blend the starting area around (0,0) towards dry land to guarantee solid ground on spawn
+                    float startScale = Mathf.Clamp01(Mathf.Max(Mathf.Abs(globalX), Mathf.Abs(globalZ)) / 300f);
+                    continentNoise = Mathf.Lerp(0.35f, continentNoise, startScale);
+
+                    float heightOffset = 0f;
+                    if (continentNoise < 0.45f)
+                    {
+                        // Dry land: boost height above sea level (up to 18 blocks)
+                        float dryT = (0.45f - continentNoise) / 0.45f;
+                        heightOffset = dryT * 18f;
+                    }
+                    else if (continentNoise > 0.55f)
+                    {
+                        // Ocean: pull height below sea level (down to 22 blocks)
+                        float oceanT = (continentNoise - 0.55f) / 0.45f;
+                        heightOffset = -oceanT * 22f;
+                    }
+
+                    exactHeight += heightOffset;
+                    exactHeight = Mathf.Max(2f, exactHeight); // clamp to ensure we always have terrain at the bottom
 
                     // ── River Carving (Realistic Meandering & Dynamic Width) ──
                     float seaLevel = 14f;
@@ -115,25 +142,41 @@ public class Chunk : MonoBehaviour
                     // Domain warp using noise to bend/wiggle the river coordinates
                     float warpX = Mathf.PerlinNoise(globalX * 0.015f + 10f, globalZ * 0.015f + 20f) * 60f;
                     float warpZ = Mathf.PerlinNoise(globalX * 0.015f + 30f, globalZ * 0.015f + 40f) * 60f;
-                    
-                    float riverNoise = Mathf.PerlinNoise((globalX + warpX) * 0.006f + 400f, (globalZ + warpZ) * 0.006f + 800f);
+
+                    // Lower frequency (0.002f) river noise creates long, continuous meandering rivers
+                    float riverNoise = Mathf.PerlinNoise((globalX + warpX) * 0.002f + 400f, (globalZ + warpZ) * 0.002f + 800f);
                     float riverCenterDist = Mathf.Abs(riverNoise - 0.5f);
                     
-                    // Dynamic width variation
+                    // Dynamic width variation (scaled for the lower frequency)
                     float widthNoise = Mathf.PerlinNoise(globalX * 0.01f + 150f, globalZ * 0.01f + 250f);
-                    float riverWidth = 0.04f + widthNoise * 0.04f; // ranges from 0.04 to 0.08
+                    float riverWidth = 0.01f + widthNoise * 0.008f; // clean, continuous channel width
                     
-                    if (riverCenterDist < riverWidth)
+                    // Smoothly fade rivers in/out as they transition to desert/ocean
+                    float riverStrength = 1f;
+                    if (continentNoise < 0.45f)
+                        riverStrength = Mathf.Clamp01((continentNoise - 0.35f) / 0.10f);
+                    else if (continentNoise > 0.55f)
+                        riverStrength = Mathf.Clamp01((0.65f - continentNoise) / 0.10f);
+
+                    bool isRiver = (riverStrength > 0f) && (riverCenterDist < riverWidth);
+                    bool isOcean = (continentNoise > 0.50f);
+
+                    if (isRiver)
                     {
                         float riverFactor = Mathf.Clamp01(riverCenterDist / riverWidth);
                         // S-curve interpolation for flatter riverbed and sloped banks
                         riverFactor = Mathf.SmoothStep(0f, 1f, riverFactor);
                         
-                        float riverDepth = 3.5f; // slightly deeper river
+                        float riverDepth = 3.5f * riverStrength;
                         float riverbedHeight = seaLevel - riverDepth;
                         
                         float carvedHeight = Mathf.Lerp(riverbedHeight, exactHeight, riverFactor);
                         exactHeight = Mathf.Min(exactHeight, carvedHeight);
+                    }
+                    else if (!isOcean)
+                    {
+                        // Clean up any stray puddles by ensuring dry land is strictly above sea level
+                        exactHeight = Mathf.Max(exactHeight, seaLevel + 1.5f);
                     }
 
                     int floorY = Mathf.FloorToInt(exactHeight);
@@ -504,6 +547,15 @@ public class Chunk : MonoBehaviour
         bool isWater = (blockType == 7);
         byte uvBlockType = blockType;
 
+        // ── Dry interior: skip water mesh if this voxel sits inside any active vehicle hull ──
+        if (isWater)
+        {
+            // Convert chunk-local voxel position to world space (centre of the voxel)
+            Vector3 worldVoxelCentre = transform.position + pos + new Vector3(0.5f, 0.5f, 0.5f);
+            if (VehicleController.IsWorldPosInsideVehicle(worldVoxelCentre))
+                return;
+        }
+
         int depth = 1;
         if (isWater)
         {
@@ -761,6 +813,48 @@ public class Chunk : MonoBehaviour
         {
             if (foliageMeshRenderer != null)
                 foliageMeshRenderer.gameObject.SetActive(false);
+        }
+    }
+    /// <summary>
+    /// Rebuilds ONLY the water (transparent) sub-mesh. Skips terrain and foliage geometry
+    /// and does NOT rebake the MeshCollider — making it ~10x faster than UpdateChunk().
+    /// Called by VehicleController when the boat moves to suppress interior water quickly.
+    /// </summary>
+    public void UpdateWaterMeshOnly()
+    {
+        // Clear only water lists
+        waterVertexIndex = 0;
+        waterVertices.Clear();
+        waterTriangles.Clear();
+        waterUvs.Clear();
+        waterColors.Clear();
+
+        // Iterate only water voxels (water only exists up to sea level which is 14; 40 is a safe maximum that saves massive CPU time)
+        int scanHeight = Mathf.Min(VoxelData.ChunkHeight, 40);
+        for (int y = 0; y < scanHeight; y++)
+            for (int x = 0; x < VoxelData.ChunkWidth; x++)
+                for (int z = 0; z < VoxelData.ChunkWidth; z++)
+                    if (voxelMap[x, y, z] == 7) // Water only
+                        UpdateVoxelMeshData(new Vector3(x, y, z), 7);
+
+        // Upload only the water mesh — no collider, no terrain touch
+        EnsureWaterChild();
+        if (waterVertices.Count > 0)
+        {
+            Mesh waterMesh = waterMeshFilter.mesh != null ? waterMeshFilter.mesh : new Mesh();
+            waterMesh.Clear();
+            waterMesh.vertices  = waterVertices.ToArray();
+            waterMesh.triangles = waterTriangles.ToArray();
+            waterMesh.uv        = waterUvs.ToArray();
+            waterMesh.colors    = waterColors.ToArray();
+            waterMesh.RecalculateNormals();
+            waterMeshFilter.mesh = waterMesh;
+            waterMeshRenderer.gameObject.SetActive(true);
+        }
+        else
+        {
+            if (waterMeshRenderer != null)
+                waterMeshRenderer.gameObject.SetActive(false);
         }
     }
 }

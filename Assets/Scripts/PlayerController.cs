@@ -89,10 +89,13 @@ public class PlayerController : MonoBehaviour
         // Block all input when inventory OR confirmation window is open
         if (isUIOpen)
         {
-            isGrounded = controller.isGrounded;
-            if (isGrounded && velocity.y < 0) velocity.y = -2f;
-            velocity.y += gravity * Time.deltaTime;
-            controller.Move(velocity * Time.deltaTime);
+            if (controller.enabled)
+            {
+                isGrounded = controller.isGrounded;
+                if (isGrounded && velocity.y < 0) velocity.y = -2f;
+                velocity.y += gravity * Time.deltaTime;
+                controller.Move(velocity * Time.deltaTime);
+            }
             
             // Reset smoothing to prevent camera snapping when closing UI
             currentMouseDelta = Vector2.zero;
@@ -101,10 +104,13 @@ public class PlayerController : MonoBehaviour
         }
 
         // Ground Check
-        isGrounded = controller.isGrounded;
-        if (isGrounded && velocity.y < 0)
+        if (controller.enabled)
         {
-            velocity.y = -2f; // Slight downward force to keep grounded
+            isGrounded = controller.isGrounded;
+            if (isGrounded && velocity.y < 0)
+            {
+                velocity.y = -2f; // Slight downward force to keep grounded
+            }
         }
 
         // Look
@@ -123,6 +129,28 @@ public class PlayerController : MonoBehaviour
 
             cameraTransform.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
             transform.Rotate(Vector3.up * mouseX);
+        }
+
+        bool isDriving = VehicleHUD.Instance != null && VehicleHUD.Instance.IsOpen;
+        if (isDriving)
+        {
+            // ── E to exit vehicle ─────────────────────────────────────────────
+            // Handled here in PlayerController so player input is guaranteed to be active.
+            bool exitPressed = false;
+#if ENABLE_INPUT_SYSTEM
+            if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+                exitPressed = true;
+#else
+            if (Input.GetKeyDown(KeyCode.E))
+                exitPressed = true;
+#endif
+            if (exitPressed)
+            {
+                VehicleHUD.Instance.CloseHUD();
+            }
+
+            velocity = Vector3.zero;
+            return;
         }
 
         // Check if player is in water (differentiating feet, waist, and head positions)
@@ -167,9 +195,7 @@ public class PlayerController : MonoBehaviour
         float z = 0;
         bool isRunning = false;
         
-        bool isDriving = VehicleHUD.Instance != null && VehicleHUD.Instance.IsOpen;
-
-        if (Keyboard.current != null && !isDriving)
+        if (Keyboard.current != null)
         {
             if (Keyboard.current.wKey.isPressed) z += 1;
             if (Keyboard.current.sKey.isPressed) z -= 1;
@@ -184,9 +210,10 @@ public class PlayerController : MonoBehaviour
         if (move.magnitude > 1f) move.Normalize();
 
         float speed = isRunning ? runSpeed : walkSpeed;
-        if (inWater) speed *= 0.5f;
-        
-        controller.Move(move * speed * Time.deltaTime);
+        if (controller.enabled)
+        {
+            controller.Move(move * speed * Time.deltaTime);
+        }
 
         // Jump / Swim
         if (Keyboard.current != null)
@@ -204,12 +231,16 @@ public class PlayerController : MonoBehaviour
                         {
                             Vector3 checkDir = move.magnitude > 0.1f ? move.normalized : transform.forward;
                             Vector3 checkPosLow = transform.position + checkDir * 0.7f + new Vector3(0f, 0.2f, 0f);
-                            Vector3 checkPosHigh = transform.position + checkDir * 0.7f + new Vector3(0f, 1.0f, 0f);
+                            Vector3 checkPosMid = transform.position + checkDir * 0.7f + new Vector3(0f, 0.7f, 0f);
+                            Vector3 checkPosHigh = transform.position + checkDir * 0.7f + new Vector3(0f, 1.2f, 0f);
 
                             byte blockLow = VoxelWorld.Instance.GetBlock(checkPosLow);
+                            byte blockMid = VoxelWorld.Instance.GetBlock(checkPosMid);
                             byte blockHigh = VoxelWorld.Instance.GetBlock(checkPosHigh);
 
-                            if ((blockLow != 0 && blockLow != 7) || (blockHigh != 0 && blockHigh != 7))
+                            if ((blockLow != 0 && blockLow != 7) || 
+                                (blockMid != 0 && blockMid != 7) || 
+                                (blockHigh != 0 && blockHigh != 7))
                             {
                                 hasWallInFront = true;
                             }
@@ -219,7 +250,7 @@ public class PlayerController : MonoBehaviour
                         {
                             if (velocity.y < 3.5f)
                             {
-                                velocity.y = 5.5f; // Leap out of water
+                                velocity.y = 8.5f; // Leap out of water (increased to clear 1.0 unit blocks from floating state)
                             }
                         }
                         else
@@ -252,7 +283,10 @@ public class PlayerController : MonoBehaviour
             velocity.y += gravity * Time.deltaTime;
         }
         
-        controller.Move(velocity * Time.deltaTime);
+        if (controller.enabled)
+        {
+            controller.Move(velocity * Time.deltaTime);
+        }
     }
 
     // ── Push Rigidbodies ──────────────────────────────────────────────────────

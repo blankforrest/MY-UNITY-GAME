@@ -102,27 +102,36 @@ public class WheelBlock : MonoBehaviour
             Vector3 worldVelocity  = rb.GetPointVelocity(transform.position);
             float verticalVelocity = Vector3.Dot(worldVelocity, transform.up);
 
-            float sensibleStrength = (suspensionStrength / 3000f) * 20f * rb.mass
-                                     / Mathf.Max(0.001f, vehicleController.totalWheelForce);
-            float sensibleDamping  = (suspensionDamping  / 200f)  * 12f  * rb.mass
-                                     / Mathf.Max(0.001f, vehicleController.totalWheelForce);
+            float totalForce = (vehicleController != null) ? vehicleController.totalWheelForce : forceContribution;
+            totalForce = Mathf.Max(0.001f, totalForce);
+
+            float sensibleStrength = (suspensionStrength / 3000f) * 20f * rb.mass / totalForce;
+            float sensibleDamping  = (suspensionDamping  / 200f)  * 12f  * rb.mass / totalForce;
 
             // Extra damping when moving upward (hitting a bump) — absorbs the spike
             float speedBoostDamping = Mathf.Max(0f, verticalVelocity) * 2.5f;
 
             Vector3 suspensionForce = transform.up * (averageCompression * sensibleStrength)
-                                    - transform.up * ((verticalVelocity * sensibleDamping) + speedBoostDamping * rb.mass / vehicleController.totalWheelForce);
-            rb.AddForceAtPosition(suspensionForce, transform.position);
+                                    - transform.up * ((verticalVelocity * sensibleDamping) + speedBoostDamping * rb.mass / totalForce);
+
+            // Guard against NaN before applying — a NaN force permanently corrupts the Rigidbody
+            if (!float.IsNaN(suspensionForce.x) && !float.IsNaN(suspensionForce.y) && !float.IsNaN(suspensionForce.z)
+                && !float.IsInfinity(suspensionForce.x) && !float.IsInfinity(suspensionForce.y) && !float.IsInfinity(suspensionForce.z))
+                rb.AddForceAtPosition(suspensionForce, transform.position);
 
             // Lateral friction
             float slipVelocity = Vector3.Dot(worldVelocity, transform.right);
             Vector3 frictionForce = -transform.right * slipVelocity * frictionCoefficient * rb.mass;
-            rb.AddForceAtPosition(frictionForce, transform.position);
+            if (!float.IsNaN(frictionForce.x) && !float.IsNaN(frictionForce.y) && !float.IsNaN(frictionForce.z)
+                && !float.IsInfinity(frictionForce.x) && !float.IsInfinity(frictionForce.y) && !float.IsInfinity(frictionForce.z))
+                rb.AddForceAtPosition(frictionForce, transform.position);
 
             if (wheelMesh != null)
             {
                 float forwardSpeed = Vector3.Dot(worldVelocity, transform.parent != null ? transform.parent.forward : transform.forward);
-                wheelMesh.Rotate(forwardSpeed * rotationScale * Time.fixedDeltaTime, 0, 0, Space.Self);
+                // Guard against NaN speed before rotating — NaN rotation permanently breaks the transform
+                if (!float.IsNaN(forwardSpeed) && !float.IsInfinity(forwardSpeed))
+                    wheelMesh.Rotate(forwardSpeed * rotationScale * Time.fixedDeltaTime, 0, 0, Space.Self);
             }
         }
     }

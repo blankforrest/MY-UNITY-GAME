@@ -324,7 +324,7 @@ public class VoxelWorld : MonoBehaviour
         if (blockID == 0 && !suppressDrop)
         {
             byte existing = chunk.GetVoxel(lx, ly, lz);
-            if (existing != 0 && (existing <= 12 || existing == 20 || existing == 21 || existing == 50))
+            if (existing != 0 && (existing <= 12 || existing == 20 || existing == 21 || existing == 22 || existing == 50))
             {
                 Item drop = null;
                 if (blockDrops != null && existing < blockDrops.Length)
@@ -421,6 +421,13 @@ public class VoxelWorld : MonoBehaviour
                         drop.itemName = "Large Wheel";
                         drop.blockTypeID = 21;
                         drop.icon = VehicleSpawner.CreateWheelIcon(true);
+                    }
+                    else if (existing == 22)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Propeller";
+                        drop.blockTypeID = 22;
+                        drop.icon = VehicleSpawner.CreatePropellerIcon();
                     }
                     else if (existing == 50)
                     {

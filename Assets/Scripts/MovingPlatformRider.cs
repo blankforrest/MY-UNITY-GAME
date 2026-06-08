@@ -29,6 +29,13 @@ public class MovingPlatformRider : MonoBehaviour
 
     private void Update()
     {
+        // Disable platform riding while driving a vehicle to prevent double-movement/sliding
+        if (VehicleHUD.Instance != null && VehicleHUD.Instance.IsOpen)
+        {
+            currentPlatform = null;
+            return;
+        }
+
         if (jumpTimer > 0f)
         {
             jumpTimer -= Time.deltaTime;
@@ -52,6 +59,13 @@ public class MovingPlatformRider : MonoBehaviour
 
     private void FixedUpdate()
     {
+        // Disable platform riding while driving a vehicle to prevent double-movement/sliding
+        if (VehicleHUD.Instance != null && VehicleHUD.Instance.IsOpen)
+        {
+            currentPlatform = null;
+            return;
+        }
+
         // 1. PLATFORM DETECTION
         Vector3 feetPos = transform.position + controller.center - new Vector3(0, controller.height / 2f, 0);
         Vector3 castOrigin = feetPos + Vector3.up * 0.3f;

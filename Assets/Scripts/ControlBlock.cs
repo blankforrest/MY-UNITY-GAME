@@ -8,9 +8,17 @@ public class ControlBlock : MonoBehaviour
     private VehicleController vc;
     private bool isLookedAt = false;
 
+    // Layer mask: everything except the Vehicle layer (avoids vehicle self-hits being missed)
+    private int _interactMask = ~0;
+
     private void Start()
     {
         vc = GetComponentInParent<VehicleController>();
+
+        // Exclude the player's own layer from the raycast so the player capsule
+        // doesn't swallow the ray when standing right next to the block.
+        int playerLayer = LayerMask.NameToLayer("Player");
+        if (playerLayer != -1) _interactMask &= ~(1 << playerLayer);
     }
 
     private void Update()
@@ -19,49 +27,61 @@ public class ControlBlock : MonoBehaviour
 
         // Auto-create VehicleHUD if it doesn't exist in the scene
         if (VehicleHUD.Instance == null)
-        {
             new GameObject("VehicleHUD_Singleton").AddComponent<VehicleHUD>();
-        }
 
         if (VehicleHUD.Instance != null && VehicleHUD.Instance.IsOpen)
             return;
 
-        // Fallback for camera if it's not tagged "MainCamera"
+        // If the HUD was closed THIS frame (player just pressed E to exit), skip.
+        // Prevents ControlBlock from re-opening the HUD on the same frame it was closed,
+        // regardless of which script runs first in Unity's Update loop.
+        if (VehicleHUD.Instance != null && VehicleHUD.Instance.JustClosedFrame == Time.frameCount)
+            return;
+
         Camera cam = Camera.main;
         if (cam == null) cam = FindObjectOfType<Camera>();
+        if (cam == null) return;
 
-        if (cam != null)
+        bool canInteract = false;
+
+        // ── Method 1: Raycast (normal look-at detection) ──────────────────────
+        Ray ray = new Ray(cam.transform.position, cam.transform.forward);
+        if (Physics.Raycast(ray, out RaycastHit hit, 5f, _interactMask, QueryTriggerInteraction.Ignore))
         {
-            Ray ray = new Ray(cam.transform.position, cam.transform.forward);
-            // Increased reach to 5f to match normal player interaction distance, and ignore triggers
-            if (Physics.Raycast(ray, out RaycastHit hit, 5f, ~0, QueryTriggerInteraction.Ignore))
-            {
-                // Use GetComponentInParent in case the collider is on a child object of the block prefab
-                if (hit.collider != null)
-                {
-                    if (vc == null) vc = GetComponentInParent<VehicleController>();
+            // Accept if the hit collider is on THIS control block or anywhere on the
+            // same vehicle. The player could be looking at a hull block next to us.
+            bool hitThisBlock   = hit.collider.GetComponentInParent<ControlBlock>()    == this;
+            bool hitThisVehicle = vc != null &&
+                                  hit.collider.GetComponentInParent<VehicleController>() == vc;
 
-                    bool isTarget = hit.collider.GetComponentInParent<ControlBlock>() == this ||
-                                    (vc != null && hit.collider.GetComponentInParent<VehicleController>() == vc) ||
-                                    hit.collider.GetComponentInChildren<ControlBlock>() == this;
+            if (hitThisBlock || hitThisVehicle)
+                canInteract = true;
+        }
 
-                    if (isTarget)
-                    {
-                        isLookedAt = true;
+        // ── Method 2: Proximity fallback ──────────────────────────────────────
+        // If the player is within 2.5 units of this block, E works even when the
+        // raycast is blocked by terrain or another geometry piece in front.
+        if (!canInteract && cam != null)
+        {
+            float dist = Vector3.Distance(cam.transform.position, transform.position);
+            if (dist <= 2.5f)
+                canInteract = true;
+        }
 
-                        bool interactPressed = false;
-                        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
-                        {
-                            interactPressed = true;
-                        }
+        if (canInteract)
+        {
+            isLookedAt = true;
 
-                        if (interactPressed && vc != null)
-                        {
-                            VehicleHUD.Instance.OpenHUD(vc);
-                        }
-                    }
-                }
-            }
+            bool interactPressed = false;
+#if ENABLE_INPUT_SYSTEM
+            if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+                interactPressed = true;
+#else
+            if (Input.GetKeyDown(KeyCode.E))
+                interactPressed = true;
+#endif
+            if (interactPressed && vc != null)
+                VehicleHUD.Instance.OpenHUD(vc);
         }
     }
 
@@ -73,8 +93,8 @@ public class ControlBlock : MonoBehaviour
             style.fontSize = 20;
             style.normal.textColor = Color.yellow;
             style.alignment = TextAnchor.MiddleCenter;
-
-            GUI.Label(new Rect(Screen.width / 2f - 100f, Screen.height / 2f + 30f, 200f, 40f), "Press E to control", style);
+            GUI.Label(new Rect(Screen.width / 2f - 100f, Screen.height / 2f + 30f, 200f, 40f),
+                      "Press E to control", style);
         }
     }
 }
