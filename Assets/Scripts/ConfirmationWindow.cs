@@ -70,6 +70,21 @@ public class ConfirmationWindow : MonoBehaviour
         _weightText.text     = $"Weight: {blueprint.totalMass:F1} kg";
         _durabilityText.text = $"Durability: {blueprint.totalDurability:F0}";
 
+        // Reset Save button text if it was previously set to "Saved!"
+        if (_panel != null)
+        {
+            var saveBtn = _panel.transform.Find("ButtonRow/SaveButton");
+            if (saveBtn != null)
+            {
+                var textObj = saveBtn.Find("Label");
+                if (textObj != null)
+                {
+                    var tmp = textObj.GetComponent<TextMeshProUGUI>();
+                    if (tmp != null) tmp.text = "💾  Save";
+                }
+            }
+        }
+
         _panel.SetActive(true);
         IsOpen = true;
 
@@ -124,7 +139,7 @@ public class ConfirmationWindow : MonoBehaviour
         panelRT.anchorMin        = new Vector2(0.5f, 0.5f);
         panelRT.anchorMax        = new Vector2(0.5f, 0.5f);
         panelRT.pivot            = new Vector2(0.5f, 0.5f);
-        panelRT.sizeDelta        = new Vector2(380f, 340f);
+        panelRT.sizeDelta        = new Vector2(440f, 340f);
         panelRT.anchoredPosition = Vector2.zero;
 
         var panelImg = _panel.AddComponent<Image>();
@@ -165,7 +180,7 @@ public class ConfirmationWindow : MonoBehaviour
         SetLayoutSize(rowGO, preferredH: 52f, minH: 52f);
 
         var rowLayout = rowGO.AddComponent<HorizontalLayoutGroup>();
-        rowLayout.spacing                = 16f;
+        rowLayout.spacing                = 12f;
         rowLayout.childAlignment         = TextAnchor.MiddleCenter;
         rowLayout.childControlWidth      = true;
         rowLayout.childControlHeight     = true;
@@ -174,7 +189,30 @@ public class ConfirmationWindow : MonoBehaviour
         rowLayout.padding = new RectOffset(0, 0, 0, 0);
 
         CreateButton("ConfirmButton", rowGO.transform, "✔  Confirm", ConfirmCol, OnConfirm);
+        CreateButton("SaveButton",    rowGO.transform, "💾  Save",    new Color(0.2f, 0.45f, 0.85f, 1f), OnSave);
         CreateButton("CancelButton",  rowGO.transform, "✖  Cancel",  CancelCol,  OnCancel);
+    }
+
+    private void OnSave()
+    {
+        if (_storedBlueprint != null)
+        {
+            string path = System.IO.Path.Combine(Application.persistentDataPath, "SavedBoat.json");
+            BlueprintSerializer.SaveBlueprint(_storedBlueprint, path);
+            Debug.Log($"[ConfirmationWindow] Blueprint saved to: {path}");
+
+            // Visually change the text to show it has saved
+            var saveBtn = _panel.transform.Find("ButtonRow/SaveButton");
+            if (saveBtn != null)
+            {
+                var textObj = saveBtn.Find("Label");
+                if (textObj != null)
+                {
+                    var tmp = textObj.GetComponent<TextMeshProUGUI>();
+                    if (tmp != null) tmp.text = "💾  Saved!";
+                }
+            }
+        }
     }
 
     // ── Builder helpers ───────────────────────────────────────────────────────

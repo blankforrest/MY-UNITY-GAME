@@ -59,16 +59,16 @@ public class PropellerBlock : MonoBehaviour
         float blockY = transform.position.y;
         float submersionDepth = currentWaterLevel - blockY;
 
-        logTimer += Time.fixedDeltaTime;
-        if (logTimer >= 1.0f)
-        {
-            logTimer = 0f;
-            Debug.Log($"[PropellerBlock] rb={(rb != null ? "Found" : "Null")}, " +
-                      $"vc={(vehicleController != null ? "Found" : "Null")}, " +
-                      $"isControlled={(vehicleController != null ? vehicleController.isBeingControlled.ToString() : "False")}, " +
-                      $"depth={submersionDepth:F2}, " +
-                      $"kbd={(Keyboard.current != null ? "Found" : "Null")}");
-        }
+        // logTimer += Time.fixedDeltaTime;
+        // if (logTimer >= 1.0f)
+        // {
+        //     logTimer = 0f;
+        //     Debug.Log($"[PropellerBlock] rb={(rb != null ? "Found" : "Null")}, " +
+        //               $"vc={(vehicleController != null ? "Found" : "Null")}, " +
+        //               $"isControlled={(vehicleController != null ? vehicleController.isBeingControlled.ToString() : "False")}, " +
+        //               $"depth={submersionDepth:F2}, " +
+        //               $"kbd={(Keyboard.current != null ? "Found" : "Null")}");
+        // }
 
         // ── PROPULSION & STEERING ──
         // Fire propulsion when the vehicle's hull is in water.

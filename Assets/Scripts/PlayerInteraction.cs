@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -30,7 +31,6 @@ public class PlayerInteraction : MonoBehaviour
             if (DragDropManager.IsPointerOverUI()) return;
         }
 
-
         // WRENCH PRIORITY: If the player is holding the wrench, WrenchItem.cs handles
         // left click entirely (flood fill scan). Skip normal block-break to avoid
         // accidentally destroying a block while scanning a structure.
@@ -52,10 +52,27 @@ public class PlayerInteraction : MonoBehaviour
                 Vector3 voxelCenter = new Vector3(gridPos.x + 0.5f, gridPos.y + 0.5f, gridPos.z + 0.5f);
 
                 if (VoxelWorld.Instance != null)
-                    VoxelWorld.Instance.ModifyBlock(voxelCenter, 0);
-
-                // Unregister from structure detection registry
-                PlacedBlockRegistry.Instance?.Unregister(gridPos);
+                {
+                    byte existing = VoxelWorld.Instance.GetBlock(voxelCenter);
+                    if (existing == 21 || existing == 23) // Large Wheel or helper
+                    {
+                        // Find all adjacent connected large wheel parts and break them as a group
+                        List<Vector3Int> parts = FindConnectedWheelBlocks(gridPos);
+                        foreach (var partPos in parts)
+                        {
+                            Vector3 partCenter = new Vector3(partPos.x + 0.5f, partPos.y + 0.5f, partPos.z + 0.5f);
+                            // Only spawn one drop (from the main block we broke, or first block in parts)
+                            bool suppressDrop = (partPos != gridPos && VoxelWorld.Instance.GetBlock(partCenter) == 23);
+                            VoxelWorld.Instance.ModifyBlock(partCenter, 0, suppressDrop);
+                            PlacedBlockRegistry.Instance?.Unregister(partPos);
+                        }
+                    }
+                    else
+                    {
+                        VoxelWorld.Instance.ModifyBlock(voxelCenter, 0);
+                        PlacedBlockRegistry.Instance?.Unregister(gridPos);
+                    }
+                }
             }
         }
 
@@ -95,30 +112,57 @@ public class PlayerInteraction : MonoBehaviour
                     Mathf.FloorToInt(p.z));
                 Vector3 voxelCenter = new Vector3(gridPos.x + 0.5f, gridPos.y + 0.5f, gridPos.z + 0.5f);
 
-                // Prevent placing block inside the player
-                Bounds blockBounds = new Bounds(voxelCenter, Vector3.one);
-                
-                // Shrink bounds slightly so you can place blocks while standing flush against the grid
-                blockBounds.Expand(-0.1f);
+                // Prepare layout of blocks to place. Large Wheel is 2x2.
+                List<Vector3Int> positionsToPlace = new List<Vector3Int>();
+                positionsToPlace.Add(gridPos);
 
-                // Use the physics engine as the source of truth for overlaps
-                Collider[] hitColliders = Physics.OverlapBox(blockBounds.center, blockBounds.extents, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore);
-                bool playerInWay = false;
-                
-                foreach (Collider col in hitColliders)
+                if (blockType == 21) // Large Wheel
                 {
-                    // If the collider belongs to the player (either tagged Player or has the CharacterController)
-                    if (col.CompareTag("Player") || col.GetComponentInParent<CharacterController>() != null)
+                    Vector3Int sideDir = Vector3Int.right;
+                    // Determine horizontal orientation based on player view
+                    if (Mathf.Abs(playerCam.transform.forward.x) > Mathf.Abs(playerCam.transform.forward.z))
                     {
-                        playerInWay = true;
-                        break;
+                        sideDir = new Vector3Int(0, 0, 1);
+                    }
+                    positionsToPlace.Add(gridPos + Vector3Int.up);
+                    positionsToPlace.Add(gridPos + sideDir);
+                    positionsToPlace.Add(gridPos + sideDir + Vector3Int.up);
+                }
+
+                // Verify placement is not blocked for any of the blocks
+                bool placementBlocked = false;
+                if (VoxelWorld.Instance != null)
+                {
+                    foreach (var pos in positionsToPlace)
+                    {
+                        Vector3 center = new Vector3(pos.x + 0.5f, pos.y + 0.5f, pos.z + 0.5f);
+                        byte existing = VoxelWorld.Instance.GetBlock(center);
+                        if (existing != 0 && existing != 7) // occupied by a solid block
+                        {
+                            placementBlocked = true;
+                            break;
+                        }
+
+                        // Prevent placing block inside the player
+                        Bounds blockBounds = new Bounds(center, Vector3.one);
+                        blockBounds.Expand(-0.1f);
+
+                        Collider[] hitColliders = Physics.OverlapBox(blockBounds.center, blockBounds.extents, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore);
+                        foreach (Collider col in hitColliders)
+                        {
+                            if (col.CompareTag("Player") || col.GetComponentInParent<CharacterController>() != null)
+                            {
+                                placementBlocked = true;
+                                break;
+                            }
+                        }
+                        if (placementBlocked) break;
                     }
                 }
 
-                if (playerInWay)
+                if (placementBlocked)
                 {
-                    // Option 2 chosen: Do not give the player the ability to place a block where they are standing.
-                    return; 
+                    return;
                 }
 
                 if (VoxelWorld.Instance != null)
@@ -133,12 +177,62 @@ public class PlayerInteraction : MonoBehaviour
                             return;
                         }
                     }
-                    VoxelWorld.Instance.ModifyBlock(voxelCenter, blockType);
-                }
 
-                // Register as player-placed for structure detection
-                PlacedBlockRegistry.Instance?.Register(gridPos);
+                    foreach (var pos in positionsToPlace)
+                    {
+                        Vector3 center = new Vector3(pos.x + 0.5f, pos.y + 0.5f, pos.z + 0.5f);
+                        // For large wheel: anchor = ID 21, helpers = ID 23.
+                        // For every other block: all positions use the actual selected blockType.
+                        byte idToPlace;
+                        if (blockType == 21)
+                            idToPlace = (pos == gridPos) ? (byte)21 : (byte)23;
+                        else
+                            idToPlace = blockType;
+                        VoxelWorld.Instance.ModifyBlock(center, idToPlace);
+                        PlacedBlockRegistry.Instance?.Register(pos);
+                    }
+                }
             }
         }
+    }
+
+    private List<Vector3Int> FindConnectedWheelBlocks(Vector3Int startPos)
+    {
+        List<Vector3Int> result = new List<Vector3Int>();
+        if (VoxelWorld.Instance == null) return result;
+
+        Queue<Vector3Int> queue = new Queue<Vector3Int>();
+        HashSet<Vector3Int> visited = new HashSet<Vector3Int>();
+
+        queue.Enqueue(startPos);
+        visited.Add(startPos);
+
+        while (queue.Count > 0)
+        {
+            Vector3Int curr = queue.Dequeue();
+            result.Add(curr);
+
+            // Scan in a 3x3x3 grid around the current part
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        Vector3Int neighbor = curr + new Vector3Int(dx, dy, dz);
+                        if (visited.Contains(neighbor)) continue;
+
+                        Vector3 center = new Vector3(neighbor.x + 0.5f, neighbor.y + 0.5f, neighbor.z + 0.5f);
+                        byte type = VoxelWorld.Instance.GetBlock(center);
+                        if (type == 21 || type == 23)
+                        {
+                            visited.Add(neighbor);
+                            queue.Enqueue(neighbor);
+                        }
+                    }
+                }
+            }
+        }
+        return result;
     }
 }

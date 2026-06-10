@@ -71,6 +71,7 @@ public static class BlueprintGenerator
         { 20, 2.0f },  // small wheel
         { 21, 4.0f },  // large wheel
         { 22, 2.5f },  // propeller
+        { 23, 0.0f },  // large wheel helper
         { 50, 1.5f },  // control block
     };
 
@@ -93,6 +94,7 @@ public static class BlueprintGenerator
         { 20, 20f },  // small wheel
         { 21, 40f },  // large wheel
         { 22, 20f },  // propeller
+        { 23, 0f   },  // large wheel helper
         { 50, 15f },  // control block
     };
 

@@ -551,9 +551,17 @@ public class Chunk : MonoBehaviour
         if (isWater)
         {
             // Convert chunk-local voxel position to world space (centre of the voxel)
-            Vector3 worldVoxelCentre = transform.position + pos + new Vector3(0.5f, 0.5f, 0.5f);
-            if (VehicleController.IsWorldPosInsideVehicle(worldVoxelCentre))
+            Vector3 center = transform.position + pos + new Vector3(0.5f, 0.5f, 0.5f);
+            // Check center and the 4 horizontal corners of the water block.
+            // If any of these points are inside a vehicle's dry zone, suppress the voxel.
+            if (VehicleController.IsWorldPosInsideVehicle(center) ||
+                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(-0.45f, 0f, -0.45f)) ||
+                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(0.45f, 0f, -0.45f)) ||
+                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(-0.45f, 0f, 0.45f)) ||
+                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(0.45f, 0f, 0.45f)))
+            {
                 return;
+            }
         }
 
         int depth = 1;

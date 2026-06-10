@@ -125,6 +125,14 @@ public class WrenchItem : MonoBehaviour
         if (!Physics.Raycast(ray, out RaycastHit hit, reach, ~0, QueryTriggerInteraction.Ignore))
             return;
 
+        // Check if we hit an active vehicle
+        VehicleController hitVehicle = hit.collider.GetComponentInParent<VehicleController>();
+        if (hitVehicle != null)
+        {
+            DeconvertVehicleToStructure(hitVehicle);
+            return;
+        }
+
         Vector3 p = hit.point - hit.normal * 0.001f;
         Vector3Int gridPos = new Vector3Int(
             Mathf.FloorToInt(p.x),
@@ -142,6 +150,131 @@ public class WrenchItem : MonoBehaviour
 
         TriggerConfirmationWindow(currentBlueprint);
     }
+
+    private void DeconvertVehicleToStructure(VehicleController vehicle)
+    {
+        if (VoxelWorld.Instance == null) return;
+
+        Debug.Log($"[WrenchItem] De-converting vehicle '{vehicle.gameObject.name}' back to structure.");
+
+        // If the player is currently riding this vehicle, exit control
+        if (vehicle.isBeingControlled)
+        {
+            vehicle.isBeingControlled = false;
+        }
+
+        // Align the vehicle to the world voxel grid to prevent block distortion.
+        // 1. Snap rotation to the nearest 90 degrees around the Y axis, clearing pitch and roll.
+        float snapY = Mathf.Round(vehicle.transform.eulerAngles.y / 90f) * 90f;
+        vehicle.transform.rotation = Quaternion.Euler(0f, snapY, 0f);
+
+        // 2. Snap position to the nearest half-grid coordinates (matching the 0.5f voxel-center offset).
+        vehicle.transform.position = new Vector3(
+            Mathf.Round(vehicle.transform.position.x - 0.5f) + 0.5f,
+            Mathf.Round(vehicle.transform.position.y - 0.5f) + 0.5f,
+            Mathf.Round(vehicle.transform.position.z - 0.5f) + 0.5f
+        );
+
+        // Collect all child blocks
+        List<Transform> childrenToProcess = new List<Transform>();
+        foreach (Transform child in vehicle.transform)
+        {
+            if (child.name.StartsWith("Block_") || child.name.StartsWith("SpecialBlock_"))
+            {
+                childrenToProcess.Add(child);
+            }
+        }
+
+        foreach (Transform child in childrenToProcess)
+        {
+            string[] parts = child.name.Split('_');
+            if (parts.Length >= 2 && int.TryParse(parts[1], out int typeID))
+            {
+                if (typeID == 21) // Large Wheel (anchor)
+                {
+                    Vector3 localPos = child.localPosition;
+                    // Determine if side offset is X or Z
+                    // fractional part of localPos.x is 0.5f if sideOffset is X
+                    float fracX = Mathf.Abs(localPos.x - Mathf.Floor(localPos.x));
+                    Vector3Int localSide;
+                    Vector3Int anchorLocal;
+                    
+                    if (Mathf.Abs(fracX - 0.5f) < 0.1f)
+                    {
+                        localSide = Vector3Int.right;
+                        anchorLocal = new Vector3Int(
+                            Mathf.RoundToInt(localPos.x - 0.5f),
+                            Mathf.RoundToInt(localPos.y - 0.5f),
+                            Mathf.RoundToInt(localPos.z)
+                        );
+                    }
+                    else
+                    {
+                        localSide = Vector3Int.forward;
+                        anchorLocal = new Vector3Int(
+                            Mathf.RoundToInt(localPos.x),
+                            Mathf.RoundToInt(localPos.y - 0.5f),
+                            Mathf.RoundToInt(localPos.z - 0.5f)
+                        );
+                    }
+
+                    // The 4 local positions for the 2x2 wheel footprint
+                    Vector3Int[] localPositions = new Vector3Int[]
+                    {
+                        anchorLocal,
+                        anchorLocal + Vector3Int.up,
+                        anchorLocal + localSide,
+                        anchorLocal + localSide + Vector3Int.up
+                    };
+
+                    for (int i = 0; i < 4; i++)
+                    {
+                        Vector3 worldPos = vehicle.transform.TransformPoint((Vector3)localPositions[i]);
+                        Vector3Int worldGrid = new Vector3Int(
+                            Mathf.RoundToInt(worldPos.x - 0.5f),
+                            Mathf.RoundToInt(worldPos.y - 0.5f),
+                            Mathf.RoundToInt(worldPos.z - 0.5f)
+                        );
+
+                        Vector3 voxelCentre = new Vector3(
+                            worldGrid.x + 0.5f,
+                            worldGrid.y + 0.5f,
+                            worldGrid.z + 0.5f
+                        );
+
+                        byte blockToPlace = (i == 0) ? (byte)21 : (byte)23;
+                        VoxelWorld.Instance.ModifyBlock(voxelCentre, blockToPlace, suppressDrop: true);
+                        PlacedBlockRegistry.Instance?.Register(worldGrid);
+                    }
+                }
+                else
+                {
+                    Vector3 childPos = child.position;
+                    Vector3Int worldGrid = new Vector3Int(
+                        Mathf.RoundToInt(childPos.x - 0.5f),
+                        Mathf.RoundToInt(childPos.y - 0.5f),
+                        Mathf.RoundToInt(childPos.z - 0.5f)
+                    );
+
+                    Vector3 voxelCentre = new Vector3(
+                        worldGrid.x + 0.5f,
+                        worldGrid.y + 0.5f,
+                        worldGrid.z + 0.5f
+                    );
+
+                    // Re-place the voxel block
+                    VoxelWorld.Instance.ModifyBlock(voxelCentre, (byte)typeID, suppressDrop: true);
+
+                    // Register as player placed
+                    PlacedBlockRegistry.Instance?.Register(worldGrid);
+                }
+            }
+        }
+
+        // Destroy the vehicle GameObject
+        Destroy(vehicle.gameObject);
+    }
+
 
     private void TriggerConfirmationWindow(StructureBlueprint blueprint)
     {

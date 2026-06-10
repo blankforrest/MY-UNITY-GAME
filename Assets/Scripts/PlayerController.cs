@@ -22,6 +22,9 @@ public class PlayerController : MonoBehaviour
     private Vector2 currentMouseVelocity;
 
     private UnityEngine.UI.Image underwaterOverlay;
+    private GameObject deathScreenGO;
+    private bool isDead = false;
+    private Vector3 spawnPoint;
 
     void Start()
     {
@@ -49,8 +52,10 @@ public class PlayerController : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
-        // Create procedural underwater overlay UI
-        Canvas canvas = FindObjectOfType<Canvas>();
+        spawnPoint = transform.position;
+
+        // Create procedural UIs
+        Canvas canvas = FindAnyObjectByType<Canvas>();
         if (canvas != null)
         {
             GameObject overlayGO = new GameObject("UnderwaterOverlay");
@@ -65,14 +70,33 @@ public class PlayerController : MonoBehaviour
             rect.sizeDelta = Vector2.zero;
             
             overlayGO.SetActive(false);
+
+            CreateDeathScreen(canvas);
         }
+    }
+
+    private bool isFrozen = false;
+
+    public void SetFrozen(bool frozen)
+    {
+        isFrozen = frozen;
+        if (controller != null)
+        {
+            controller.enabled = !frozen;
+        }
+        velocity = Vector3.zero;
     }
 
     void Update()
     {
+        if (isFrozen)
+        {
+            velocity = Vector3.zero;
+            return;
+        }
         if (cameraTransform == null) return;
 
-        bool isUIOpen = InventoryUI.IsInventoryOpen || ConfirmationWindow.IsOpen;
+        bool isUIOpen = InventoryUI.IsInventoryOpen || ConfirmationWindow.IsOpen || DevToolsUI.IsCursorUnlocked || isDead;
 
         // Handle cursor lock state based on UI
         if (isUIOpen)
@@ -225,11 +249,13 @@ public class PlayerController : MonoBehaviour
                     // If player is at the surface (feet/waist in water, but head out)
                     if (!headInWater)
                     {
-                        // Check if there is a wall in front to climb out onto
+                        // Check if there is a wall or a vehicle in front to climb out onto
                         bool hasWallInFront = false;
+                        bool hasVehicleInFront = false;
+                        Vector3 checkDir = move.magnitude > 0.1f ? move.normalized : transform.forward;
+
                         if (VoxelWorld.Instance != null)
                         {
-                            Vector3 checkDir = move.magnitude > 0.1f ? move.normalized : transform.forward;
                             Vector3 checkPosLow = transform.position + checkDir * 0.7f + new Vector3(0f, 0.2f, 0f);
                             Vector3 checkPosMid = transform.position + checkDir * 0.7f + new Vector3(0f, 0.7f, 0f);
                             Vector3 checkPosHigh = transform.position + checkDir * 0.7f + new Vector3(0f, 1.2f, 0f);
@@ -246,7 +272,21 @@ public class PlayerController : MonoBehaviour
                             }
                         }
 
-                        if (hasWallInFront)
+                        // Check for a vehicle (boat) directly in front of the player
+                        int vehicleLayer = LayerMask.NameToLayer("Vehicle");
+                        if (vehicleLayer != -1)
+                        {
+                            int vehicleMask = 1 << vehicleLayer;
+                            // Check if a sphere in front of the player overlaps any vehicle collider
+                            Vector3 overlapCenter = transform.position + checkDir * 0.5f + new Vector3(0f, 0.6f, 0f);
+                            Collider[] cols = Physics.OverlapSphere(overlapCenter, 0.5f, vehicleMask);
+                            if (cols.Length > 0)
+                            {
+                                hasVehicleInFront = true;
+                            }
+                        }
+
+                        if (hasWallInFront || hasVehicleInFront)
                         {
                             if (velocity.y < 3.5f)
                             {
@@ -256,7 +296,11 @@ public class PlayerController : MonoBehaviour
                         else
                         {
                             // Gently float at the surface instead of launching into the air
-                            velocity.y = 0.8f;
+                            // Only set if we aren't already mid-leap (to preserve upward momentum)
+                            if (velocity.y <= 0.8f)
+                            {
+                                velocity.y = 0.8f;
+                            }
                         }
                     }
                     else
@@ -287,6 +331,163 @@ public class PlayerController : MonoBehaviour
         {
             controller.Move(velocity * Time.deltaTime);
         }
+
+        // Void rescue safety check
+        if (transform.position.y < -5f)
+        {
+            RescuePlayerFromVoid();
+        }
+    }
+
+    private void RescuePlayerFromVoid()
+    {
+        if (isDead) return;
+
+        if (VoxelWorld.Instance == null) return;
+
+        Vector3 currentPos = transform.position;
+        int px = Mathf.FloorToInt(currentPos.x);
+        int pz = Mathf.FloorToInt(currentPos.z);
+
+        // Scan downward from the top of the world to find a solid block
+        int targetY = -1;
+        for (int y = VoxelData.ChunkHeight - 1; y >= 0; y--)
+        {
+            byte blockType = VoxelWorld.Instance.GetBlock(new Vector3(px + 0.5f, y + 0.5f, pz + 0.5f));
+            // 0 is air, 7 is water. We want a solid block (anything else)
+            if (blockType != 0 && blockType != 7)
+            {
+                targetY = y;
+                break;
+            }
+        }
+
+        if (targetY != -1)
+        {
+            // Teleport player's feet inside the solid block, making them stuck
+            // so they can remove it to escape, mimicking Minecraft's behavior.
+            Vector3 rescuePos = new Vector3(px + 0.5f, targetY + 0.5f, pz + 0.5f);
+            Debug.Log($"[VoidRescue] Player fell to void! Rescued to solid block at {rescuePos} (stuck in block).");
+
+            bool wasEnabled = controller.enabled;
+            controller.enabled = false;
+            transform.position = rescuePos;
+            velocity = Vector3.zero;
+            controller.enabled = wasEnabled;
+        }
+        else
+        {
+            // No solid block found (true void) — player dies and needs to respawn
+            Debug.Log("[VoidRescue] Player fell to void and died (no solid block found).");
+            Die();
+        }
+    }
+
+    public void Die()
+    {
+        if (isDead) return;
+        isDead = true;
+
+        // Reset velocity
+        velocity = Vector3.zero;
+
+        // Show death screen UI
+        if (deathScreenGO != null)
+        {
+            deathScreenGO.SetActive(true);
+        }
+
+        // Unlock cursor for death screen interaction
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+    }
+
+    private void Respawn()
+    {
+        isDead = false;
+        if (deathScreenGO != null)
+        {
+            deathScreenGO.SetActive(false);
+        }
+
+        // Teleport player to the spawn point
+        bool wasEnabled = controller.enabled;
+        controller.enabled = false;
+        transform.position = spawnPoint;
+        velocity = Vector3.zero;
+        controller.enabled = wasEnabled;
+
+        // Re-lock cursor
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+    }
+
+    private void CreateDeathScreen(Canvas canvas)
+    {
+        deathScreenGO = new GameObject("DeathScreen");
+        deathScreenGO.transform.SetParent(canvas.transform, false);
+
+        // Dark red overlay
+        var img = deathScreenGO.AddComponent<UnityEngine.UI.Image>();
+        img.color = new Color(0.45f, 0.05f, 0.05f, 0.65f);
+
+        var rect = deathScreenGO.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.sizeDelta = Vector2.zero;
+
+        // "You Died!" Text
+        GameObject textGO = new GameObject("DeathText");
+        textGO.transform.SetParent(deathScreenGO.transform, false);
+        var text = textGO.AddComponent<TMPro.TextMeshProUGUI>();
+        text.text = "You Died!";
+        text.fontSize = 48f;
+        text.fontStyle = TMPro.FontStyles.Bold;
+        text.color = Color.red;
+        text.alignment = TMPro.TextAlignmentOptions.Center;
+
+        var textRT = textGO.GetComponent<RectTransform>();
+        textRT.anchorMin = new Vector2(0.5f, 0.6f);
+        textRT.anchorMax = new Vector2(0.5f, 0.6f);
+        textRT.pivot = new Vector2(0.5f, 0.5f);
+        textRT.sizeDelta = new Vector2(400f, 100f);
+
+        // Respawn Button
+        GameObject buttonGO = new GameObject("RespawnButton");
+        buttonGO.transform.SetParent(deathScreenGO.transform, false);
+        
+        var btnImg = buttonGO.AddComponent<UnityEngine.UI.Image>();
+        btnImg.color = new Color(0.15f, 0.15f, 0.15f, 1f);
+
+        var btn = buttonGO.AddComponent<UnityEngine.UI.Button>();
+        var colors = btn.colors;
+        colors.normalColor = new Color(0.15f, 0.15f, 0.15f, 1f);
+        colors.highlightedColor = new Color(0.25f, 0.25f, 0.25f, 1f);
+        colors.pressedColor = new Color(0.08f, 0.08f, 0.08f, 1f);
+        btn.colors = colors;
+        btn.onClick.AddListener(Respawn);
+
+        var btnRT = buttonGO.GetComponent<RectTransform>();
+        btnRT.anchorMin = new Vector2(0.5f, 0.45f);
+        btnRT.anchorMax = new Vector2(0.5f, 0.45f);
+        btnRT.pivot = new Vector2(0.5f, 0.5f);
+        btnRT.sizeDelta = new Vector2(180f, 40f);
+
+        // Button Label Text
+        GameObject btnTextGO = new GameObject("Label");
+        btnTextGO.transform.SetParent(buttonGO.transform, false);
+        var btnText = btnTextGO.AddComponent<TMPro.TextMeshProUGUI>();
+        btnText.text = "Respawn";
+        btnText.fontSize = 18f;
+        btnText.alignment = TMPro.TextAlignmentOptions.Center;
+        btnText.color = Color.white;
+
+        var btnTextRT = btnTextGO.GetComponent<RectTransform>();
+        btnTextRT.anchorMin = Vector2.zero;
+        btnTextRT.anchorMax = Vector2.one;
+        btnTextRT.sizeDelta = Vector2.zero;
+
+        deathScreenGO.SetActive(false);
     }
 
     // ── Push Rigidbodies ──────────────────────────────────────────────────────

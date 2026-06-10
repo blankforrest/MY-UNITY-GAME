@@ -307,6 +307,15 @@ public class VehicleSpawner : MonoBehaviour
             return;
         }
 
+        if (VoxelWorld.Instance != null && VoxelWorld.Instance.playerTransform != null)
+        {
+            PlayerController player = VoxelWorld.Instance.playerTransform.GetComponent<PlayerController>();
+            player?.SetFrozen(true);
+        }
+
+        // 1. Remove original voxels first so the new vehicle colliders do not overlap with them!
+        RemoveSourceBlocks(blueprint);
+
         string vehicleName = $"Vehicle_{System.DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
         GameObject vehicleGO = new GameObject(vehicleName);
         try 
@@ -317,10 +326,13 @@ public class VehicleSpawner : MonoBehaviour
         {
             Debug.LogWarning("[VehicleSpawner] The 'Vehicle' tag is not defined in your project! Please add it in Edit -> Project Settings -> Tags and Layers so the player can properly ride it.");
         }
-        vehicleGO.transform.position = blueprint.worldOrigin;
+        vehicleGO.transform.position = blueprint.worldOrigin + new Vector3(0.5f, 0.5f, 0.5f);
 
         foreach (BlockEntry entry in blueprint.blocks)
         {
+            // Large wheel helper blocks are voxel-world placeholders only — nothing to spawn on the vehicle.
+            if (entry.blockTypeID == 23) continue;
+
             bool isWheel = (entry.blockTypeID == 20 || entry.blockTypeID == 21);
             bool isPropeller = (entry.blockTypeID == 22);
 
@@ -354,9 +366,28 @@ public class VehicleSpawner : MonoBehaviour
             }
 
             blockGO.name = $"Block_{entry.blockTypeID}_{entry.localPosition}";
-            blockGO.transform.localPosition = entry.localPosition;
             blockGO.transform.localRotation = Quaternion.identity;
             blockGO.transform.localScale    = Vector3.one;
+
+            // Large wheels are 2x2 voxel blocks — the anchor (ID 21) is at the bottom-left corner.
+            // We detect which direction the 2x2 extends (right or forward) by checking adjacent
+            // helper blocks (ID 23), then offset the blockGO to the centre of the 2x2 so the
+            // sphere collider and suspension raycasts are perfectly centred.
+            if (entry.blockTypeID == 21)
+            {
+                Vector3 sideOffset = Vector3.right; // default: extends along +X
+                bool hasSideZ = blueprint.blocks.Exists(b =>
+                    b.blockTypeID == 23 &&
+                    b.localPosition == entry.localPosition + new Vector3Int(0, 0, 1));
+                if (hasSideZ) sideOffset = Vector3.forward;
+
+                // Centre = anchor corner + half a unit up and half a unit to the side
+                blockGO.transform.localPosition = (Vector3)entry.localPosition + (Vector3.up + sideOffset) * 0.5f;
+            }
+            else
+            {
+                blockGO.transform.localPosition = entry.localPosition;
+            }
 
             // Replace existing collider on wheel blocks
             if (isWheel)
@@ -451,6 +482,7 @@ public class VehicleSpawner : MonoBehaviour
         rb.angularDamping = angularDrag;
         rb.useGravity     = true;
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+        rb.isKinematic    = true; // Start kinematic to prevent immediate physics explosion while colliders bake
 
         // ── d. Add VehicleController ──────────────────────────────────────────
         vehicleGO.AddComponent<VehicleController>();
@@ -461,11 +493,25 @@ public class VehicleSpawner : MonoBehaviour
             Debug.LogWarning("[VehicleSpawner] No Control Block (ID 50) found! " +
                              "Include the yellow Control Block in your structure so you can press E to drive.");
 
-        // ── e. Remove original voxels ─────────────────────────────────────────
-        RemoveSourceBlocks(blueprint);
+        // Set layer recursively so all colliders are on the Vehicle layer
+        int vehicleLayerIndex = LayerMask.NameToLayer("Vehicle");
+        if (vehicleLayerIndex != -1)
+        {
+            SetLayerRecursive(vehicleGO, vehicleLayerIndex);
+        }
 
         Debug.Log($"[VehicleSpawner] Vehicle spawned with {blueprint.blocks.Count} blocks " +
                   $"at {blueprint.worldOrigin}. HasControlBlock={hasControlBlock}");
+    }
+
+    private static void SetLayerRecursive(GameObject go, int layer)
+    {
+        if (go == null) return;
+        go.layer = layer;
+        for (int i = 0; i < go.transform.childCount; i++)
+        {
+            SetLayerRecursive(go.transform.GetChild(i).gameObject, layer);
+        }
     }
 
     private void ApplyVoxelTexture(GameObject go, byte blockTypeID)

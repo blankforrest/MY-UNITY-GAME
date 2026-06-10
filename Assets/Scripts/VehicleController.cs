@@ -50,6 +50,8 @@ public class VehicleController : MonoBehaviour
     [Header("Dry Interior Settings")]
     [Tooltip("The local bounds inside the vehicle that should remain dry. Calculated automatically if not set.")]
     public Bounds dryBounds;
+    [Tooltip("List of multiple dry interior box filters.")]
+    public List<Bounds> dryFilters = new List<Bounds>();
 
     // Static list of all active vehicles for water clipping
     private static List<VehicleController> _activeVehicles = new List<VehicleController>();
@@ -91,6 +93,7 @@ public class VehicleController : MonoBehaviour
         if (waterLevel <= 0f) waterLevel = 14f;
     }
 
+
     public void RegisterWheel(WheelBlock wheel)
     {
         if (!registeredWheels.Contains(wheel))
@@ -106,6 +109,9 @@ public class VehicleController : MonoBehaviour
 
     private void Start()
     {
+        Debug.Log($"[VC.Start] childCount={transform.childCount}, " +
+                  $"rb={(_rb != null ? "found" : "NULL")}, " +
+                  $"BoxColliders={GetComponentsInChildren<BoxCollider>().Length}");
         if (_rb == null) return;
 
         // 1. BOUNDS & CENTER OF MASS
@@ -179,49 +185,9 @@ public class VehicleController : MonoBehaviour
         foreach (var col in allColliders)
             col.sharedMaterial = glideMaterial;
 
-        // ── Calculate vehicle local bounds ────────────────────────────────────
-        // Instead of creating a giant solid root BoxCollider (which seals off hollow
-        // cockpits/cabins and blocks the player from entering them), we calculate and
-        // cache the local bounds of the vehicle. We then toggle player collision
-        // dynamically on all individual block colliders, letting the player naturally
-        // step inside hollow sections of the boat.
-        {
-            Bounds tb    = new Bounds(Vector3.zero, Vector3.zero);
-            bool   first = true;
-            foreach (var col in allColliders)
-            {
-                Bounds lb = new Bounds(
-                    transform.InverseTransformPoint(col.bounds.center),
-                    col.bounds.size);
-                if (first) { tb = lb; first = false; }
-                else tb.Encapsulate(lb);
-            }
-            _localBounds = tb;
-        }
+        // Initialize local bounds and dry interior filters
+        InitializeDryFilters();
 
-        // ── Calculate dry interior bounds ────────────────────────────────────
-        if (dryBounds.size == Vector3.zero)
-        {
-            // Auto-calculate: shrink _localBounds to represent the cabin interior.
-            // Assume 1-voxel thick hull (1.0 units). We shrink by 0.8f on sides to be safe,
-            // raise bottom by 0.8f, and keep the top high.
-            Vector3 center = _localBounds.center;
-            Vector3 size = _localBounds.size;
-
-            size.x = Mathf.Max(0.1f, size.x - 1.6f);
-            size.z = Mathf.Max(0.1f, size.z - 1.6f);
-
-            float localMinY = _localBounds.min.y;
-            float localMaxY = _localBounds.max.y;
-
-            float dryMinY = localMinY + 0.8f; // raise floor of dry zone
-            float dryMaxY = localMaxY + 2.0f; // extend top of dry zone upward
-
-            center.y = (dryMinY + dryMaxY) * 0.5f;
-            size.y = Mathf.Max(0.1f, dryMaxY - dryMinY);
-
-            dryBounds = new Bounds(center, size);
-        }
 
         // Cache the player CharacterController for targeted IgnoreCollision calls.
         if (VoxelWorld.Instance != null && VoxelWorld.Instance.playerTransform != null)
@@ -241,6 +207,35 @@ public class VehicleController : MonoBehaviour
         Collider[] vehicleColliders = GetComponentsInChildren<Collider>();
         foreach (var chunk in Object.FindObjectsByType<Chunk>(FindObjectsSortMode.None))
             chunk.IgnoreFoliageCollisionWith(vehicleColliders);
+
+        // Start delayed unfreeze to let chunk colliders finish baking
+        StartCoroutine(UnfreezePhysicsDelayed());
+    }
+
+    private System.Collections.IEnumerator UnfreezePhysicsDelayed()
+    {
+        // Wait 4 fixed updates to ensure Unity has fully baked the new chunk MeshColliders
+        // and any initial physics frame collisions have been resolved.
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+        yield return new WaitForFixedUpdate();
+
+        if (_rb != null)
+        {
+            _rb.isKinematic = false;
+            _rb.linearVelocity = Vector3.zero;
+            _rb.angularVelocity = Vector3.zero;
+        }
+
+        if (VoxelWorld.Instance != null && VoxelWorld.Instance.playerTransform != null)
+        {
+            PlayerController player = VoxelWorld.Instance.playerTransform.GetComponent<PlayerController>();
+            player?.SetFrozen(false);
+        }
+
+        // Trigger the water mesh rebuild now that the vehicle is stable
+        RefreshNearbyChunks(transform.position);
     }
 
     private void Update()
@@ -274,7 +269,8 @@ public class VehicleController : MonoBehaviour
             {
                 if (playerCC != null)
                 {
-                    playerCC.transform.position = GetSafeExitPosition();
+                    // Re-enable the CharacterController in-place — the player stays exactly
+                    // where they were sitting. No teleport, no forced exit position.
                     playerCC.enabled = true;
                 }
                 StartCoroutine(RestorePlayerCollisionDelayed());
@@ -685,19 +681,20 @@ public class VehicleController : MonoBehaviour
 
     // ── Water Clipping & Dry Interior ──────────────────────────────────────────
 
-    // Track the boat's integer voxel-grid position so we refresh chunks every
-    // time it crosses into a new voxel column (1-unit resolution).
-    private Vector3Int _lastVoxelPos;
-    // Timer for periodic refresh while the boat is in water (catches fast movement)
-    private float _waterRefreshTimer = 0f;
-    private const float WaterRefreshInterval = 0.12f; // seconds between forced refreshes in water
+    // Track the boat's last refreshed position and rotation to trigger updates dynamically
+    private Vector3 _lastRefreshPos;
+    private Quaternion _lastRefreshRot;
 
     private void OnEnable()
     {
         if (!_activeVehicles.Contains(this))
             _activeVehicles.Add(this);
 
-        _lastVoxelPos = WorldToVoxel(transform.position);
+        _lastRefreshPos = transform.position;
+        _lastRefreshRot = transform.rotation;
+
+        InitializeDryFilters();
+
         RefreshNearbyChunks(transform.position);
     }
 
@@ -711,25 +708,17 @@ public class VehicleController : MonoBehaviour
     // Called every frame — keeps water suppressed as the boat navigates
     private void LateUpdate()
     {
-        Vector3Int currentVoxel = WorldToVoxel(transform.position);
+        // Detect if the boat has moved or rotated since the last water mesh refresh
+        float posDelta = Vector3.Distance(transform.position, _lastRefreshPos);
+        float rotDelta = Quaternion.Angle(transform.rotation, _lastRefreshRot);
 
-        if (currentVoxel != _lastVoxelPos)
+        // If the boat has moved/rotated by a noticeable amount, refresh the surrounding chunks immediately
+        if (posDelta > 0.05f || rotDelta > 0.5f)
         {
-            // Boat crossed a voxel boundary — refresh both old and new footprints
-            RefreshNearbyChunks(VoxelToWorld(_lastVoxelPos));
-            RefreshNearbyChunks(transform.position);
-            _lastVoxelPos = currentVoxel;
-            _waterRefreshTimer = 0f; // reset timer since we just refreshed
-        }
-        else if (_isInWater)
-        {
-            // Periodic refresh while floating — catches fast movement within the same voxel
-            _waterRefreshTimer += Time.deltaTime;
-            if (_waterRefreshTimer >= WaterRefreshInterval)
-            {
-                RefreshNearbyChunks(transform.position);
-                _waterRefreshTimer = 0f;
-            }
+            RefreshNearbyChunksCombined(_lastRefreshPos, transform.position);
+
+            _lastRefreshPos = transform.position;
+            _lastRefreshRot = transform.rotation;
         }
     }
 
@@ -749,10 +738,25 @@ public class VehicleController : MonoBehaviour
         foreach (var vc in _activeVehicles)
         {
             if (vc == null) continue;
-            // Transform world point to vehicle local space and check against _localBounds
+            // Transform world point to vehicle local space
             Vector3 localPos = vc.transform.InverseTransformPoint(worldPos);
-            if (vc._localBounds.Contains(localPos))
-                return true;
+            // Check if position is inside any dry filter
+            if (vc.dryFilters != null)
+            {
+                for (int i = 0; i < vc.dryFilters.Count; i++)
+                {
+                    bool inside = vc.dryFilters[i].Contains(localPos);
+                    
+                    // Log details to help diagnose the issue
+                    // if (Vector3.Distance(worldPos, vc.transform.position) < 6f)
+                    // {
+                    //     Debug.Log($"[DryFilterCheck] worldPos={worldPos} localPos={localPos} filterBounds={vc.dryFilters[i]} inside={inside}");
+                    // }
+
+                    if (inside)
+                        return true;
+                }
+            }
         }
         return false;
     }
@@ -761,8 +765,31 @@ public class VehicleController : MonoBehaviour
     private void RefreshNearbyChunks(Vector3 origin)
     {
         if (VoxelWorld.Instance == null) return;
+        HashSet<Vector2Int> coords = new HashSet<Vector2Int>();
+        AddChunkCoordsForPosition(origin, coords);
+        foreach (var coord in coords)
+        {
+            Chunk c = VoxelWorld.Instance.GetChunkFromChunkPos(new Vector2(coord.x, coord.y));
+            c?.UpdateWaterMeshOnly();
+        }
+    }
 
-        // Calculate world bounds of the vehicle if it were placed at the specified origin
+    /// <summary>Triggers UpdateWaterMeshOnly on the union of chunks covering both positions A and B, avoiding duplicate updates.</summary>
+    private void RefreshNearbyChunksCombined(Vector3 posA, Vector3 posB)
+    {
+        if (VoxelWorld.Instance == null) return;
+        HashSet<Vector2Int> coords = new HashSet<Vector2Int>();
+        AddChunkCoordsForPosition(posA, coords);
+        AddChunkCoordsForPosition(posB, coords);
+        foreach (var coord in coords)
+        {
+            Chunk c = VoxelWorld.Instance.GetChunkFromChunkPos(new Vector2(coord.x, coord.y));
+            c?.UpdateWaterMeshOnly();
+        }
+    }
+
+    private void AddChunkCoordsForPosition(Vector3 origin, HashSet<Vector2Int> coords)
+    {
         Vector3 worldCenter = origin + transform.rotation * _localBounds.center;
         Vector3 ext = _localBounds.extents;
 
@@ -798,18 +825,256 @@ public class VehicleController : MonoBehaviour
         {
             for (int cz = minCZ; cz <= maxCZ; cz++)
             {
-                Chunk c = VoxelWorld.Instance.GetChunkFromChunkPos(new Vector2(cx, cz));
-                // Water-only rebuild: skips terrain/collider bake — much cheaper than UpdateChunk()
-                c?.UpdateWaterMeshOnly();
+                coords.Add(new Vector2Int(cx, cz));
             }
         }
     }
 
+    public void InitializeDryFilters()
+    {
+        // Calculate the AABB of the vehicle blocks in the vehicle's local space.
+        // We use child local positions (which are grid-aligned) to avoid rotation distortion.
+        Bounds tb = new Bounds(Vector3.zero, Vector3.zero);
+        bool first = true;
+        foreach (Transform child in transform)
+        {
+            if (child.GetComponentInChildren<Collider>() != null)
+            {
+                Bounds lb = new Bounds(child.localPosition, Vector3.one);
+                if (first) { tb = lb; first = false; }
+                else tb.Encapsulate(lb);
+            }
+        }
+        _localBounds = tb;
+
+        // Calculate dry interior filters
+        dryFilters = new List<Bounds>();
+
+        // 1. Add primary overall shrunk bounding box filter to guarantee cabin dryness.
+        // Shrink horizontally by 1.1 units (0.55 on each side) to stay inside the 1-block thick outer walls.
+        if (_localBounds.size.magnitude > 0.1f)
+        {
+            Vector3 fc = _localBounds.center;
+            Vector3 fs = _localBounds.size;
+            fs.x = Mathf.Max(0.2f, fs.x - 1.1f);
+            fs.z = Mathf.Max(0.2f, fs.z - 1.1f);
+            float fbBottom = (fc.y - fs.y * 0.5f) - 1.5f;
+            float fbTop    = (fc.y + fs.y * 0.5f) + 2.5f;
+            fc.y = (fbBottom + fbTop) * 0.5f;
+            fs.y = fbTop - fbBottom;
+            dryFilters.Add(new Bounds(fc, fs));
+            Debug.Log($"[DryFilters] Added primary overall filter. center={fc} size={fs}");
+        }
+
+        // 2. Generate flood-fill filters for multi-cabin details
+        GenerateDryFilters();
+    }
+
+    private void GenerateDryFilters()
+    {
+        // 1. Gather all child blocks that have colliders
+        var blocks = new List<Transform>();
+        int minX = int.MaxValue, maxX = int.MinValue;
+        int minY = int.MaxValue, maxY = int.MinValue;
+        int minZ = int.MaxValue, maxZ = int.MinValue;
+
+        foreach (Transform child in transform)
+        {
+            // Skip wheel blocks (SphereCollider only) — include everything with a BoxCollider
+            if (child.GetComponentInChildren<BoxCollider>() != null &&
+                child.GetComponent<SphereCollider>() == null)
+            {
+                blocks.Add(child);
+                Vector3Int lp = Vector3Int.RoundToInt(child.localPosition);
+                if (lp.x < minX) minX = lp.x;
+                if (lp.x > maxX) maxX = lp.x;
+                if (lp.y < minY) minY = lp.y;
+                if (lp.y > maxY) maxY = lp.y;
+                if (lp.z < minZ) minZ = lp.z;
+                if (lp.z > maxZ) maxZ = lp.z;
+            }
+        }
+
+        if (blocks.Count == 0)
+        {
+            Debug.LogWarning("[DryFilters] No BoxCollider blocks found on vehicle — cannot generate filters!");
+            return;
+        }
+
+        Debug.Log($"[DryFilters] Found {blocks.Count} hull blocks. Grid size: ({maxX-minX+1}, {maxY-minY+1}, {maxZ-minZ+1})");
+
+        // 2. Create the grid representation
+        int sizeX = maxX - minX + 1;
+        int sizeY = maxY - minY + 1;
+        int sizeZ = maxZ - minZ + 1;
+
+        bool[,,] isSolid = new bool[sizeX, sizeY, sizeZ];
+        foreach (var block in blocks)
+        {
+            Vector3Int lp = Vector3Int.RoundToInt(block.localPosition);
+            isSolid[lp.x - minX, lp.y - minY, lp.z - minZ] = true;
+        }
+
+        // 3. Find interior empty voxels (bounded on bottom, left, right, front, back)
+        bool[,,] isInterior = new bool[sizeX, sizeY, sizeZ];
+        for (int y = 0; y < sizeY; y++)
+        {
+            for (int x = 0; x < sizeX; x++)
+            {
+                for (int z = 0; z < sizeZ; z++)
+                {
+                    if (isSolid[x, y, z]) continue;
+
+                    // Check below
+                    bool hasBelow = false;
+                    for (int dy = y - 1; dy >= 0; dy--)
+                    {
+                        if (isSolid[x, dy, z]) { hasBelow = true; break; }
+                    }
+
+                    // Check left
+                    bool hasLeft = false;
+                    for (int dx = x - 1; dx >= 0; dx--)
+                    {
+                        if (isSolid[dx, y, z]) { hasLeft = true; break; }
+                    }
+
+                    // Check right
+                    bool hasRight = false;
+                    for (int dx = x + 1; dx < sizeX; dx++)
+                    {
+                        if (isSolid[dx, y, z]) { hasRight = true; break; }
+                    }
+
+                    // Check front (z-)
+                    bool hasFront = false;
+                    for (int dz = z - 1; dz >= 0; dz--)
+                    {
+                        if (isSolid[x, y, dz]) { hasFront = true; break; }
+                    }
+
+                    // Check back (z+)
+                    bool hasBack = false;
+                    for (int dz = z + 1; dz < sizeZ; dz++)
+                    {
+                        if (isSolid[x, y, dz]) { hasBack = true; break; }
+                    }
+
+                    if (hasBelow && hasLeft && hasRight && hasFront && hasBack)
+                    {
+                        isInterior[x, y, z] = true;
+                    }
+                }
+            }
+        }
+
+        // 4. Merge interior voxels into rectangular Bounds (Greedy box generation)
+        bool[,,] visited = new bool[sizeX, sizeY, sizeZ];
+        for (int y = 0; y < sizeY; y++)
+        {
+            for (int x = 0; x < sizeX; x++)
+            {
+                for (int z = 0; z < sizeZ; z++)
+                {
+                    if (!isInterior[x, y, z] || visited[x, y, z]) continue;
+
+                    // Start a new box at (x, y, z)
+                    int startX = x, startY = y, startZ = z;
+                    int endX = x, endY = y, endZ = z;
+
+                    // Expand along X axis
+                    while (endX + 1 < sizeX && isInterior[endX + 1, y, z] && !visited[endX + 1, y, z])
+                    {
+                        endX++;
+                    }
+
+                    // Expand along Z axis
+                    bool canExpandZ = true;
+                    while (canExpandZ && endZ + 1 < sizeZ)
+                    {
+                        // Check if the entire X range can expand to endZ + 1
+                        for (int tx = startX; tx <= endX; tx++)
+                        {
+                            if (!isInterior[tx, y, endZ + 1] || visited[tx, y, endZ + 1])
+                            {
+                                canExpandZ = false;
+                                break;
+                            }
+                        }
+                        if (canExpandZ) endZ++;
+                    }
+
+                    // Expand along Y axis
+                    bool canExpandY = true;
+                    while (canExpandY && endY + 1 < sizeY)
+                    {
+                        // Check if the entire X-Z range can expand to endY + 1
+                        for (int tx = startX; tx <= endX; tx++)
+                        {
+                            for (int tz = startZ; tz <= endZ; tz++)
+                            {
+                                if (!isInterior[tx, endY + 1, tz] || visited[tx, endY + 1, tz])
+                                {
+                                    canExpandY = false;
+                                    break;
+                                }
+                            }
+                            if (!canExpandY) break;
+                        }
+                        if (canExpandY) endY++;
+                    }
+
+                    // Mark all voxels inside the generated box as visited
+                    for (int tx = startX; tx <= endX; tx++)
+                        for (int ty = startY; ty <= endY; ty++)
+                            for (int tz = startZ; tz <= endZ; tz++)
+                                visited[tx, ty, tz] = true;
+
+                    // Calculate local Bounds coordinates
+                    Vector3 minLocal = new Vector3(startX + minX, startY + minY, startZ + minZ);
+                    Vector3 maxLocal = new Vector3(endX + minX, endY + minY, endZ + minZ);
+
+                    // Center of the interior voxel cluster (with 0.5 voxel-center offset)
+                    Vector3 center = (minLocal + maxLocal) * 0.5f + new Vector3(0.5f, 0.5f, 0.5f);
+                    Vector3 size = (maxLocal - minLocal) + Vector3.one;
+
+                    // Expand horizontally slightly to overlap with the wall blocks
+                    // This ensures rotated water voxels overlapping the cabin are culled
+                    // without clipping water outside the outer hull.
+                    size.x += 0.5f;
+                    size.z += 0.5f;
+
+                    // The interior air voxels are 1 row ABOVE the floor.
+                    // Water sits AT the floor level (local Y = floor_y to floor_y+1).
+                    // So we extend 1.5 units DOWNWARD and 2.5 upward from the interior center.
+                    float rawCenterY = center.y;
+                    float dryBottom = rawCenterY - size.y * 0.5f - 1.5f; // reach down to water level
+                    float dryTop    = rawCenterY + size.y * 0.5f + 2.5f; // extend up for player head
+                    center.y = (dryBottom + dryTop) * 0.5f;
+                    size.y   = dryTop - dryBottom;
+
+                    dryFilters.Add(new Bounds(center, size));
+                }
+            }
+        }
+
+        // Log results for debugging
+        Debug.Log($"[DryFilters] Generated {dryFilters.Count} dry filter box(es).");
+        for (int i = 0; i < dryFilters.Count; i++)
+            Debug.Log($"  Filter[{i}]: center={dryFilters[i].center}, size={dryFilters[i].size}");
+    }
+
     private void OnDrawGizmosSelected()
     {
-        // Draw the _localBounds dry zone as a cyan wireframe in the scene view
+        // Draw the dry zone filters as cyan wireframes in the scene view
         Gizmos.color = Color.cyan;
         Gizmos.matrix = transform.localToWorldMatrix;
-        Gizmos.DrawWireCube(_localBounds.center, _localBounds.size);
+        if (dryFilters != null)
+        {
+            foreach (var filter in dryFilters)
+            {
+                Gizmos.DrawWireCube(filter.center, filter.size);
+            }
+        }
     }
 }
