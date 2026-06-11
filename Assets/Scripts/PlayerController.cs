@@ -26,6 +26,15 @@ public class PlayerController : MonoBehaviour
     private bool isDead = false;
     private Vector3 spawnPoint;
 
+    // ── Suffocation (stuck-in-block) state ────────────────────────────────────
+    private bool   isStuck           = false;
+    private Vector3 stuckPosition;
+    private float  suffocationTimer  = 0f;
+    private const float SuffocationDeathTime = 5f;  // seconds until death
+    private const float SuffocationTickTime  = 1f;  // damage flash interval
+    private float  suffocationTickTimer = 0f;
+    private UnityEngine.UI.Image suffocationOverlay;
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
@@ -70,6 +79,17 @@ public class PlayerController : MonoBehaviour
             rect.sizeDelta = Vector2.zero;
             
             overlayGO.SetActive(false);
+
+            // Suffocation overlay — red flash when stuck inside a block
+            GameObject sufGO = new GameObject("SuffocationOverlay");
+            sufGO.transform.SetParent(canvas.transform, false);
+            suffocationOverlay = sufGO.AddComponent<UnityEngine.UI.Image>();
+            suffocationOverlay.color = new Color(0.6f, 0.0f, 0.0f, 0.55f); // opaque red flash
+            UnityEngine.RectTransform sufRect = sufGO.GetComponent<UnityEngine.RectTransform>();
+            sufRect.anchorMin = Vector2.zero;
+            sufRect.anchorMax = Vector2.one;
+            sufRect.sizeDelta = Vector2.zero;
+            sufGO.SetActive(false);
 
             CreateDeathScreen(canvas);
         }
@@ -332,30 +352,85 @@ public class PlayerController : MonoBehaviour
             controller.Move(velocity * Time.deltaTime);
         }
 
-        // Void rescue safety check
+        // ── Suffocation tick (player is pinned inside a block) ────────────────
+        if (isStuck)
+        {
+            // Hard-pin position — keep controller disabled so physics can't push player out
+            controller.enabled = false;
+            transform.position = stuckPosition;
+            velocity = Vector3.zero;
+
+            if (VoxelWorld.Instance != null)
+            {
+                // Check if the block the player is inside has been broken
+                byte blockHere = VoxelWorld.Instance.GetBlock(stuckPosition);
+                if (blockHere == 0 || blockHere == 7) // air or water → escaped!
+                {
+                    isStuck = false;
+                    suffocationTimer = 0f;
+                    suffocationTickTimer = 0f;
+                    controller.enabled = true;
+                    velocity = new Vector3(0f, 3f, 0f); // pop upward so they don't re-sink
+                    if (suffocationOverlay != null) suffocationOverlay.gameObject.SetActive(false);
+                    return;
+                }
+            }
+
+            // Accumulate total time stuck
+            suffocationTimer += Time.deltaTime;
+            suffocationTickTimer += Time.deltaTime;
+
+            // Flash red overlay on each tick
+            if (suffocationTickTimer >= SuffocationTickTime)
+            {
+                suffocationTickTimer = 0f;
+                if (suffocationOverlay != null)
+                    StartCoroutine(FlashSuffocation());
+            }
+
+            // Die after SuffocationDeathTime seconds
+            if (suffocationTimer >= SuffocationDeathTime)
+            {
+                isStuck = false;
+                suffocationTimer = 0f;
+                controller.enabled = true;
+                if (suffocationOverlay != null) suffocationOverlay.gameObject.SetActive(false);
+                Die();
+            }
+            return;
+        }
+
+        // Void rescue safety check (only when not already stuck)
         if (transform.position.y < -5f)
         {
             RescuePlayerFromVoid();
         }
     }
 
+    private System.Collections.IEnumerator FlashSuffocation()
+    {
+        if (suffocationOverlay == null) yield break;
+        suffocationOverlay.gameObject.SetActive(true);
+        yield return new WaitForSeconds(0.15f);
+        suffocationOverlay.gameObject.SetActive(false);
+    }
+
     private void RescuePlayerFromVoid()
     {
-        if (isDead) return;
+        if (isDead || isStuck) return; // already handled — don't chain-teleport
 
-        if (VoxelWorld.Instance == null) return;
+        if (VoxelWorld.Instance == null) { Die(); return; }
 
         Vector3 currentPos = transform.position;
         int px = Mathf.FloorToInt(currentPos.x);
         int pz = Mathf.FloorToInt(currentPos.z);
 
-        // Scan downward from the top of the world to find a solid block
+        // Scan downward from the top of the world to find a solid block to embed in
         int targetY = -1;
         for (int y = VoxelData.ChunkHeight - 1; y >= 0; y--)
         {
             byte blockType = VoxelWorld.Instance.GetBlock(new Vector3(px + 0.5f, y + 0.5f, pz + 0.5f));
-            // 0 is air, 7 is water. We want a solid block (anything else)
-            if (blockType != 0 && blockType != 7)
+            if (blockType != 0 && blockType != 7) // solid block found
             {
                 targetY = y;
                 break;
@@ -364,20 +439,22 @@ public class PlayerController : MonoBehaviour
 
         if (targetY != -1)
         {
-            // Teleport player's feet inside the solid block, making them stuck
-            // so they can remove it to escape, mimicking Minecraft's behavior.
-            Vector3 rescuePos = new Vector3(px + 0.5f, targetY + 0.5f, pz + 0.5f);
-            Debug.Log($"[VoidRescue] Player fell to void! Rescued to solid block at {rescuePos} (stuck in block).");
-
-            bool wasEnabled = controller.enabled;
+            // Pin the player inside the topmost solid block.
+            // Controller stays DISABLED until the player breaks the block.
+            // This prevents the CharacterController from pushing them out and
+            // causing an infinite fall → rescue → fall loop.
+            stuckPosition = new Vector3(px + 0.5f, targetY + 0.5f, pz + 0.5f);
             controller.enabled = false;
-            transform.position = rescuePos;
+            transform.position = stuckPosition;
             velocity = Vector3.zero;
-            controller.enabled = wasEnabled;
+            isStuck = true;
+            suffocationTimer = 0f;
+            suffocationTickTimer = 0f;
+            Debug.Log($"[VoidRescue] Player pinned inside block at {stuckPosition}. Break the block to escape!");
         }
         else
         {
-            // No solid block found (true void) — player dies and needs to respawn
+            // True void — no solid block anywhere, just die
             Debug.Log("[VoidRescue] Player fell to void and died (no solid block found).");
             Die();
         }
@@ -405,17 +482,23 @@ public class PlayerController : MonoBehaviour
     private void Respawn()
     {
         isDead = false;
+
+        // Clear any stuck/suffocation state so movement works after respawn
+        isStuck = false;
+        suffocationTimer = 0f;
+        suffocationTickTimer = 0f;
+        if (suffocationOverlay != null) suffocationOverlay.gameObject.SetActive(false);
+
         if (deathScreenGO != null)
         {
             deathScreenGO.SetActive(false);
         }
 
         // Teleport player to the spawn point
-        bool wasEnabled = controller.enabled;
         controller.enabled = false;
         transform.position = spawnPoint;
         velocity = Vector3.zero;
-        controller.enabled = wasEnabled;
+        controller.enabled = true;
 
         // Re-lock cursor
         Cursor.lockState = CursorLockMode.Locked;

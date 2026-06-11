@@ -98,20 +98,69 @@ public class DragDropManager : MonoBehaviour
 
                 if (target != null && target != dragging)
                 {
-                    // Copy data FIRST before any writes
-                    var src = dragging.GetItemData();
-                    var dst = target.GetItemData();
-                    var srcCopy = src != null ? new InventorySlot(src.item, src.amount) : null;
-                    var dstCopy = dst != null ? new InventorySlot(dst.item, dst.amount) : null;
+                    // Prevent dropping into crafting output
+                    if (target.owner == SlotUI.Owner.CraftingOutput)
+                    {
+                        dragging.Refresh();
+                        isDragging = false;
+                        dragging = null;
+                        return;
+                    }
 
-                    // Write silently (no mid-swap callbacks)
-                    dragging.WriteItemData(dstCopy, silent: true);
-                    target.WriteItemData(srcCopy, silent: true);
+                    // Handling drag FROM CraftingOutput
+                    if (dragging.owner == SlotUI.Owner.CraftingOutput)
+                    {
+                        var src = dragging.GetItemData(); // The crafted item
+                        var dst = target.GetItemData(); // The target slot contents
 
-                    // One single refresh for everything
-                    dragging.Refresh();
-                    target.Refresh();
-                    Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+                        if (src != null && src.item != null)
+                        {
+                            if (dst == null || dst.item == null)
+                            {
+                                // Success! Drop into empty slot
+                                target.WriteItemData(new InventorySlot(src.item, src.amount), silent: true);
+                                Inventory.Instance?.ConsumeCraftingInputs();
+                                dragging.Refresh();
+                                target.Refresh();
+                                Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+                            }
+                            else if (dst.item.itemName == src.item.itemName)
+                            {
+                                // Success! Stack with existing item
+                                target.WriteItemData(new InventorySlot(src.item, dst.amount + src.amount), silent: true);
+                                Inventory.Instance?.ConsumeCraftingInputs();
+                                dragging.Refresh();
+                                target.Refresh();
+                                Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+                            }
+                            else
+                            {
+                                // Different item, reject
+                                dragging.Refresh();
+                            }
+                        }
+                        else
+                        {
+                            dragging.Refresh();
+                        }
+                    }
+                    else
+                    {
+                        // Copy data FIRST before any writes
+                        var src = dragging.GetItemData();
+                        var dst = target.GetItemData();
+                        var srcCopy = src != null ? new InventorySlot(src.item, src.amount) : null;
+                        var dstCopy = dst != null ? new InventorySlot(dst.item, dst.amount) : null;
+
+                        // Write silently (no mid-swap callbacks)
+                        dragging.WriteItemData(dstCopy, silent: true);
+                        target.WriteItemData(srcCopy, silent: true);
+
+                        // One single refresh for everything
+                        dragging.Refresh();
+                        target.Refresh();
+                        Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+                    }
                 }
                 else if (target == null && !InventoryUI.IsInventoryOpen && !IsPointerOverUI())
                 {
@@ -119,7 +168,7 @@ public class DragDropManager : MonoBehaviour
                     var data = dragging.GetItemData();
                     if (data?.item != null)
                     {
-                        DroppedItem dropped = DroppedItem.Spawn(data.item, data.amount);
+                        DroppedItem dropped = DroppedItem.Spawn(data.item, data.amount, (byte)data.item.blockTypeID);
 
                         // If this is the wrench tool, apply the 3D wrench mesh instead of a mini-cube
                         if (dropped != null && WrenchItem.Instance != null
@@ -129,7 +178,14 @@ public class DragDropManager : MonoBehaviour
                             // overrideMaterial left null → DroppedItem uses gold fallback color
                         }
 
-                        dragging.WriteItemData(null);
+                        if (dragging.owner == SlotUI.Owner.CraftingOutput)
+                        {
+                            Inventory.Instance?.ConsumeCraftingInputs();
+                        }
+                        else
+                        {
+                            dragging.WriteItemData(null);
+                        }
                     }
                     dragging.Refresh();
                 }
@@ -141,6 +197,26 @@ public class DragDropManager : MonoBehaviour
             }
             else
             {
+                // Click (no drag threshold met)
+                if (dragging.owner == SlotUI.Owner.CraftingOutput)
+                {
+                    // Clicked crafting output -> try to auto-craft and add to hotbar/inventory!
+                    var src = dragging.GetItemData();
+                    if (src != null && src.item != null)
+                    {
+                        bool added = false;
+                        if (Hotbar.Instance != null)
+                            added = Hotbar.Instance.TryAddItem(src.item, src.amount);
+                        if (!added && Inventory.Instance != null)
+                            added = Inventory.Instance.Add(src.item, src.amount);
+
+                        if (added)
+                        {
+                            Inventory.Instance?.ConsumeCraftingInputs();
+                            Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+                        }
+                    }
+                }
                 dragging.Refresh(); // no drag occurred — restore icon
             }
 

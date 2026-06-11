@@ -9,7 +9,7 @@ using TMPro;
 /// </summary>
 public class SlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
-    public enum Owner { Inventory, Hotbar }
+    public enum Owner { Inventory, Hotbar, CraftingInput, CraftingOutput }
 
     [HideInInspector] public Owner              owner;
     [HideInInspector] public int                index;
@@ -33,6 +33,17 @@ public class SlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
             var s = Inventory.Instance.slots;
             return (index >= 0 && index < s.Length) ? s[index] : null; // use runtime length
         }
+        else if (owner == Owner.CraftingInput)
+        {
+            if (Inventory.Instance == null) return null;
+            var s = Inventory.Instance.craftingSlots;
+            return (index >= 0 && index < s.Length) ? s[index] : null;
+        }
+        else if (owner == Owner.CraftingOutput)
+        {
+            if (Inventory.Instance == null) return null;
+            return Inventory.Instance.craftingResultSlot;
+        }
         return Hotbar.Instance?.GetSlotData(index);
     }
 
@@ -42,6 +53,23 @@ public class SlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
         int  amount = slot?.amount ?? 0;
 
         if (owner == Owner.Inventory) Inventory.Instance?.SetSlot(index, item, amount, silent);
+        else if (owner == Owner.CraftingInput)
+        {
+            if (Inventory.Instance != null)
+            {
+                Inventory.Instance.craftingSlots[index] = (item != null) ? new InventorySlot(item, amount) : null;
+                Inventory.Instance.UpdateCraftingOutput();
+                if (!silent) Inventory.Instance.onInventoryChangedCallback?.Invoke();
+            }
+        }
+        else if (owner == Owner.CraftingOutput)
+        {
+            if (Inventory.Instance != null)
+            {
+                Inventory.Instance.craftingResultSlot = (item != null) ? new InventorySlot(item, amount) : null;
+                if (!silent) Inventory.Instance.onInventoryChangedCallback?.Invoke();
+            }
+        }
         else                          Hotbar.Instance?.SetSlot(index, item, amount);
     }
 

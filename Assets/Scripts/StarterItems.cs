@@ -13,7 +13,6 @@ public class StarterItems : MonoBehaviour
     private static readonly Dictionary<string, string> SpriteMap =
         new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
     {
-        { "Grass",  "Sprites/grass_block"  },
         { "Wood",   "Sprites/wood_block"   },
         { "Plank",  "Sprites/plank_block"  },
         { "Stone",  "Sprites/stone_block"  },
@@ -75,6 +74,10 @@ public class StarterItems : MonoBehaviour
         {
             item.icon = VoxelWorld.MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.40f, 0.20f, 0.90f), new Color(1.00f, 0.80f, 0.10f));
         }
+        else if (itemName.Equals("Grass", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.icon = MakeGrassBlockIcon();
+        }
         else
         {
             item.icon = loaded != null ? loaded : MakeBlockIcon(fallbackColor);
@@ -108,6 +111,8 @@ public class StarterItems : MonoBehaviour
             item.icon = VoxelWorld.MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.95f, 0.85f, 0.10f), new Color(0.95f, 0.65f, 0.05f));
         else if (itemName.Equals("Iris", System.StringComparison.OrdinalIgnoreCase))
             item.icon = VoxelWorld.MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.40f, 0.20f, 0.90f), new Color(1.00f, 0.80f, 0.10f));
+        else if (itemName.Equals("Grass", System.StringComparison.OrdinalIgnoreCase))
+            item.icon = MakeGrassBlockIcon();
         else
             item.icon = MakeBlockIcon(fallbackColor);
 
@@ -162,6 +167,50 @@ public class StarterItems : MonoBehaviour
         Sprite result = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
         _blockIconCache[baseColor] = result;
         return result;
+    }
+
+    public static Sprite MakeGrassBlockIcon()
+    {
+        // Load the generated Minecraft-style grass block PNG from Resources
+        Sprite loaded = Resources.Load<Sprite>("Sprites/grass_block");
+        if (loaded != null) return loaded;
+
+        // Fallback: procedural grass block using the same style as other blocks
+        Color grassGreen = new Color(0.35f, 0.65f, 0.25f, 1f);
+        Color dirtBrown  = new Color(0.45f, 0.30f, 0.18f, 1f);
+
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        Color top     = Brighten(grassGreen, 0.15f);
+        Color front   = dirtBrown;
+        Color side    = Darken(dirtBrown, 0.20f);
+        Color outline = Darken(dirtBrown, 0.45f);
+
+        void Set(int x, int y, Color c)
+        { if (x >= 0 && x < SZ && y >= 0 && y < SZ) px[y * SZ + x] = c; }
+
+        void FillRect(int x, int y, int w, int h, Color c)
+        { for (int dy = 0; dy < h; dy++) for (int dx = 0; dx < w; dx++) Set(x+dx, y+dy, c); }
+
+        FillRect(16, 38, 32, 14, top);
+        FillRect(8,  14, 24, 24, front);
+        FillRect(32, 14, 24, 24, side);
+        for (int x = 8;  x < 40; x++) Set(x, 13, outline);
+        for (int x = 32; x < 56; x++) Set(x, 13, outline);
+        for (int y = 13; y < 38; y++) Set(7,  y,  outline);
+        for (int y = 13; y < 38; y++) Set(56, y,  outline);
+        for (int x = 8;  x < 32; x++) Set(x, 38, outline);
+        for (int x = 32; x < 56; x++) Set(x, 38, outline);
+        for (int y = 38; y < 52; y++) Set(16, y,  outline);
+        for (int y = 38; y < 52; y++) Set(47, y,  outline);
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
     }
 
     private static Color Brighten(Color c, float amt) =>

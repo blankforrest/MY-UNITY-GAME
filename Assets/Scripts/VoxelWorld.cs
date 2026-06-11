@@ -361,8 +361,7 @@ public class VoxelWorld : MonoBehaviour
                         drop = ScriptableObject.CreateInstance<Item>();
                         drop.itemName = "Grass";
                         drop.blockTypeID = 4;
-                        Sprite loaded = Resources.Load<Sprite>("Sprites/grass_block");
-                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.35f, 0.65f, 0.25f));
+                        drop.icon = StarterItems.MakeGrassBlockIcon();
                     }
                     else if (existing == 5)
                     {
