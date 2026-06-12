@@ -92,16 +92,7 @@ public class InventoryUI : MonoBehaviour
         title.text = "Inventory & Crafting"; title.fontSize = 15; title.alignment = TextAlignmentOptions.Center;
         title.color = new Color(0.8f, 0.8f, 0.8f);
 
-        // Create shared drag ghost
-        GameObject ghostGO = new GameObject("DragGhost", typeof(RectTransform), typeof(Image));
-        ghostGO.transform.SetParent(canvas.transform, false);
-        RectTransform gRT = ghostGO.GetComponent<RectTransform>();
-        gRT.sizeDelta = new Vector2(SLOT_SIZE * 0.8f, SLOT_SIZE * 0.8f);
-        gRT.anchorMin = gRT.anchorMax = gRT.pivot = new Vector2(0.5f, 0.5f);
-        Image ghost = ghostGO.GetComponent<Image>();
-        ghost.raycastTarget = false;
-        ghost.enabled = false;
-        SlotUI.Ghost = ghost;
+
 
         // Build 5x5 grid
         for (int i = 0; i < Inventory.MaxSlots; i++)
@@ -278,6 +269,11 @@ public class InventoryUI : MonoBehaviour
         }
         else
         {
+            if (DragDropManager.Instance != null)
+            {
+                DragDropManager.Instance.ReturnHeldItem();
+                DragDropManager.Instance.ExitSplitMode();
+            }
             if (Inventory.Instance != null)
             {
                 Inventory.Instance.ReturnCraftingInputs();

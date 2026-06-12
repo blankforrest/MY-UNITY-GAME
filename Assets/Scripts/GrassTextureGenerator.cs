@@ -8,14 +8,14 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 18; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel
+    public const int TILE_COUNT = 23; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass
 
     public static Texture2D Create()
     {
         int w = TILE_SIZE * TILE_COUNT;
         int h = TILE_SIZE;
 
-        Texture2D atlas = new Texture2D(w, h, TextureFormat.RGB24, false);
+        Texture2D atlas = new Texture2D(w, h, TextureFormat.RGBA32, false);
         atlas.filterMode = FilterMode.Point; // pixel-art crisp look
         atlas.wrapMode   = TextureWrapMode.Clamp;
 
@@ -44,7 +44,12 @@ public static class GrassTextureGenerator
                               : tile == 14 ? ControlBlockFront(lx, y)
                               : tile == 15 ? TireTread(lx, y)
                               : tile == 16 ? WheelSide(lx, y, false)
-                                           : WheelSide(lx, y, true);
+                              : tile == 17 ? WheelSide(lx, y, true)
+                              : tile == 18 ? CoalOre(lx, y)
+                              : tile == 19 ? IronOre(lx, y)
+                              : tile == 20 ? GoldBlock(lx, y)
+                              : tile == 21 ? IronBlock(lx, y)
+                                           : MinecraftGlass(lx, y);
             }
         }
 
@@ -485,7 +490,7 @@ public static class GrassTextureGenerator
             tile = 2;
         else if (blockType == 7) // Water: all faces water
             tile = 7;
-        else if (blockType == 8) // Sand: all faces sand
+        else if (blockType == 8 || blockType == 34) // Sand: all faces sand
             tile = 8;
         else if (blockType == 9) // Flower: all quads use flower tile
             tile = 9;
@@ -503,6 +508,16 @@ public static class GrassTextureGenerator
             tile = 6;
         else if (blockType == 50) // Control Block: front is screen, others are striped sides
             tile = (face == 1) ? 14 : 13;
+        else if (blockType == 30) // Coal Ore
+            tile = 18;
+        else if (blockType == 31) // Iron Ore
+            tile = 19;
+        else if (blockType == 32) // Gold Block
+            tile = 20;
+        else if (blockType == 33) // Iron Block
+            tile = 21;
+        else if (blockType == 35) // Glass
+            tile = 22;
         else                     // Grass (blockType == 4 or 6)
             tile = (face == 2) ? 0   // top    → grass top
                  : (face == 3) ? 2   // bottom → dirt
@@ -520,7 +535,142 @@ public static class GrassTextureGenerator
         };
     }
 
+    // ── New Block Samplers ───────────────────────────────────────────────────
+
+    static Color CoalOre(int x, int y)
+    {
+        Color baseCol = Stone(x, y);
+        float n = Mathf.PerlinNoise(x * 1.8f + 50f, y * 1.8f + 60f);
+        bool isCoal = n > 0.65f && (x + y) % 3 != 0;
+        if (isCoal)
+        {
+            return new Color(0.12f, 0.12f, 0.12f); // charcoal black
+        }
+        return baseCol;
+    }
+
+    static Color IronOre(int x, int y)
+    {
+        Color baseCol = Stone(x, y);
+        float n = Mathf.PerlinNoise(x * 1.6f + 80f, y * 1.6f + 90f);
+        bool isIron = n > 0.68f;
+        if (isIron)
+        {
+            return new Color(0.85f, 0.65f, 0.52f); // light peach/rusty iron color
+        }
+        return baseCol;
+    }
+
+    static Color GoldBlock(int x, int y)
+    {
+        float n = Mathf.PerlinNoise(x * 0.7f + 110f, y * 0.7f + 120f);
+        float shiny = Mathf.PerlinNoise(x * 1.5f + 10f, y * 1.5f + 20f);
+        Color baseGold = new Color(0.98f, 0.82f, 0.15f);
+        Color shadowGold = new Color(0.80f, 0.62f, 0.05f);
+        Color shine = new Color(1.00f, 0.95f, 0.60f);
+
+        Color col = Color.Lerp(shadowGold, baseGold, n);
+        if (shiny > 0.7f) col = Color.Lerp(col, shine, 0.6f);
+
+        int distToXEdge = Mathf.Min(x, 15 - x);
+        int distToYEdge = Mathf.Min(y, 15 - y);
+        int distToEdge = Mathf.Min(distToXEdge, distToYEdge);
+        if (distToEdge == 0)
+        {
+            col = shadowGold * 0.7f;
+        }
+        else if (distToEdge == 1)
+        {
+            col = shine;
+        }
+        return col;
+    }
+
+    /// <summary>Renamed from Glass — the frosted texture resembles iron. Used for Iron Block (ID 33).</summary>
+    static Color IronBlock(int x, int y)
+    {
+        int distToXEdge = Mathf.Min(x, 15 - x);
+        int distToYEdge = Mathf.Min(y, 15 - y);
+        int distToEdge  = Mathf.Min(distToXEdge, distToYEdge);
+
+        // Outermost pixel: thin light gray border
+        if (distToEdge == 0)
+            return new Color(0.65f, 0.70f, 0.75f);
+
+        // Inner border: slightly lighter
+        if (distToEdge == 1)
+            return new Color(0.80f, 0.85f, 0.90f);
+
+        // Interior: soft icy blue-white base with subtle noise
+        float n = Mathf.PerlinNoise(x * 1.2f + 7f, y * 1.2f + 13f);
+        Color interior = Color.Lerp(new Color(0.88f, 0.93f, 0.98f), new Color(0.94f, 0.97f, 1.00f), n);
+
+        // Bright diagonal glint lines
+        if (x + y == 8 || x + y == 9)
+            return new Color(0.98f, 0.99f, 1.00f);
+        if (x + y == 20 || x + y == 21)
+            return new Color(0.96f, 0.98f, 1.00f);
+
+        return interior;
+    }
+
+    /// <summary>Minecraft/Survivalcraft-style Glass (ID 35): thin dark border, white interior with subtle tint.</summary>
+    static Color MinecraftGlass(int x, int y)
+    {
+        int distToXEdge = Mathf.Min(x, 15 - x);
+        int distToYEdge = Mathf.Min(y, 15 - y);
+        int distToEdge  = Mathf.Min(distToXEdge, distToYEdge);
+
+        // Outermost border: black, as requested by the user
+        if (distToEdge == 0)
+            return new Color(0.0f, 0.0f, 0.0f, 1.0f);
+
+        // 1-pixel inner border highlight
+        if (distToEdge == 1)
+            return new Color(0.55f, 0.68f, 0.75f, 1.0f);
+
+        // Bright white diagonal glint lines
+        if (x + y == 8 || x + y == 9 || x + y == 20 || x + y == 21)
+            return new Color(1.0f, 1.0f, 1.0f, 0.9f);
+
+        // Interior: soft semi-transparent blue-white fill with alpha=0.15
+        return new Color(0.80f, 0.90f, 0.95f, 0.15f);
+    }
 
     // Keep old name as alias so existing callers don't break
     public static Vector2[] GetGrassUVs(int face) => GetBlockUVs(face, 1);
+
+    public static Color GetPixel(int tile, int lx, int ly)
+    {
+        lx = Mathf.Clamp(lx, 0, 15);
+        ly = Mathf.Clamp(ly, 0, 15);
+        
+        switch (tile)
+        {
+            case 0: return GrassTop(lx, ly);
+            case 1: return GrassSide(lx, ly);
+            case 2: return Dirt(lx, ly);
+            case 3: return Stone(lx, ly);
+            case 4: return WoodTop(lx, ly);
+            case 5: return WoodSide(lx, ly);
+            case 6: return Plank(lx, ly);
+            case 7: return Water(lx, ly);
+            case 8: return Sand(lx, ly);
+            case 9: return Flower(lx, ly);
+            case 10: return Dandelion(lx, ly);
+            case 11: return Iris(lx, ly);
+            case 12: return Leaves(lx, ly);
+            case 13: return ControlBlockSide(lx, ly);
+            case 14: return ControlBlockFront(lx, ly);
+            case 15: return TireTread(lx, ly);
+            case 16: return WheelSide(lx, ly, false);
+            case 17: return WheelSide(lx, ly, true);
+            case 18: return CoalOre(lx, ly);
+            case 19: return IronOre(lx, ly);
+            case 20: return GoldBlock(lx, ly);
+            case 21: return IronBlock(lx, ly);
+            case 22: return MinecraftGlass(lx, ly);
+            default: return Color.clear;
+        }
+    }
 }

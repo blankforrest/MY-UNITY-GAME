@@ -73,6 +73,12 @@ public static class BlueprintGenerator
         { 22, 2.5f },  // propeller
         { 23, 0.0f },  // large wheel helper
         { 50, 1.5f },  // control block
+        { 30, 2.2f },  // coal ore
+        { 31, 3.5f },  // iron ore
+        { 32, 8.0f },  // gold block
+        { 33, 5.0f },  // iron block
+        { 34, 1.5f },  // sand (34)
+        { 35, 0.8f },  // glass
     };
 
     /// <summary>
@@ -96,6 +102,12 @@ public static class BlueprintGenerator
         { 22, 20f },  // propeller
         { 23, 0f   },  // large wheel helper
         { 50, 15f },  // control block
+        { 30, 25f },  // coal ore
+        { 31, 45f },  // iron ore
+        { 32, 50f },  // gold block
+        { 33, 75f },  // iron block
+        { 34, 8f   },  // sand (34)
+        { 35, 5f   },  // glass
     };
 
     /// <summary>Fallback mass for block types not in <see cref="BlockMassTable"/>.</summary>

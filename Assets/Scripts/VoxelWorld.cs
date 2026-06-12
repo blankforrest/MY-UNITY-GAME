@@ -9,6 +9,7 @@ public class VoxelWorld : MonoBehaviour
     public Material chunkMaterial;
     public Material waterMaterial;
     public Material foliageMaterial;
+    [HideInInspector] public Material glassMaterial;
 
     [Header("Streaming")]
     [Range(3, 16)]
@@ -36,6 +37,11 @@ public class VoxelWorld : MonoBehaviour
 
     void InitializeMaterials()
     {
+        // Apply procedurally generated grass texture atlas
+        Texture2D grassAtlas = GrassTextureGenerator.Create();
+        // Re-bake atlas as RGBA32 so magenta key pixels become alpha=0
+        Texture2D rgbaAtlas = ConvertFlowerAtlasToRGBA(grassAtlas);
+
         // Auto-find material
         if (chunkMaterial == null)
         {
@@ -43,10 +49,30 @@ public class VoxelWorld : MonoBehaviour
             chunkMaterial = new Material(s);
         }
 
-        // Apply procedurally generated grass texture atlas
-        Texture2D grassAtlas = GrassTextureGenerator.Create();
-        chunkMaterial.mainTexture = grassAtlas;
+        chunkMaterial.mainTexture = rgbaAtlas;
+        chunkMaterial.SetTexture("_BaseMap", rgbaAtlas);
         chunkMaterial.color       = Color.white; // don't tint the texture
+        chunkMaterial.SetColor("_BaseColor", Color.white);
+
+        // Configure chunkMaterial as Cutout (Alpha Test) so transparent blocks like Glass work in the solid mesh
+        if (chunkMaterial.shader.name.Contains("Standard"))
+        {
+            chunkMaterial.SetFloat("_Mode", 1f); // 1 = Cutout
+            chunkMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+            chunkMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+            chunkMaterial.SetInt("_ZWrite", 1);
+            chunkMaterial.EnableKeyword("_ALPHATEST_ON");
+            chunkMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
+        }
+        else
+        {
+            chunkMaterial.SetFloat("_Surface", 0f);       // 0 = Opaque
+            chunkMaterial.SetFloat("_AlphaClip", 1f);     // 1 = On
+            chunkMaterial.SetFloat("_Cutoff", 0.5f);      // Threshold
+            chunkMaterial.EnableKeyword("_ALPHATEST_ON");
+            chunkMaterial.SetInt("_ZWrite", 1);           // Write to depth
+            chunkMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
+        }
 
         // Initialize water material if not assigned
         if (waterMaterial == null)
@@ -117,8 +143,11 @@ public class VoxelWorld : MonoBehaviour
                 }
             }
         }
-        waterMaterial.mainTexture = grassAtlas;
+        // Use rgbaAtlas so glass (tile 22) alpha channels are properly sampled
+        waterMaterial.mainTexture = rgbaAtlas;
+        waterMaterial.SetTexture("_BaseMap", rgbaAtlas); // URP shaders use _BaseMap
         waterMaterial.color       = Color.white;
+        waterMaterial.SetColor("_BaseColor", Color.white);
         waterMaterial.SetInt("_Cull", 0); // Always ensure double-sided regardless of which shader was chosen
 
         // ── Foliage material (alpha-cutout, double-sided) ─────────────────────
@@ -156,13 +185,52 @@ public class VoxelWorld : MonoBehaviour
                 foliageMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
             }
         }
-        // Re-bake atlas as RGBA32 so magenta key pixels become alpha=0
-        Texture2D rgbaAtlas = ConvertFlowerAtlasToRGBA(grassAtlas);
         foliageMaterial.mainTexture = rgbaAtlas;           // sets _MainTex
         foliageMaterial.SetTexture("_BaseMap", rgbaAtlas); // URP Particles/Lit use _BaseMap
         foliageMaterial.color       = Color.white;
         foliageMaterial.SetColor("_BaseColor", Color.white);
         foliageMaterial.SetInt("_Cull", 0);                 // Ensure culling is off (double-sided rendering) on all shaders
+
+        // ── Glass material (ZWrite On + Cull Back) ────────────────────────────
+        // ZWrite On: front faces write depth → back faces are Z-rejected and never show through.
+        // Cull Back: only front-facing fragments are rasterized. This is the key fix for the
+        // bug where the back-face border frames were bleeding through the front faces.
+        {
+            Shader glassShader = Shader.Find("Universal Render Pipeline/Lit")
+                              ?? Shader.Find("Universal Render Pipeline/Unlit")
+                              ?? Shader.Find("Standard");
+            glassMaterial = new Material(glassShader);
+
+            if (glassShader.name.Contains("Standard"))
+            {
+                glassMaterial.SetFloat("_Mode", 3f); // Transparent
+                glassMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                glassMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                glassMaterial.SetInt("_ZWrite", 1);  // ON — front faces occlude back faces
+                glassMaterial.SetInt("_Cull", 2);    // 2 = Back — only render front faces
+                glassMaterial.DisableKeyword("_ALPHATEST_ON");
+                glassMaterial.EnableKeyword("_ALPHABLEND_ON");
+                glassMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            }
+            else
+            {
+                // URP path
+                glassMaterial.SetFloat("_Surface", 1f);      // 1 = Transparent
+                glassMaterial.SetFloat("_Blend", 0f);        // Alpha blend
+                glassMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                glassMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                glassMaterial.SetInt("_ZWrite", 1);          // ON — front faces occlude back faces
+                glassMaterial.SetInt("_Cull", 2);            // 2 = Back — only render front faces
+                glassMaterial.DisableKeyword("_ALPHATEST_ON");
+                glassMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                glassMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            }
+
+            glassMaterial.mainTexture = rgbaAtlas;
+            glassMaterial.SetTexture("_BaseMap", rgbaAtlas);
+            glassMaterial.color = Color.white;
+            glassMaterial.SetColor("_BaseColor", Color.white);
+        }
     }
 
     void Start()
@@ -324,7 +392,7 @@ public class VoxelWorld : MonoBehaviour
         if (blockID == 0 && !suppressDrop)
         {
             byte existing = chunk.GetVoxel(lx, ly, lz);
-            if (existing != 0 && (existing <= 12 || existing == 20 || existing == 21 || existing == 22 || existing == 23 || existing == 50))
+            if (existing != 0 && (existing <= 12 || existing == 20 || existing == 21 || existing == 22 || existing == 23 || existing == 50 || (existing >= 30 && existing <= 35)))
             {
                 Item drop = null;
                 if (blockDrops != null && existing < blockDrops.Length)
@@ -372,12 +440,44 @@ public class VoxelWorld : MonoBehaviour
                         drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.45f, 0.30f, 0.18f));
                     }
 
-                    else if (existing == 8)
+                    else if (existing == 8 || existing == 34)
                     {
                         drop = ScriptableObject.CreateInstance<Item>();
                         drop.itemName = "Sand";
-                        drop.blockTypeID = 8;
-                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.86f, 0.78f, 0.58f));
+                        drop.blockTypeID = existing;
+                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.86f, 0.78f, 0.58f), existing);
+                    }
+                    else if (existing == 30)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Coal Ore";
+                        drop.blockTypeID = 30;
+                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.2f, 0.2f, 0.2f), 30);
+                    }
+                    else if (existing == 31)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Iron Ore";
+                        drop.blockTypeID = 31;
+                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.85f, 0.65f, 0.52f), 31);
+                    }
+                    else if (existing == 32)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Gold Block";
+                        drop.blockTypeID = 32;
+                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.98f, 0.82f, 0.15f), 32);
+                    }
+                    else if (existing == 33)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Iron Block";
+                        drop.blockTypeID = 33;
+                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.88f, 0.93f, 0.98f), 33);
+                    }
+                    else if (existing == 35)
+                    {
+                        // Glass shatters — no item drop (drop stays null)
                     }
                     else if (existing == 9)
                     {
@@ -582,18 +682,29 @@ public class VoxelWorld : MonoBehaviour
         Color[] out_ = new Color[src.Length];
         int tileSize  = GrassTextureGenerator.TILE_SIZE;
         int flowerTileXStart = 9 * tileSize; // pixel x start of flower tiles
-        int flowerTileXEnd   = 12 * tileSize; // end of flower tiles (9, 10, 11)
+        int flowerTileXEnd   = 12 * tileSize; // end of flower tiles (9, 10, 11) — flowers only
+        int glassTileXStart  = 22 * tileSize; // glass tile is 22nd (index 22)
+        int glassTileXEnd    = 23 * tileSize;
 
         for (int i = 0; i < src.Length; i++)
         {
             int px = i % w;
             Color c = src[i];
-            // Check if this pixel is in the flower tiles and is magenta (key colour)
-            bool inFlowerTile = (px >= flowerTileXStart && px < flowerTileXEnd);
-            bool isMagenta    = (c.r > 0.8f && c.g < 0.2f && c.b > 0.8f);
-            out_[i] = inFlowerTile && isMagenta
-                ? new Color(c.r, c.g, c.b, 0f)  // transparent
-                : new Color(c.r, c.g, c.b, 1f);  // opaque
+            
+            bool inGlassTile = (px >= glassTileXStart && px < glassTileXEnd);
+            if (inGlassTile)
+            {
+                out_[i] = c; // Preserve the exact alpha generated by MinecraftGlass
+            }
+            else
+            {
+                // Convert magenta key pixels in flower tiles to alpha=0
+                bool inFlowerTile = (px >= flowerTileXStart && px < flowerTileXEnd);
+                bool isMagenta    = (c.r > 0.8f && c.g < 0.2f && c.b > 0.8f);
+                out_[i] = inFlowerTile && isMagenta
+                    ? new Color(c.r, c.g, c.b, 0f)  // transparent
+                    : new Color(c.r, c.g, c.b, 1f);  // opaque
+            }
         }
 
         dst.SetPixels(out_);

@@ -37,6 +37,15 @@ public class Chunk : MonoBehaviour
     private MeshRenderer foliageMeshRenderer;
     private MeshCollider foliageMeshCollider;
 
+    // Glass rendering lists — separate child mesh, ZWrite On + CullBack to fix back-face bleed
+    private List<Vector3> glassVertices  = new List<Vector3>();
+    private List<int>     glassTriangles = new List<int>();
+    private List<Vector2> glassUvs       = new List<Vector2>();
+    private int glassVertexIndex = 0;
+
+    private MeshFilter   glassMeshFilter;
+    private MeshRenderer glassMeshRenderer;
+
     public void Initialize(Vector2 pos, Material mat)
     {
         chunkPos = pos;
@@ -421,6 +430,11 @@ public class Chunk : MonoBehaviour
         foliageTriangles.Clear();
         foliageUvs.Clear();
         foliageColors.Clear();
+
+        glassVertexIndex = 0;
+        glassVertices.Clear();
+        glassTriangles.Clear();
+        glassUvs.Clear();
     }
 
     void EnsureWaterChild()
@@ -541,6 +555,13 @@ public class Chunk : MonoBehaviour
         if (blockType == 12)
         {
             AddLeavesBlock(pos);
+            return;
+        }
+
+        // ── Glass (ID 35): render in the solid mesh with face-culling (has collider, player can't pass through) ─
+        if (blockType == 35)
+        {
+            AddGlassToSolidMesh(pos);
             return;
         }
 
@@ -729,6 +750,99 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    void EnsureGlassChild()
+    {
+        Transform t = transform.Find("Glass");
+        GameObject go;
+        if (t == null)
+        {
+            go = new GameObject("Glass");
+            go.transform.SetParent(transform, false);
+        }
+        else
+        {
+            go = t.gameObject;
+        }
+
+        glassMeshFilter = go.GetComponent<MeshFilter>();
+        if (glassMeshFilter == null) glassMeshFilter = go.AddComponent<MeshFilter>();
+
+        glassMeshRenderer = go.GetComponent<MeshRenderer>();
+        if (glassMeshRenderer == null) glassMeshRenderer = go.AddComponent<MeshRenderer>();
+
+        if (VoxelWorld.Instance != null && VoxelWorld.Instance.glassMaterial != null)
+            glassMeshRenderer.material = VoxelWorld.Instance.glassMaterial;
+        else
+            glassMeshRenderer.material = meshRenderer.material;
+    }
+
+    /// <summary>
+    /// Renders Glass (ID 35) visually into the dedicated glass mesh (ZWrite On + CullBack)
+    /// to correctly occlude back faces. Also adds invisible collision geometry to the solid mesh.
+    /// Adjacent-glass faces are culled. Faces next to solid opaque blocks are also culled.
+    /// </summary>
+    void AddGlassToSolidMesh(Vector3 pos)
+    {
+        float transU = 9f / (float)GrassTextureGenerator.TILE_COUNT;
+        Vector2 transparentUV = new Vector2(transU, 0f);
+
+        for (int p = 0; p < 6; p++)
+        {
+            Vector3 neighborPos = pos + VoxelData.faceChecks[p];
+            int nx = Mathf.FloorToInt(neighborPos.x);
+            int ny = Mathf.FloorToInt(neighborPos.y);
+            int nz = Mathf.FloorToInt(neighborPos.z);
+
+            byte neighbor = 0;
+            if (!IsVoxelInChunk(nx, ny, nz))
+            {
+                if (VoxelWorld.Instance != null)
+                    neighbor = VoxelWorld.Instance.GetBlock(neighborPos + transform.position);
+            }
+            else
+            {
+                neighbor = voxelMap[nx, ny, nz];
+            }
+
+            // Cull face against: same glass=35 (cull), fully-solid blocks (cull)
+            // Show face against: air (0), water (7), flowers (9-11), leaves (12)
+            if (neighbor == 35) continue;  // adjacent glass panes share a face — hide it
+            if (neighbor != 0 && neighbor != 7 && neighbor != 9 &&
+                neighbor != 10 && neighbor != 11 && neighbor != 12) continue;
+
+            Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, 35);
+
+            // 1. Add to dedicated Glass mesh (ZWrite On + CullBack so back frames don't bleed through)
+            for (int i = 0; i < 4; i++)
+                glassVertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, i]]);
+            glassUvs.AddRange(faceUVs);
+
+            glassTriangles.Add(glassVertexIndex);
+            glassTriangles.Add(glassVertexIndex + 1);
+            glassTriangles.Add(glassVertexIndex + 2);
+            glassTriangles.Add(glassVertexIndex + 2);
+            glassTriangles.Add(glassVertexIndex + 1);
+            glassTriangles.Add(glassVertexIndex + 3);
+            glassVertexIndex += 4;
+
+            // 2. Add invisible geometry to the solid mesh for MeshCollider (transparent UVs)
+            for (int i = 0; i < 4; i++)
+            {
+                vertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, i]]);
+                uvs.Add(transparentUV);
+            }
+
+            triangles.Add(vertexIndex);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 3);
+            vertexIndex += 4;
+        }
+    }
+
+
     bool CheckVoxelFace(Vector3 pos, int faceIndex, byte currentBlockType)
     {
         Vector3 neighborPos = pos + VoxelData.faceChecks[faceIndex];
@@ -752,8 +866,8 @@ public class Chunk : MonoBehaviour
 
         bool currentIsWater  = (currentBlockType == 7);
         bool neighborIsWater = (neighbor == 7);
-        // Flowers and leaves are transparent billboards — treat like air for culling purposes
-        bool neighborIsFlower = (neighbor == 9 || neighbor == 10 || neighbor == 11 || neighbor == 12);
+        // Flowers, leaves, and glass (ID 35) are transparent — treat like air for solid-mesh culling purposes
+        bool neighborIsFlower = (neighbor == 9 || neighbor == 10 || neighbor == 11 || neighbor == 12 || neighbor == 35);
 
         if (currentIsWater)
         {
@@ -821,6 +935,25 @@ public class Chunk : MonoBehaviour
         {
             if (foliageMeshRenderer != null)
                 foliageMeshRenderer.gameObject.SetActive(false);
+        }
+
+        // ── Glass mesh (ZWrite On + CullBack to prevent back-face border bleed) ─
+        if (glassVertices.Count > 0)
+        {
+            EnsureGlassChild();
+            Mesh glassMesh = new Mesh();
+            glassMesh.vertices  = glassVertices.ToArray();
+            glassMesh.triangles = glassTriangles.ToArray();
+            glassMesh.uv        = glassUvs.ToArray();
+            glassMesh.RecalculateNormals();
+
+            glassMeshFilter.mesh = glassMesh;
+            glassMeshRenderer.gameObject.SetActive(true);
+        }
+        else
+        {
+            if (glassMeshRenderer != null)
+                glassMeshRenderer.gameObject.SetActive(false);
         }
     }
     /// <summary>
