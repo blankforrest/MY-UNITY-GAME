@@ -358,8 +358,10 @@ public class VehicleSpawner : MonoBehaviour
                     if (mr != null) mr.material.color = GetDebugColor(entry.blockTypeID);
                 }
 
-                // Apply correct procedural texture and face UVs for blocks (IDs 1–12, 50)
-                if ((entry.blockTypeID >= 1 && entry.blockTypeID <= 12) || entry.blockTypeID == 50)
+                // Apply correct procedural texture and face UVs for blocks (IDs 1–12, 30–36, 50)
+                if ((entry.blockTypeID >= 1 && entry.blockTypeID <= 12) || 
+                    (entry.blockTypeID >= 30 && entry.blockTypeID <= 36) || 
+                    entry.blockTypeID == 50)
                 {
                     ApplyVoxelTexture(blockGO, (byte)entry.blockTypeID);
                 }
@@ -522,7 +524,18 @@ public class VehicleSpawner : MonoBehaviour
         if (mf != null && mr != null && VoxelWorld.Instance != null)
         {
             mf.sharedMesh = CreateVoxelMesh(blockTypeID);
-            mr.sharedMaterial = VoxelWorld.Instance.chunkMaterial;
+            if (blockTypeID == 35)
+            {
+                mr.sharedMaterial = VoxelWorld.Instance.glassMaterial;
+            }
+            else if (blockTypeID == 9 || blockTypeID == 10 || blockTypeID == 11 || blockTypeID == 12)
+            {
+                mr.sharedMaterial = VoxelWorld.Instance.foliageMaterial;
+            }
+            else
+            {
+                mr.sharedMaterial = VoxelWorld.Instance.chunkMaterial;
+            }
         }
     }
 

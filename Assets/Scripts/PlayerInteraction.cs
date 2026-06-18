@@ -112,6 +112,20 @@ public class PlayerInteraction : MonoBehaviour
                     Mathf.FloorToInt(p.z));
                 Vector3 voxelCenter = new Vector3(gridPos.x + 0.5f, gridPos.y + 0.5f, gridPos.z + 0.5f);
 
+                // Check if the block being LOOKED AT (inward nudge) is a Crafting Table.
+                Vector3 inwardP = hit.point - hit.normal * 0.001f;
+                Vector3Int hitVoxel = new Vector3Int(
+                    Mathf.FloorToInt(inwardP.x),
+                    Mathf.FloorToInt(inwardP.y),
+                    Mathf.FloorToInt(inwardP.z));
+                byte hitBlock = VoxelWorld.Instance?.GetBlock(new Vector3(hitVoxel.x + 0.5f, hitVoxel.y + 0.5f, hitVoxel.z + 0.5f)) ?? 0;
+                if (hitBlock == 36)
+                {
+                    // Open the 3x3 Crafting Table UI instead of placing a block
+                    InventoryUI.Instance?.Open3x3Crafting();
+                    return;
+                }
+
                 // Prepare layout of blocks to place. Large Wheel is 2x2.
                 List<Vector3Int> positionsToPlace = new List<Vector3Int>();
                 positionsToPlace.Add(gridPos);

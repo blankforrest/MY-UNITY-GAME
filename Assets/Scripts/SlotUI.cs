@@ -9,12 +9,13 @@ using TMPro;
 /// </summary>
 public class SlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
-    public enum Owner { Inventory, Hotbar, CraftingInput, CraftingOutput }
+    public enum Owner { Inventory, Hotbar, CraftingInput, CraftingOutput, TableCraftingInput, TableCraftingOutput }
 
     [HideInInspector] public Owner              owner;
     [HideInInspector] public int                index;
     [HideInInspector] public Image              iconImage;
     [HideInInspector] public TextMeshProUGUI    amountText;
+    [HideInInspector] public TextMeshProUGUI[]  amountOutlineTexts;
     [HideInInspector] public Image              background;
 
     // Shared ghost image assigned by InventoryUI or DragDropManager
@@ -44,6 +45,17 @@ public class SlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
             if (Inventory.Instance == null) return null;
             return Inventory.Instance.craftingResultSlot;
         }
+        else if (owner == Owner.TableCraftingInput)
+        {
+            if (Inventory.Instance == null) return null;
+            var s = Inventory.Instance.tableCraftingSlots;
+            return (index >= 0 && index < s.Length) ? s[index] : null;
+        }
+        else if (owner == Owner.TableCraftingOutput)
+        {
+            if (Inventory.Instance == null) return null;
+            return Inventory.Instance.tableCraftingResultSlot;
+        }
         return Hotbar.Instance?.GetSlotData(index);
     }
 
@@ -70,6 +82,23 @@ public class SlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
                 if (!silent) Inventory.Instance.onInventoryChangedCallback?.Invoke();
             }
         }
+        else if (owner == Owner.TableCraftingInput)
+        {
+            if (Inventory.Instance != null)
+            {
+                Inventory.Instance.tableCraftingSlots[index] = (item != null) ? new InventorySlot(item, amount) : null;
+                Inventory.Instance.UpdateTableCraftingOutput();
+                if (!silent) Inventory.Instance.onInventoryChangedCallback?.Invoke();
+            }
+        }
+        else if (owner == Owner.TableCraftingOutput)
+        {
+            if (Inventory.Instance != null)
+            {
+                Inventory.Instance.tableCraftingResultSlot = (item != null) ? new InventorySlot(item, amount) : null;
+                if (!silent) Inventory.Instance.onInventoryChangedCallback?.Invoke();
+            }
+        }
         else                          Hotbar.Instance?.SetSlot(index, item, amount);
     }
 
@@ -91,7 +120,18 @@ public class SlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
             iconImage.enabled = hasItem;
         }
         if (amountText != null)
-            amountText.text = (hasItem && data.amount > 1) ? data.amount.ToString() : "";
+        {
+            string amtStr = (hasItem && data.amount > 1) ? data.amount.ToString() : "";
+            amountText.text = amtStr;
+            if (amountOutlineTexts != null)
+            {
+                for (int i = 0; i < amountOutlineTexts.Length; i++)
+                {
+                    if (amountOutlineTexts[i] != null)
+                        amountOutlineTexts[i].text = amtStr;
+                }
+            }
+        }
     }
 
     // ── Hover highlight ───────────────────────────────────────────────────────

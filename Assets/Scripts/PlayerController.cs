@@ -6,6 +6,7 @@ public class PlayerController : MonoBehaviour
 {
     public float walkSpeed = 5f;
     public float runSpeed = 8f;
+    public float sneakSpeed = 2f;
     public float jumpHeight = 1.5f;
     public float gravity = -20f; 
     public float mouseSensitivity = 0.1f; 
@@ -24,7 +25,10 @@ public class PlayerController : MonoBehaviour
     private UnityEngine.UI.Image underwaterOverlay;
     private GameObject deathScreenGO;
     private bool isDead = false;
+    public bool IsDead => isDead;
     private Vector3 spawnPoint;
+    private Vector3 originalCameraLocalPosition;
+    private bool isSneaking = false;
 
     // ── Suffocation (stuck-in-block) state ────────────────────────────────────
     private bool   isStuck           = false;
@@ -55,7 +59,14 @@ public class PlayerController : MonoBehaviour
             return;
         }
         cameraTransform = cam.transform;
-        // Do NOT override localPosition — Inspector value is the correct eye height
+        originalCameraLocalPosition = cameraTransform.localPosition;
+
+        // Disable shadow casting on player's visual components (no bean shadow)
+        Renderer[] playerRenderers = GetComponentsInChildren<Renderer>();
+        foreach (Renderer r in playerRenderers)
+        {
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
 
         // Initial cursor state
         Cursor.lockState = CursorLockMode.Locked;
@@ -193,6 +204,12 @@ public class PlayerController : MonoBehaviour
                 VehicleHUD.Instance.CloseHUD();
             }
 
+            // Clear underwater overlay when entering driving mode
+            if (underwaterOverlay != null && underwaterOverlay.gameObject.activeSelf)
+            {
+                underwaterOverlay.gameObject.SetActive(false);
+            }
+
             velocity = Vector3.zero;
             return;
         }
@@ -234,6 +251,23 @@ public class PlayerController : MonoBehaviour
             underwaterOverlay.gameObject.SetActive(headInWater && !isUIOpen);
         }
 
+        // Toggle Sneak Mode
+        if (isDriving)
+        {
+            isSneaking = false;
+        }
+        else if (Keyboard.current != null && Keyboard.current.leftCtrlKey.wasPressedThisFrame && isGrounded)
+        {
+            isSneaking = !isSneaking;
+        }
+
+        // Smoothly lerp camera position for sneaking visual indicator
+        Vector3 targetCamPos = isSneaking ? (originalCameraLocalPosition + new Vector3(0f, -0.2f, 0f)) : originalCameraLocalPosition;
+        if (cameraTransform != null)
+        {
+            cameraTransform.localPosition = Vector3.Lerp(cameraTransform.localPosition, targetCamPos, Time.deltaTime * 10f);
+        }
+
         // Movement
         float x = 0;
         float z = 0;
@@ -250,10 +284,43 @@ public class PlayerController : MonoBehaviour
         }
 
         Vector3 move = transform.right * x + transform.forward * z;
-        // Normalize vector so diagonal movement isn't faster
         if (move.magnitude > 1f) move.Normalize();
 
-        float speed = isRunning ? runSpeed : walkSpeed;
+        float speed = walkSpeed;
+        if (isRunning) speed = runSpeed;
+        else if (isSneaking) speed = sneakSpeed;
+
+        // Prevent falling off edges when sneaking
+        if (isSneaking && isGrounded)
+        {
+            float dt = Time.deltaTime;
+            Vector3 moveX = new Vector3(move.x, 0f, 0f);
+            Vector3 moveZ = new Vector3(0f, 0f, move.z);
+
+            // Test X movement separately
+            if (moveX.magnitude > 0.0001f)
+            {
+                Vector3 nextPosX = transform.position + moveX * speed * dt;
+                if (!HasGroundUnder(nextPosX))
+                {
+                    move.x = 0f;
+                }
+            }
+
+            // Test Z movement separately
+            if (moveZ.magnitude > 0.0001f)
+            {
+                Vector3 nextPosZ = transform.position + moveZ * speed * dt;
+                if (!HasGroundUnder(nextPosZ))
+                {
+                    move.z = 0f;
+                }
+            }
+
+            // Re-normalize if any component was modified
+            if (move.magnitude > 1f) move.Normalize();
+        }
+
         if (controller.enabled)
         {
             controller.Move(move * speed * Time.deltaTime);
@@ -590,8 +657,64 @@ public class PlayerController : MonoBehaviour
         // Push direction = horizontal movement direction of the player
         Vector3 pushDir = new Vector3(hit.moveDirection.x, 0f, hit.moveDirection.z);
 
-        // Force proportional to player speed — feel free to tune the multiplier
+        // Push proportional to player speed — feel free to tune the multiplier
         float pushForce = 3f;
         rb.AddForce(pushDir * pushForce, ForceMode.Impulse);
+    }
+
+    /// <summary>
+    /// Checks if there is a solid block or physics collider below the given position.
+    /// Used to prevent sneaking off edges.
+    /// </summary>
+    private bool HasGroundUnder(Vector3 pos)
+    {
+        // Calculate the exact bottom (feet) of the CharacterController at the target position
+        Vector3 feetPos = pos;
+        if (controller != null)
+        {
+            feetPos = pos + controller.center + Vector3.down * (controller.height * 0.5f);
+        }
+
+        // Using a tiny check radius (0.05f) ensures the player stops exactly at the ledge,
+        // keeping the controller firmly supported so they never slip off and lose grounding.
+        float radius = 0.05f;
+        float yOffset = -0.3f; // Safely check the block below the feet
+        Vector3[] checkPoints = new Vector3[] {
+            feetPos + new Vector3(0f, yOffset, 0f),
+            feetPos + new Vector3(radius, yOffset, 0f),
+            feetPos + new Vector3(-radius, yOffset, 0f),
+            feetPos + new Vector3(0f, yOffset, radius),
+            feetPos + new Vector3(0f, yOffset, -radius),
+            feetPos + new Vector3(radius * 0.7f, yOffset, radius * 0.7f),
+            feetPos + new Vector3(-radius * 0.7f, yOffset, radius * 0.7f),
+            feetPos + new Vector3(radius * 0.7f, yOffset, -radius * 0.7f),
+            feetPos + new Vector3(-radius * 0.7f, yOffset, -radius * 0.7f)
+        };
+
+        if (VoxelWorld.Instance != null)
+        {
+            foreach (var pt in checkPoints)
+            {
+                byte block = VoxelWorld.Instance.GetBlock(pt);
+                if (block != 0 && block != 7) 
+                {
+                    return true;
+                }
+            }
+        }
+
+        // Physics check fallback (e.g. for vehicle colliders or custom meshes)
+        // Start raycast slightly above the feet and point down, ignoring the player's own collider
+        RaycastHit hit;
+        Vector3 rayStart = feetPos + new Vector3(0f, 0.05f, 0f);
+        if (Physics.Raycast(rayStart, Vector3.down, out hit, 0.3f))
+        {
+            if (hit.collider != controller && !hit.collider.transform.IsChildOf(transform))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

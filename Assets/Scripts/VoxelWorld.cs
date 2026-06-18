@@ -392,7 +392,7 @@ public class VoxelWorld : MonoBehaviour
         if (blockID == 0 && !suppressDrop)
         {
             byte existing = chunk.GetVoxel(lx, ly, lz);
-            if (existing != 0 && (existing <= 12 || existing == 20 || existing == 21 || existing == 22 || existing == 23 || existing == 50 || (existing >= 30 && existing <= 35)))
+            if (existing != 0 && (existing <= 12 || existing == 20 || existing == 21 || existing == 22 || existing == 23 || existing == 50 || existing == 36 || (existing >= 30 && existing <= 35)))
             {
                 Item drop = null;
                 if (blockDrops != null && existing < blockDrops.Length)
@@ -478,6 +478,14 @@ public class VoxelWorld : MonoBehaviour
                     else if (existing == 35)
                     {
                         // Glass shatters — no item drop (drop stays null)
+                    }
+                    else if (existing == 36)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Crafting Table";
+                        drop.blockTypeID = 36;
+                        Sprite loaded = Resources.Load<Sprite>("Sprites/crafting_table");
+                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f), 36);
                     }
                     else if (existing == 9)
                     {

@@ -27,6 +27,7 @@ public class Hotbar : MonoBehaviour
     private List<RectTransform>      slotRects       = new List<RectTransform>();
     private List<Image>              slotIcons       = new List<Image>();
     private List<TextMeshProUGUI>    slotTexts       = new List<TextMeshProUGUI>();
+    private List<TextMeshProUGUI[]>  slotOutlineTexts = new List<TextMeshProUGUI[]>();
     private List<Image>              slotBackgrounds = new List<Image>();
 
     private static readonly Color NormalSlot   = new Color(0.35f, 0.35f, 0.35f, 1f);
@@ -125,6 +126,35 @@ public class Hotbar : MonoBehaviour
             iconImg.raycastTarget = false; // slot background handles raycasts
             slotIcons.Add(iconImg);
 
+            // Stack outlines (bottom-right of slot)
+            TextMeshProUGUI[] outlines = new TextMeshProUGUI[4];
+            Vector2[] offsets = new Vector2[] {
+                new Vector2(-1f, 1f),
+                new Vector2(1f, 1f),
+                new Vector2(-1f, -1f),
+                new Vector2(1f, -1f)
+            };
+
+            for (int j = 0; j < 4; j++)
+            {
+                GameObject outlineGO = new GameObject("AmountTextOutline_" + j, typeof(RectTransform), typeof(TextMeshProUGUI));
+                outlineGO.transform.SetParent(slotGO.transform, false);
+
+                RectTransform outlineRT = outlineGO.GetComponent<RectTransform>();
+                outlineRT.anchorMin = new Vector2(0f, 0f);
+                outlineRT.anchorMax = new Vector2(1f, 1f);
+                outlineRT.sizeDelta  = new Vector2(-4f, -4f);
+                outlineRT.anchoredPosition = offsets[j];
+
+                TextMeshProUGUI oTmp = outlineGO.GetComponent<TextMeshProUGUI>();
+                oTmp.text      = "";
+                oTmp.fontSize  = 13f;
+                oTmp.alignment = TextAlignmentOptions.BottomRight;
+                oTmp.color     = Color.black;
+                outlines[j] = oTmp;
+            }
+            slotOutlineTexts.Add(outlines);
+
             // Stack count text (bottom-right of slot)
             GameObject textGO = new GameObject("AmountText", typeof(RectTransform), typeof(TextMeshProUGUI));
             textGO.transform.SetParent(slotGO.transform, false);
@@ -140,6 +170,10 @@ public class Hotbar : MonoBehaviour
             tmp.fontSize  = 13f;
             tmp.alignment = TextAlignmentOptions.BottomRight;
             tmp.color     = Color.white;
+            tmp.fontMaterial.EnableKeyword("OUTLINE_ON");
+            tmp.fontMaterial.SetColor("_OutlineColor", Color.black);
+            tmp.fontMaterial.SetFloat("_OutlineWidth", 0.25f);
+            tmp.UpdateMeshPadding();
             slotTexts.Add(tmp);
 
             // ── SlotUI for drag-drop ──────────────────────────────────────────
@@ -148,6 +182,8 @@ public class Hotbar : MonoBehaviour
             slotUI.index      = i;
             slotUI.iconImage  = iconImg;
             slotUI.amountText = tmp;
+            slotUI.amountOutlineTexts = outlines;
+            slotUI.background = slotImg;
             slotUI.background = slotImg;
         }
 
@@ -257,6 +293,16 @@ public class Hotbar : MonoBehaviour
 
         // Stack count
         TextMeshProUGUI txt = slotTexts[index];
-        txt.text = (data != null && data.amount > 1) ? data.amount.ToString() : "";
+        string amtStr = (data != null && data.amount > 1) ? data.amount.ToString() : "";
+        txt.text = amtStr;
+        if (index < slotOutlineTexts.Count && slotOutlineTexts[index] != null)
+        {
+            var outlines = slotOutlineTexts[index];
+            for (int j = 0; j < outlines.Length; j++)
+            {
+                if (outlines[j] != null)
+                    outlines[j].text = amtStr;
+            }
+        }
     }
 }

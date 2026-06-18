@@ -19,6 +19,7 @@ public class DragDropManager : MonoBehaviour
     private InventorySlot heldItem = null;
     private Image ghost;
     private TextMeshProUGUI ghostText;      // stack count (bottom-right of icon)
+    private TextMeshProUGUI[] ghostOutlineTexts;
     private TextMeshProUGUI ghostNameLabel; // item name shown below cursor
 
     // Split mode state
@@ -66,6 +67,34 @@ public class DragDropManager : MonoBehaviour
 
         SlotUI.Ghost = ghost;
 
+        // Create the 4 stack amount outlines for the ghost
+        ghostOutlineTexts = new TextMeshProUGUI[4];
+        Vector2[] offsets = new Vector2[] {
+            new Vector2(-1f, 1f),
+            new Vector2(1f, 1f),
+            new Vector2(-1f, -1f),
+            new Vector2(1f, -1f)
+        };
+
+        for (int i = 0; i < 4; i++)
+        {
+            GameObject outlineGO = new GameObject("GhostTextOutline_" + i, typeof(RectTransform), typeof(TextMeshProUGUI));
+            outlineGO.transform.SetParent(ghostGO.transform, false);
+            RectTransform outlineRT = outlineGO.GetComponent<RectTransform>();
+            outlineRT.anchorMin = Vector2.zero;
+            outlineRT.anchorMax = Vector2.one;
+            outlineRT.sizeDelta = new Vector2(-4f, -4f);
+            outlineRT.anchoredPosition = offsets[i];
+
+            TextMeshProUGUI oTmp = outlineGO.GetComponent<TextMeshProUGUI>();
+            oTmp.fontSize = 14f;
+            oTmp.alignment = TextAlignmentOptions.BottomRight;
+            oTmp.color = Color.black;
+            oTmp.raycastTarget = false;
+            oTmp.enabled = false;
+            ghostOutlineTexts[i] = oTmp;
+        }
+
         // Create the stack amount text child for the ghost
         GameObject textGO = new GameObject("GhostText", typeof(RectTransform), typeof(TextMeshProUGUI));
         textGO.transform.SetParent(ghostGO.transform, false);
@@ -79,6 +108,10 @@ public class DragDropManager : MonoBehaviour
         ghostText.fontSize = 14f;
         ghostText.alignment = TextAlignmentOptions.BottomRight;
         ghostText.color = Color.white;
+        ghostText.fontMaterial.EnableKeyword("OUTLINE_ON");
+        ghostText.fontMaterial.SetColor("_OutlineColor", Color.black);
+        ghostText.fontMaterial.SetFloat("_OutlineWidth", 0.25f);
+        ghostText.UpdateMeshPadding();
         ghostText.raycastTarget = false;
         ghostText.enabled = false;
 
@@ -284,7 +317,7 @@ public class DragDropManager : MonoBehaviour
 
             if (isEmpty || isSameType)
             {
-                if (slot.owner == SlotUI.Owner.CraftingOutput)
+                if (slot.owner == SlotUI.Owner.CraftingOutput || slot.owner == SlotUI.Owner.TableCraftingOutput)
                     return; // Cannot place into crafting output
 
                 // Keep local reference to splitSourceSlot before we potentially null it out in ExitSplitMode
@@ -328,6 +361,12 @@ public class DragDropManager : MonoBehaviour
                 Inventory.Instance?.ConsumeCraftingInputs();
                 Inventory.Instance?.onInventoryChangedCallback?.Invoke();
             }
+            else if (slot.owner == SlotUI.Owner.TableCraftingOutput)
+            {
+                heldItem = new InventorySlot(slotData.item, slotData.amount);
+                Inventory.Instance?.ConsumeTableCraftingInputs();
+                Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+            }
             else
             {
                 if (isLeftClick)
@@ -364,6 +403,19 @@ public class DragDropManager : MonoBehaviour
                 {
                     heldItem.amount += slotData.amount;
                     Inventory.Instance?.ConsumeCraftingInputs();
+                    Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+                    slot.Refresh();
+                    UpdateGhostVisual();
+                }
+                return;
+            }
+
+            if (slot.owner == SlotUI.Owner.TableCraftingOutput)
+            {
+                if (slotData != null && slotData.item != null && slotData.item.itemName == heldItem.item.itemName)
+                {
+                    heldItem.amount += slotData.amount;
+                    Inventory.Instance?.ConsumeTableCraftingInputs();
                     Inventory.Instance?.onInventoryChangedCallback?.Invoke();
                     slot.Refresh();
                     UpdateGhostVisual();
@@ -508,8 +560,20 @@ public class DragDropManager : MonoBehaviour
             ghost.enabled = true;
             if (ghostText != null)
             {
-                ghostText.text = heldItem.amount > 1 ? heldItem.amount.ToString() : "";
+                string amtStr = heldItem.amount > 1 ? heldItem.amount.ToString() : "";
+                ghostText.text = amtStr;
                 ghostText.enabled = true;
+                if (ghostOutlineTexts != null)
+                {
+                    for (int i = 0; i < ghostOutlineTexts.Length; i++)
+                    {
+                        if (ghostOutlineTexts[i] != null)
+                        {
+                            ghostOutlineTexts[i].text = amtStr;
+                            ghostOutlineTexts[i].enabled = true;
+                        }
+                    }
+                }
             }
             if (ghostNameLabel != null)
             {
@@ -525,6 +589,17 @@ public class DragDropManager : MonoBehaviour
             {
                 ghostText.text = "";
                 ghostText.enabled = false;
+            }
+            if (ghostOutlineTexts != null)
+            {
+                for (int i = 0; i < ghostOutlineTexts.Length; i++)
+                {
+                    if (ghostOutlineTexts[i] != null)
+                    {
+                        ghostOutlineTexts[i].text = "";
+                        ghostOutlineTexts[i].enabled = false;
+                    }
+                }
             }
             if (ghostNameLabel != null)
             {

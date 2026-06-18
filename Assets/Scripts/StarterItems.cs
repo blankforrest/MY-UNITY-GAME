@@ -26,6 +26,7 @@ public class StarterItems : MonoBehaviour
         { "Iron Block", "Sprites/iron_block"       },
         { "Sand",       "Sprites/sand_block"       },
         { "Glass",      "Sprites/glass_block"      },
+        { "Crafting Table", "Sprites/crafting_table" },
     };
 
     private IEnumerator Start()
@@ -68,8 +69,8 @@ public class StarterItems : MonoBehaviour
             System.IO.Directory.CreateDirectory(dir);
         }
 
-        string[] names = { "coal_ore_block", "iron_ore_block", "gold_block", "iron_block", "sand_block", "glass_block" };
-        int[] ids = { 30, 31, 32, 33, 34, 35 };
+        string[] names = { "coal_ore_block", "iron_ore_block", "gold_block", "iron_block", "sand_block", "glass_block", "crafting_table" };
+        int[] ids = { 30, 31, 32, 33, 34, 35, 36 };
 
         bool createdAny = false;
         // Keep forceGenerate as false so we do not overwrite the permanent, hand-crafted sprites
@@ -298,6 +299,7 @@ public class StarterItems : MonoBehaviour
         else if (blockTypeID == 33) outlineColor = new Color(0.30f, 0.32f, 0.35f, 1f); // Iron
         else if (blockTypeID == 8 || blockTypeID == 34) outlineColor = new Color(0.40f, 0.35f, 0.25f, 1f); // Sand
         else if (blockTypeID == 35) outlineColor = new Color(0.15f, 0.22f, 0.28f, 1.0f); // Glass
+        else if (blockTypeID == 36) outlineColor = new Color(0.25f, 0.15f, 0.05f, 1f);   // Crafting Table
 
         // Draw pixel-by-pixel
         for (int y = 0; y < SZ; y++)
@@ -360,6 +362,7 @@ public class StarterItems : MonoBehaviour
                 else if (blockTypeID == 33) tileIndex = 21; // Iron Block
                 else if (blockTypeID == 8 || blockTypeID == 34) tileIndex = 8; // Sand
                 else if (blockTypeID == 35) tileIndex = 22; // Glass
+                else if (blockTypeID == 36) tileIndex = (face == 1) ? 23 : 24; // Crafting Table
                 else if (blockTypeID == 1) tileIndex = (face == 1) ? 4 : 5; // Wood
                 else if (blockTypeID == 4 || blockTypeID == 6) tileIndex = (face == 1) ? 0 : 1; // Grass
                 else if (blockTypeID == 5) tileIndex = 2; // Dirt

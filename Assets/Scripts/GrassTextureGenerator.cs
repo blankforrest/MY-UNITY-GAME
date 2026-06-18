@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 23; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass
+    public const int TILE_COUNT = 25; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side
 
     public static Texture2D Create()
     {
@@ -49,7 +49,9 @@ public static class GrassTextureGenerator
                               : tile == 19 ? IronOre(lx, y)
                               : tile == 20 ? GoldBlock(lx, y)
                               : tile == 21 ? IronBlock(lx, y)
-                                           : MinecraftGlass(lx, y);
+                              : tile == 22 ? MinecraftGlass(lx, y)
+                              : tile == 23 ? CraftingTableTop(lx, y)
+                                           : CraftingTableSide(lx, y);
             }
         }
 
@@ -518,6 +520,10 @@ public static class GrassTextureGenerator
             tile = 21;
         else if (blockType == 35) // Glass
             tile = 22;
+        else if (blockType == 36) // Crafting Table
+            tile = (face == 2) ? 23   // Top
+                 : (face == 3) ? 6    // Bottom (Plank)
+                 :               24;  // Sides
         else                     // Grass (blockType == 4 or 6)
             tile = (face == 2) ? 0   // top    → grass top
                  : (face == 3) ? 2   // bottom → dirt
@@ -637,6 +643,77 @@ public static class GrassTextureGenerator
         return new Color(0.80f, 0.90f, 0.95f, 0.15f);
     }
 
+    static Color CraftingTableTop(int x, int y)
+    {
+        // Nice warm plank color base
+        float n = Mathf.PerlinNoise(x * 0.5f, y * 0.5f) * 0.06f;
+        Color plankColor = new Color(0.72f + n, 0.58f + n * 0.8f, 0.37f + n * 0.5f);
+
+        // Dark brown border
+        int distToXEdge = Mathf.Min(x, 15 - x);
+        int distToYEdge = Mathf.Min(y, 15 - y);
+        int distToEdge = Mathf.Min(distToXEdge, distToYEdge);
+
+        if (distToEdge == 0)
+        {
+            return new Color(0.28f, 0.18f, 0.08f); // dark brown frame
+        }
+
+        // Add grid lines for a 3x3 layout to look like a crafting table
+        if (x == 5 || x == 10 || y == 5 || y == 10)
+        {
+            return new Color(0.38f, 0.25f, 0.12f); // grid seam
+        }
+
+        // Draw a small hammer at top right cell (x: 11..14, y: 11..14)
+        if (x == 11 && y == 11) return new Color(0.48f, 0.35f, 0.18f);
+        if (x == 12 && y == 12) return new Color(0.48f, 0.35f, 0.18f);
+        if ((x == 12 && y == 13) || (x == 13 && y == 12) || (x == 13 && y == 13) || (x == 14 && y == 14))
+            return new Color(0.7f, 0.7f, 0.72f); // hammer head
+
+        // Draw a small saw at bottom left cell (x: 1..4, y: 1..4)
+        if (x == 1 && y == 1) return new Color(0.6f, 0.2f, 0.2f);
+        if ((x == 2 && y == 2) || (x == 3 && y == 3) || (x == 4 && y == 4) || (x == 2 && y == 3) || (x == 3 && y == 4))
+            return new Color(0.75f, 0.75f, 0.78f); // saw blade
+
+        return plankColor;
+    }
+
+    static Color CraftingTableSide(int x, int y)
+    {
+        // Plank base
+        float n = Mathf.PerlinNoise(x * 0.5f, y * 0.5f) * 0.06f;
+        Color baseCol = new Color(0.72f + n, 0.58f + n * 0.8f, 0.37f + n * 0.5f);
+
+        // Dark brown top and bottom border to represent table legs/sides
+        if (y == 0 || y == 15)
+        {
+            return new Color(0.28f, 0.18f, 0.08f);
+        }
+
+        // Side borders (left and right legs)
+        if (x == 0 || x == 1 || x == 14 || x == 15)
+        {
+            return new Color(0.38f, 0.25f, 0.12f);
+        }
+
+        // Draw tools hanging on the side
+        if (x >= 4 && x <= 11 && y >= 3 && y <= 9)
+        {
+            // Inside pocket
+            if (x == 4 || x == 11 || y == 3)
+                return new Color(0.48f, 0.35f, 0.18f); // leather/pocket border
+            else
+                return new Color(0.58f, 0.45f, 0.28f); // leather body
+        }
+
+        // Tool hanging (e.g. shears or saw)
+        if (x == 2 && y >= 2 && y <= 8) return new Color(0.48f, 0.35f, 0.18f);
+        if (x >= 1 && x <= 3 && y >= 9 && y <= 10) return new Color(0.7f, 0.7f, 0.72f);
+
+        return baseCol;
+    }
+
     // Keep old name as alias so existing callers don't break
     public static Vector2[] GetGrassUVs(int face) => GetBlockUVs(face, 1);
 
@@ -670,6 +747,8 @@ public static class GrassTextureGenerator
             case 20: return GoldBlock(lx, ly);
             case 21: return IronBlock(lx, ly);
             case 22: return MinecraftGlass(lx, ly);
+            case 23: return CraftingTableTop(lx, ly);
+            case 24: return CraftingTableSide(lx, ly);
             default: return Color.clear;
         }
     }
