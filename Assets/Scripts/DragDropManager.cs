@@ -128,6 +128,10 @@ public class DragDropManager : MonoBehaviour
         ghostNameLabel.alignment = TextAlignmentOptions.Center;
         ghostNameLabel.color = Color.white;
         ghostNameLabel.fontStyle = FontStyles.Bold;
+        ghostNameLabel.fontMaterial.EnableKeyword("OUTLINE_ON");
+        ghostNameLabel.fontMaterial.SetColor("_OutlineColor", Color.black);
+        ghostNameLabel.fontMaterial.SetFloat("_OutlineWidth", 0.1f); // Thin black text outline
+        ghostNameLabel.UpdateMeshPadding();
         ghostNameLabel.raycastTarget = false;
 
         // Semi-transparent dark background for readability
@@ -139,8 +143,9 @@ public class DragDropManager : MonoBehaviour
         bgRT.anchorMax = Vector2.one;
         bgRT.sizeDelta = new Vector2(6f, 4f);
         bgRT.anchoredPosition = Vector2.zero;
+        
         Image bgImg = bgGO.GetComponent<Image>();
-        bgImg.color = new Color(0f, 0f, 0f, 0.55f);
+        bgImg.color = new Color(0f, 0f, 0f, 0.55f); // Original semi-transparent gray background
         bgImg.raycastTarget = false;
 
         // Start hidden — the whole GO must be inactive so the bg image is also hidden
@@ -169,6 +174,10 @@ public class DragDropManager : MonoBehaviour
             {
                 ExitSplitMode();
             }
+            if (ghostNameLabel != null)
+            {
+                ghostNameLabel.gameObject.SetActive(false);
+            }
             isPressing = false;
             clickedSlotOnPress = null;
             return;
@@ -178,11 +187,31 @@ public class DragDropManager : MonoBehaviour
         if (ghost != null && ghost.enabled)
         {
             ghost.rectTransform.position = mousePos;
+        }
 
-            // Keep name label positioned just below the ghost icon
-            if (ghostNameLabel != null && ghostNameLabel.enabled)
+        // ── Handle Hover Tooltip or Held Item Label Position ──────────────────
+        if (ghostNameLabel != null)
+        {
+            if (heldItem != null && heldItem.item != null && heldItem.amount > 0)
             {
+                // Position held item label below cursor
                 ghostNameLabel.rectTransform.position = mousePos + new Vector2(0f, -32f);
+            }
+            else
+            {
+                // Tooltip mode: check if hovering a slot containing an item
+                SlotUI hoveredSlot = RaycastSlot(mousePos);
+                var data = hoveredSlot?.GetItemData();
+                if (data != null && data.item != null && data.amount > 0)
+                {
+                    ghostNameLabel.text = data.item.itemName;
+                    ghostNameLabel.rectTransform.position = mousePos + new Vector2(0f, -32f);
+                    ghostNameLabel.gameObject.SetActive(true);
+                }
+                else
+                {
+                    ghostNameLabel.gameObject.SetActive(false);
+                }
             }
         }
 
@@ -228,7 +257,15 @@ public class DragDropManager : MonoBehaviour
                     SlotUI releaseSlot = RaycastSlot(mousePos);
                     if (releaseSlot == clickedSlotOnPress && releaseSlot != null)
                     {
-                        HandleQuickClick(releaseSlot, pressButton == 0);
+                        bool isShiftHeld = Keyboard.current != null && (Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed);
+                        if (isShiftHeld && heldItem == null)
+                        {
+                            HandleShiftClick(releaseSlot);
+                        }
+                        else
+                        {
+                            HandleQuickClick(releaseSlot, pressButton == 0);
+                        }
                     }
                 }
                 clickedSlotOnPress = null;
@@ -315,10 +352,19 @@ public class DragDropManager : MonoBehaviour
             bool isEmpty = clickedData == null || clickedData.item == null;
             bool isSameType = !isEmpty && clickedData.item.itemName == srcData.item.itemName;
 
+            if (!isEmpty && !isSameType)
+            {
+                if (isLeftClick)
+                {
+                    ExitSplitMode();
+                    return;
+                }
+            }
+
             if (isEmpty || isSameType)
             {
-                if (slot.owner == SlotUI.Owner.CraftingOutput || slot.owner == SlotUI.Owner.TableCraftingOutput)
-                    return; // Cannot place into crafting output
+                if (slot.owner == SlotUI.Owner.CraftingOutput || slot.owner == SlotUI.Owner.TableCraftingOutput || slot.owner == SlotUI.Owner.FurnaceOutput)
+                    return; // Cannot place into output slots
 
                 // Keep local reference to splitSourceSlot before we potentially null it out in ExitSplitMode
                 var srcSlot = splitSourceSlot;
@@ -366,6 +412,11 @@ public class DragDropManager : MonoBehaviour
                 heldItem = new InventorySlot(slotData.item, slotData.amount);
                 Inventory.Instance?.ConsumeTableCraftingInputs();
                 Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+            }
+            else if (slot.owner == SlotUI.Owner.FurnaceOutput)
+            {
+                heldItem = new InventorySlot(slotData.item, slotData.amount);
+                slot.WriteItemData(null);
             }
             else
             {
@@ -423,6 +474,40 @@ public class DragDropManager : MonoBehaviour
                 return;
             }
 
+            if (slot.owner == SlotUI.Owner.FurnaceOutput)
+            {
+                if (slotData != null && slotData.item != null && slotData.item.itemName == heldItem.item.itemName)
+                {
+                    int space = 64 - slotData.amount;
+                    int toAdd = Mathf.Min(space, heldItem.amount);
+                    if (toAdd > 0)
+                    {
+                        heldItem.amount -= toAdd;
+                        slot.WriteItemData(new InventorySlot(slotData.item, slotData.amount + toAdd));
+                        if (heldItem.amount <= 0) heldItem = null;
+                        slot.Refresh();
+                        UpdateGhostVisual();
+                    }
+                }
+                return;
+            }
+
+            // Validation checks before placing/swapping into slots
+            if (slot.owner == SlotUI.Owner.FurnaceFuel)
+            {
+                if (!FurnaceManager.IsFuel(heldItem.item))
+                    return; // Fuel slot only accepts fuel (Coal, Wood, Plank, Stick)
+            }
+            else if (slot.owner == SlotUI.Owner.FurnaceInput)
+            {
+                if (heldItem.item.itemName != "Sand")
+                    return; // Input slot only accepts Sand
+            }
+            else if (slot.owner == SlotUI.Owner.FurnaceOutput)
+            {
+                return; // Output slot cannot have items dropped into it directly
+            }
+
             if (slotData == null || slotData.item == null)
             {
                 if (isLeftClick)
@@ -462,6 +547,225 @@ public class DragDropManager : MonoBehaviour
             slot.Refresh();
             UpdateGhostVisual();
             Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+        }
+    }
+
+    private void HandleShiftClick(SlotUI slot)
+    {
+        if (slot == null) return;
+        var slotData = slot.GetItemData();
+        if (slotData == null || slotData.item == null || slotData.amount <= 0) return;
+
+        // 1. Shift-Clicking Crafting Output or Table Crafting Output (Craft-All/Bulk)
+        if (slot.owner == SlotUI.Owner.CraftingOutput || slot.owner == SlotUI.Owner.TableCraftingOutput)
+        {
+            int itemsCrafted = 0;
+            while (true)
+            {
+                var currentOutput = slot.GetItemData();
+                if (currentOutput == null || currentOutput.item == null || currentOutput.amount <= 0)
+                    break;
+
+                int amountToMove = currentOutput.amount;
+                Item itemToMove = currentOutput.item;
+
+                bool added = false;
+                if (Hotbar.Instance != null)
+                {
+                    added = Hotbar.Instance.TryAddItem(itemToMove, amountToMove);
+                }
+                if (!added && Inventory.Instance != null)
+                {
+                    added = Inventory.Instance.Add(itemToMove, amountToMove);
+                }
+
+                if (added)
+                {
+                    if (slot.owner == SlotUI.Owner.CraftingOutput)
+                    {
+                        Inventory.Instance?.ConsumeCraftingInputs();
+                    }
+                    else
+                    {
+                        Inventory.Instance?.ConsumeTableCraftingInputs();
+                    }
+                    itemsCrafted++;
+                }
+                else
+                {
+                    break; // Inventory and hotbar are full
+                }
+            }
+
+            if (itemsCrafted > 0)
+            {
+                Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+                slot.Refresh();
+            }
+            return;
+        }
+
+        // 2. Shift-Clicking Hotbar Slot -> Transfer to main inventory (or furnace if furnace open)
+        if (slot.owner == SlotUI.Owner.Hotbar)
+        {
+            if (InventoryUI.Instance != null && InventoryUI.Instance.isFurnaceActive && FurnaceManager.ActiveFurnace != null)
+            {
+                if (FurnaceManager.IsFuel(slotData.item))
+                {
+                    var fuel = FurnaceManager.ActiveFurnace.fuelSlot;
+                    if (fuel == null || fuel.item == null)
+                    {
+                        FurnaceManager.ActiveFurnace.fuelSlot = new InventorySlot(slotData.item, slotData.amount);
+                        slot.WriteItemData(null);
+                        slot.Refresh();
+                        InventoryUI.Instance.RefreshFurnaceUI();
+                        return;
+                    }
+                    else if (fuel.item.itemName == slotData.item.itemName)
+                    {
+                        int space = 64 - fuel.amount;
+                        int toAdd = Mathf.Min(space, slotData.amount);
+                        if (toAdd > 0)
+                        {
+                            fuel.amount += toAdd;
+                            int left = slotData.amount - toAdd;
+                            slot.WriteItemData(left > 0 ? new InventorySlot(slotData.item, left) : null);
+                            slot.Refresh();
+                            InventoryUI.Instance.RefreshFurnaceUI();
+                            return;
+                        }
+                    }
+                }
+                
+                var input = FurnaceManager.ActiveFurnace.inputSlot;
+                if (input == null || input.item == null)
+                {
+                    FurnaceManager.ActiveFurnace.inputSlot = new InventorySlot(slotData.item, slotData.amount);
+                    slot.WriteItemData(null);
+                    slot.Refresh();
+                    InventoryUI.Instance.RefreshFurnaceUI();
+                    return;
+                }
+                else if (input.item.itemName == slotData.item.itemName)
+                {
+                    int space = 64 - input.amount;
+                    int toAdd = Mathf.Min(space, slotData.amount);
+                    if (toAdd > 0)
+                    {
+                        input.amount += toAdd;
+                        int left = slotData.amount - toAdd;
+                        slot.WriteItemData(left > 0 ? new InventorySlot(slotData.item, left) : null);
+                        slot.Refresh();
+                        InventoryUI.Instance.RefreshFurnaceUI();
+                        return;
+                    }
+                }
+            }
+
+            if (Inventory.Instance != null)
+            {
+                bool added = Inventory.Instance.Add(slotData.item, slotData.amount);
+                if (added)
+                {
+                    slot.WriteItemData(null);
+                    slot.Refresh();
+                    Inventory.Instance.onInventoryChangedCallback?.Invoke();
+                }
+            }
+            return;
+        }
+
+        // 3. Shift-Clicking Main Inventory Slot -> Transfer to hotbar (or furnace if furnace open)
+        if (slot.owner == SlotUI.Owner.Inventory)
+        {
+            if (InventoryUI.Instance != null && InventoryUI.Instance.isFurnaceActive && FurnaceManager.ActiveFurnace != null)
+            {
+                if (FurnaceManager.IsFuel(slotData.item))
+                {
+                    var fuel = FurnaceManager.ActiveFurnace.fuelSlot;
+                    if (fuel == null || fuel.item == null)
+                    {
+                        FurnaceManager.ActiveFurnace.fuelSlot = new InventorySlot(slotData.item, slotData.amount);
+                        slot.WriteItemData(null);
+                        slot.Refresh();
+                        InventoryUI.Instance.RefreshFurnaceUI();
+                        return;
+                    }
+                    else if (fuel.item.itemName == slotData.item.itemName)
+                    {
+                        int space = 64 - fuel.amount;
+                        int toAdd = Mathf.Min(space, slotData.amount);
+                        if (toAdd > 0)
+                        {
+                            fuel.amount += toAdd;
+                            int left = slotData.amount - toAdd;
+                            slot.WriteItemData(left > 0 ? new InventorySlot(slotData.item, left) : null);
+                            slot.Refresh();
+                            InventoryUI.Instance.RefreshFurnaceUI();
+                            return;
+                        }
+                    }
+                }
+                
+                var input = FurnaceManager.ActiveFurnace.inputSlot;
+                if (input == null || input.item == null)
+                {
+                    FurnaceManager.ActiveFurnace.inputSlot = new InventorySlot(slotData.item, slotData.amount);
+                    slot.WriteItemData(null);
+                    slot.Refresh();
+                    InventoryUI.Instance.RefreshFurnaceUI();
+                    return;
+                }
+                else if (input.item.itemName == slotData.item.itemName)
+                {
+                    int space = 64 - input.amount;
+                    int toAdd = Mathf.Min(space, slotData.amount);
+                    if (toAdd > 0)
+                    {
+                        input.amount += toAdd;
+                        int left = slotData.amount - toAdd;
+                        slot.WriteItemData(left > 0 ? new InventorySlot(slotData.item, left) : null);
+                        slot.Refresh();
+                        InventoryUI.Instance.RefreshFurnaceUI();
+                        return;
+                    }
+                }
+            }
+
+            if (Hotbar.Instance != null)
+            {
+                bool added = Hotbar.Instance.TryAddItem(slotData.item, slotData.amount);
+                if (added)
+                {
+                    slot.WriteItemData(null);
+                    slot.Refresh();
+                    Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+                }
+            }
+            return;
+        }
+
+        // 4. Shift-Clicking Crafting Input Slot -> Transfer back to hotbar/inventory
+        if (slot.owner == SlotUI.Owner.CraftingInput || slot.owner == SlotUI.Owner.TableCraftingInput ||
+            slot.owner == SlotUI.Owner.FurnaceInput || slot.owner == SlotUI.Owner.FurnaceFuel || slot.owner == SlotUI.Owner.FurnaceOutput)
+        {
+            bool added = false;
+            if (Hotbar.Instance != null)
+            {
+                added = Hotbar.Instance.TryAddItem(slotData.item, slotData.amount);
+            }
+            if (!added && Inventory.Instance != null)
+            {
+                added = Inventory.Instance.Add(slotData.item, slotData.amount);
+            }
+
+            if (added)
+            {
+                slot.WriteItemData(null);
+                slot.Refresh();
+                Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+            }
+            return;
         }
     }
 

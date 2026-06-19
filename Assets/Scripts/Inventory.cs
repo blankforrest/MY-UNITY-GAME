@@ -123,6 +123,8 @@ public class Inventory : MonoBehaviour
 
     public void UpdateCraftingOutput()
     {
+        craftingResultSlot = null;
+
         Item i0 = craftingSlots[0]?.item;
         Item i1 = craftingSlots[1]?.item;
         Item i2 = craftingSlots[2]?.item;
@@ -201,6 +203,11 @@ public class Inventory : MonoBehaviour
     public void ConsumeCraftingInputs()
     {
         int multiplier = GetCraftingMultiplier();
+        if (craftingResultSlot != null && craftingResultSlot.item != null && craftingResultSlot.item.toolType != ToolType.None)
+        {
+            multiplier = 1;
+        }
+
         for (int i = 0; i < craftingSlots.Length; i++)
         {
             if (craftingSlots[i] != null)
@@ -248,6 +255,12 @@ public class Inventory : MonoBehaviour
 
     public void UpdateTableCraftingOutput()
     {
+        tableCraftingResultSlot = null;
+
+        // First check tool recipes
+        CheckToolRecipes();
+        if (tableCraftingResultSlot != null) return;
+
         // Check 3x3-only recipes first
         // Recipe: Control Block (4 Planks in corners, 1 Iron/Stone in center)
         bool isControlBlock3x3 = true;
@@ -272,6 +285,131 @@ public class Inventory : MonoBehaviour
         {
             int mult = GetTableCraftingMultiplier();
             tableCraftingResultSlot = new InventorySlot(CreateItem("Control Block", 50), 1 * mult);
+            return;
+        }
+
+        // Recipe: Furnace (8 Stone in a ring)
+        bool isFurnace3x3 = true;
+        for (int i = 0; i < 9; i++)
+        {
+            var slot = tableCraftingSlots[i];
+            if (i == 4)
+            {
+                if (slot != null && slot.item != null) isFurnace3x3 = false;
+            }
+            else
+            {
+                if (slot?.item?.itemName != "Stone") isFurnace3x3 = false;
+            }
+        }
+        if (isFurnace3x3)
+        {
+            int mult = GetTableCraftingMultiplier();
+            tableCraftingResultSlot = new InventorySlot(CreateItem("Furnace", 37), 1 * mult);
+            return;
+        }
+
+        // Recipe: Wooden Stairs (Pattern A & B)
+        bool isWoodStairsA = true;
+        bool isWoodStairsB = true;
+        bool isStoneStairsA = true;
+        bool isStoneStairsB = true;
+
+        int[] indicesA = new int[] { 0, 3, 4, 6, 7, 8 };
+        int[] emptyA = new int[] { 1, 2, 5 };
+
+        int[] indicesB = new int[] { 2, 4, 5, 6, 7, 8 };
+        int[] emptyB = new int[] { 0, 1, 3 };
+
+        foreach (int idx in indicesA)
+        {
+            if (tableCraftingSlots[idx]?.item?.itemName != "Plank") isWoodStairsA = false;
+            if (tableCraftingSlots[idx]?.item?.itemName != "Stone") isStoneStairsA = false;
+        }
+        foreach (int idx in emptyA)
+        {
+            if (tableCraftingSlots[idx] != null && tableCraftingSlots[idx].item != null)
+            {
+                isWoodStairsA = false;
+                isStoneStairsA = false;
+            }
+        }
+
+        foreach (int idx in indicesB)
+        {
+            if (tableCraftingSlots[idx]?.item?.itemName != "Plank") isWoodStairsB = false;
+            if (tableCraftingSlots[idx]?.item?.itemName != "Stone") isStoneStairsB = false;
+        }
+        foreach (int idx in emptyB)
+        {
+            if (tableCraftingSlots[idx] != null && tableCraftingSlots[idx].item != null)
+            {
+                isWoodStairsB = false;
+                isStoneStairsB = false;
+            }
+        }
+
+        if (isWoodStairsA || isWoodStairsB)
+        {
+            int mult = GetTableCraftingMultiplier();
+            tableCraftingResultSlot = new InventorySlot(CreateItem("Wooden Stairs", 38), 4 * mult);
+            return;
+        }
+
+        if (isStoneStairsA || isStoneStairsB)
+        {
+            int mult = GetTableCraftingMultiplier();
+            tableCraftingResultSlot = new InventorySlot(CreateItem("Stone Stairs", 39), 4 * mult);
+            return;
+        }
+
+        // Recipe: Wooden Slab & Stone Slab
+        // Can be in Row 0 (0,1,2), Row 1 (3,4,5), or Row 2 (6,7,8)
+        bool isWoodSlab = false;
+        bool isStoneSlab = false;
+
+        for (int r = 0; r < 3; r++)
+        {
+            bool rowIsPlank = true;
+            bool rowIsStone = true;
+            for (int c = 0; c < 3; c++)
+            {
+                int idx = r * 3 + c;
+                if (tableCraftingSlots[idx]?.item?.itemName != "Plank") rowIsPlank = false;
+                if (tableCraftingSlots[idx]?.item?.itemName != "Stone") rowIsStone = false;
+            }
+
+            bool othersEmpty = true;
+            for (int or = 0; or < 3; or++)
+            {
+                if (or == r) continue;
+                for (int c = 0; c < 3; c++)
+                {
+                    int idx = or * 3 + c;
+                    if (tableCraftingSlots[idx] != null && tableCraftingSlots[idx].item != null)
+                    {
+                        othersEmpty = false;
+                    }
+                }
+            }
+
+            if (othersEmpty)
+            {
+                if (rowIsPlank) { isWoodSlab = true; break; }
+                if (rowIsStone) { isStoneSlab = true; break; }
+            }
+        }
+
+        if (isWoodSlab)
+        {
+            int mult = GetTableCraftingMultiplier();
+            tableCraftingResultSlot = new InventorySlot(CreateItem("Wooden Slab", 46), 6 * mult);
+            return;
+        }
+        if (isStoneSlab)
+        {
+            int mult = GetTableCraftingMultiplier();
+            tableCraftingResultSlot = new InventorySlot(CreateItem("Stone Slab", 47), 6 * mult);
             return;
         }
 
@@ -396,6 +534,11 @@ public class Inventory : MonoBehaviour
     public void ConsumeTableCraftingInputs()
     {
         int multiplier = GetTableCraftingMultiplier();
+        if (tableCraftingResultSlot != null && tableCraftingResultSlot.item != null && tableCraftingResultSlot.item.toolType != ToolType.None)
+        {
+            multiplier = 1;
+        }
+
         for (int i = 0; i < tableCraftingSlots.Length; i++)
         {
             if (tableCraftingSlots[i] != null)
@@ -441,12 +584,24 @@ public class Inventory : MonoBehaviour
         }
     }
 
-    private Item CreateItem(string itemName, int blockTypeID)
+    public Item CreateItem(string itemName, int blockTypeID)
     {
         Item item = ScriptableObject.CreateInstance<Item>();
         item.itemName = itemName;
         item.blockTypeID = blockTypeID;
         item.itemID = 0;
+
+        // Parse tool characteristics
+        ToolType tType;
+        ToolTier tTier;
+        ParseToolName(itemName, out tType, out tTier);
+        if (tType != ToolType.None)
+        {
+            item.toolType = tType;
+            item.toolTier = tTier;
+            item.icon = CreateToolIcon(tType, tTier);
+            return item;
+        }
 
         Sprite sprite = null;
         if (itemName.Equals("Grass", System.StringComparison.OrdinalIgnoreCase))
@@ -455,15 +610,18 @@ public class Inventory : MonoBehaviour
         }
         else
         {
-            sprite = Resources.Load<Sprite>("Sprites/" + itemName.ToLower() + "_block");
+            string cleanName = itemName.ToLower().Replace(" ", "_");
+            sprite = Resources.Load<Sprite>("Sprites/" + cleanName + "_block");
             if (sprite == null)
-                sprite = Resources.Load<Sprite>("Sprites/" + itemName.ToLower());
+                sprite = Resources.Load<Sprite>("Sprites/" + cleanName);
         }
 
         if (sprite == null)
         {
             if (itemName == "Stick")
                 sprite = CreateStickIcon();
+            else if (itemName == "Diamond")
+                sprite = CreateDiamondIcon();
             else if (itemName == "Control Block")
                 sprite = VehicleSpawner.CreateControlBlockIcon();
             else if (itemName == "Small Wheel")
@@ -503,6 +661,288 @@ public class Inventory : MonoBehaviour
         tex.SetPixels(px);
         tex.Apply();
         return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    private static Sprite CreateDiamondIcon()
+    {
+        const int SZ = 64;
+        Color cyan = new Color(0.20f, 0.85f, 0.88f, 1f);
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        for (int y = 16; y < 48; y++)
+        {
+            int width = 16 - Mathf.Abs(32 - y);
+            for (int x = 32 - width; x <= 32 + width; x++)
+            {
+                px[y * SZ + x] = cyan;
+            }
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    public static Sprite CreateToolIcon(ToolType type, ToolTier tier)
+    {
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        Color stickColor = new Color(0.48f, 0.31f, 0.16f, 1f);
+        Color matColor = Color.white;
+        switch (tier)
+        {
+            case ToolTier.Wood: matColor = new Color(0.65f, 0.50f, 0.30f, 1f); break;
+            case ToolTier.Stone: matColor = new Color(0.50f, 0.50f, 0.50f, 1f); break;
+            case ToolTier.Iron: matColor = new Color(0.85f, 0.85f, 0.85f, 1f); break;
+            case ToolTier.Diamond: matColor = new Color(0.20f, 0.80f, 0.85f, 1f); break;
+        }
+
+        for (int i = 12; i <= 40; i++)
+        {
+            SetPixelSafe(px, SZ, i, i, stickColor);
+            SetPixelSafe(px, SZ, i + 1, i, stickColor);
+            SetPixelSafe(px, SZ, i, i + 1, stickColor);
+        }
+
+        if (type == ToolType.Sword)
+        {
+            for (int i = 32; i <= 56; i++)
+            {
+                SetPixelSafe(px, SZ, i, i, matColor);
+                SetPixelSafe(px, SZ, i - 1, i + 1, matColor);
+                SetPixelSafe(px, SZ, i + 1, i - 1, matColor);
+            }
+            for (int offset = -5; offset <= 5; offset++)
+            {
+                SetPixelSafe(px, SZ, 28 - offset, 28 + offset, stickColor);
+                SetPixelSafe(px, SZ, 29 - offset, 29 + offset, stickColor);
+            }
+        }
+        else if (type == ToolType.Pickaxe)
+        {
+            for (int offset = -14; offset <= 14; offset++)
+            {
+                int hx = 40 - offset;
+                int hy = 40 + offset;
+                int curve = (14 * 14 - offset * offset) / 18;
+                hx -= curve;
+                hy -= curve;
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    for (int dy = -1; dy <= 1; dy++)
+                    {
+                        SetPixelSafe(px, SZ, hx + dx, hy + dy, matColor);
+                    }
+                }
+            }
+        }
+        else if (type == ToolType.Axe)
+        {
+            for (int x = 38; x <= 52; x++)
+            {
+                for (int y = 38; y <= 52; y++)
+                {
+                    int dx = x - 40;
+                    int dy = y - 40;
+                    if (dx + dy >= 4 && dx - dy >= -6 && dy - dx >= -6)
+                    {
+                        SetPixelSafe(px, SZ, x, y, matColor);
+                    }
+                }
+            }
+        }
+        else if (type == ToolType.Shovel)
+        {
+            for (int dx = -6; dx <= 6; dx++)
+            {
+                for (int dy = -6; dy <= 6; dy++)
+                {
+                    if (dx * dx + dy * dy <= 36)
+                    {
+                        SetPixelSafe(px, SZ, 44 + dx, 44 + dy, matColor);
+                    }
+                }
+            }
+            SetPixelSafe(px, SZ, 51, 51, matColor);
+        }
+        else if (type == ToolType.Rake)
+        {
+            for (int offset = -12; offset <= 12; offset++)
+            {
+                int hx = 42 - offset;
+                int hy = 42 + offset;
+                SetPixelSafe(px, SZ, hx, hy, matColor);
+                SetPixelSafe(px, SZ, hx + 1, hy, matColor);
+                SetPixelSafe(px, SZ, hx, hy + 1, matColor);
+
+                if (offset % 4 == 0)
+                {
+                    for (int p = 0; p <= 4; p++)
+                    {
+                        SetPixelSafe(px, SZ, hx + p, hy + p, matColor);
+                    }
+                }
+            }
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    private static void SetPixelSafe(Color[] px, int sz, int x, int y, Color c)
+    {
+        if (x >= 0 && x < sz && y >= 0 && y < sz)
+        {
+            px[y * sz + x] = c;
+        }
+    }
+
+    private static void ParseToolName(string name, out ToolType type, out ToolTier tier)
+    {
+        type = ToolType.None;
+        tier = ToolTier.None;
+        string lower = name.ToLower();
+        
+        if (lower.Contains("wooden")) tier = ToolTier.Wood;
+        else if (lower.Contains("stone")) tier = ToolTier.Stone;
+        else if (lower.Contains("iron")) tier = ToolTier.Iron;
+        else if (lower.Contains("diamond")) tier = ToolTier.Diamond;
+
+        if (lower.Contains("pickaxe")) type = ToolType.Pickaxe;
+        else if (lower.Contains("axe")) type = ToolType.Axe;
+        else if (lower.Contains("shovel")) type = ToolType.Shovel;
+        else if (lower.Contains("rake")) type = ToolType.Rake;
+        else if (lower.Contains("sword")) type = ToolType.Sword;
+    }
+
+    private void CheckToolRecipes()
+    {
+        bool stick4 = tableCraftingSlots[4]?.item?.itemName == "Stick";
+        bool stick7 = tableCraftingSlots[7]?.item?.itemName == "Stick";
+        
+        string matName = null;
+        ToolTier tier = ToolTier.None;
+        
+        System.Action<Item> checkMat = (itm) => {
+            if (itm == null) return;
+            string name = itm.itemName;
+            if (name == "Plank") { matName = "Plank"; tier = ToolTier.Wood; }
+            else if (name == "Stone") { matName = "Stone"; tier = ToolTier.Stone; }
+            else if (name == "Iron") { matName = "Iron"; tier = ToolTier.Iron; }
+            else if (name == "Diamond") { matName = "Diamond"; tier = ToolTier.Diamond; }
+        };
+
+        Item i0 = tableCraftingSlots[0]?.item;
+        Item i1 = tableCraftingSlots[1]?.item;
+        Item i2 = tableCraftingSlots[2]?.item;
+        Item i3 = tableCraftingSlots[3]?.item;
+        Item i4 = tableCraftingSlots[4]?.item;
+        Item i5 = tableCraftingSlots[5]?.item;
+        Item i6 = tableCraftingSlots[6]?.item;
+        Item i7 = tableCraftingSlots[7]?.item;
+        Item i8 = tableCraftingSlots[8]?.item;
+
+        if (i7?.itemName == "Stick" && i1 != null && i4 != null && i1.itemName == i4.itemName)
+        {
+            checkMat(i1);
+            if (tier != ToolTier.None && i0 == null && i2 == null && i3 == null && i5 == null && i6 == null && i8 == null)
+            {
+                string toolName = GetToolNameString(ToolType.Sword, tier);
+                tableCraftingResultSlot = new InventorySlot(CreateItem(toolName, 0), 1);
+                return;
+            }
+        }
+
+        if (stick4 && stick7 && i1 != null)
+        {
+            checkMat(i1);
+            if (tier != ToolTier.None && i0 == null && i2 == null && i3 == null && i5 == null && i6 == null && i8 == null)
+            {
+                string toolName = GetToolNameString(ToolType.Shovel, tier);
+                tableCraftingResultSlot = new InventorySlot(CreateItem(toolName, 0), 1);
+                return;
+            }
+        }
+
+        if (stick4 && stick7 && i0 != null && i1 != null && i2 != null && i0.itemName == i1.itemName && i1.itemName == i2.itemName)
+        {
+            checkMat(i0);
+            if (tier != ToolTier.None && i3 == null && i5 == null && i6 == null && i8 == null)
+            {
+                string toolName = GetToolNameString(ToolType.Pickaxe, tier);
+                tableCraftingResultSlot = new InventorySlot(CreateItem(toolName, 0), 1);
+                return;
+            }
+        }
+
+        if (stick4 && stick7)
+        {
+            if (i0 != null && i1 != null && i3 != null && i0.itemName == i1.itemName && i1.itemName == i3.itemName)
+            {
+                checkMat(i0);
+                if (tier != ToolTier.None && i2 == null && i5 == null && i6 == null && i8 == null)
+                {
+                    string toolName = GetToolNameString(ToolType.Axe, tier);
+                    tableCraftingResultSlot = new InventorySlot(CreateItem(toolName, 0), 1);
+                    return;
+                }
+            }
+            if (i1 != null && i2 != null && i5 != null && i1.itemName == i2.itemName && i2.itemName == i5.itemName)
+            {
+                checkMat(i1);
+                if (tier != ToolTier.None && i0 == null && i3 == null && i6 == null && i8 == null)
+                {
+                    string toolName = GetToolNameString(ToolType.Axe, tier);
+                    tableCraftingResultSlot = new InventorySlot(CreateItem(toolName, 0), 1);
+                    return;
+                }
+            }
+        }
+
+        if (stick4 && stick7)
+        {
+            if (i0 != null && i1 != null && i0.itemName == i1.itemName)
+            {
+                checkMat(i0);
+                if (tier != ToolTier.None && i2 == null && i3 == null && i5 == null && i6 == null && i8 == null)
+                {
+                    string toolName = GetToolNameString(ToolType.Rake, tier);
+                    tableCraftingResultSlot = new InventorySlot(CreateItem(toolName, 0), 1);
+                    return;
+                }
+            }
+            if (i1 != null && i2 != null && i1.itemName == i2.itemName)
+            {
+                checkMat(i1);
+                if (tier != ToolTier.None && i0 == null && i3 == null && i5 == null && i6 == null && i8 == null)
+                {
+                    string toolName = GetToolNameString(ToolType.Rake, tier);
+                    tableCraftingResultSlot = new InventorySlot(CreateItem(toolName, 0), 1);
+                    return;
+                }
+            }
+        }
+    }
+
+    private string GetToolNameString(ToolType type, ToolTier tier)
+    {
+        string tierStr = "";
+        switch (tier)
+        {
+            case ToolTier.Wood: tierStr = "Wooden"; break;
+            case ToolTier.Stone: tierStr = "Stone"; break;
+            case ToolTier.Iron: tierStr = "Iron"; break;
+            case ToolTier.Diamond: tierStr = "Diamond"; break;
+        }
+        return $"{tierStr} {type.ToString()}";
     }
 }
 

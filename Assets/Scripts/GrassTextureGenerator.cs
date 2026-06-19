@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 25; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side
+    public const int TILE_COUNT = 27; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side, furnace front unlit, furnace front lit
 
     public static Texture2D Create()
     {
@@ -51,7 +51,9 @@ public static class GrassTextureGenerator
                               : tile == 21 ? IronBlock(lx, y)
                               : tile == 22 ? MinecraftGlass(lx, y)
                               : tile == 23 ? CraftingTableTop(lx, y)
-                                           : CraftingTableSide(lx, y);
+                              : tile == 24 ? CraftingTableSide(lx, y)
+                              : tile == 25 ? FurnaceFront(lx, y, false)
+                                           : FurnaceFront(lx, y, true);
             }
         }
 
@@ -479,7 +481,7 @@ public static class GrassTextureGenerator
     /// <summary>Returns the 4 atlas UVs for a given face and block type.</summary>
     /// <param name="face">0=back,1=front,2=top,3=bottom,4=left,5=right</param>
     /// <param name="blockType">1=Wood, 2=Plank, 3=Stone, 4=Grass, 5=Dirt, 6=Grass Slab, 7=Water, 8=Sand, 9=Flower</param>
-    public static Vector2[] GetBlockUVs(int face, byte blockType)
+    public static Vector2[] GetBlockUVs(int face, byte blockType, bool isLit = false)
     {
         int tile;
         if (blockType == 1)      // Wood: top/bottom uses WoodTop, sides use WoodSide
@@ -524,6 +526,17 @@ public static class GrassTextureGenerator
             tile = (face == 2) ? 23   // Top
                  : (face == 3) ? 6    // Bottom (Plank)
                  :               24;  // Sides
+        else if (blockType == 37) // Furnace
+            tile = (face == 2 || face == 3) ? 3                      // Top / Bottom (Stone)
+                 : (isLit ? 26 : 25);                                // Sides (Furnace Front)
+        else if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42) // Wooden Stairs
+            tile = 6;                                                // Plank texture
+        else if (blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45) // Stone Stairs
+            tile = 3;                                                // Stone texture
+        else if (blockType == 46) // Wooden Slab
+            tile = 6;                                                // Plank texture
+        else if (blockType == 47) // Stone Slab
+            tile = 3;                                                // Stone texture
         else                     // Grass (blockType == 4 or 6)
             tile = (face == 2) ? 0   // top    → grass top
                  : (face == 3) ? 2   // bottom → dirt
@@ -643,6 +656,42 @@ public static class GrassTextureGenerator
         return new Color(0.80f, 0.90f, 0.95f, 0.15f);
     }
 
+    static Color FurnaceFront(int x, int y, bool lit)
+    {
+        // Dark gray/stone border frame
+        Color stoneColor = Stone(x, y);
+
+        // Inner furnace chamber opening (x: 3..12, y: 3..8)
+        if (x >= 3 && x <= 12 && y >= 3 && y <= 8)
+        {
+            if (lit)
+            {
+                // Active fire glow (orange/yellow/red)
+                float n = Mathf.PerlinNoise(x * 1.5f, y * 1.5f);
+                if (x >= 5 && x <= 10 && y >= 4 && y <= 7)
+                {
+                    return Color.Lerp(new Color(1f, 0.9f, 0f), new Color(1f, 0.5f, 0f), n); // bright yellow/orange core
+                }
+                return Color.Lerp(new Color(0.9f, 0.3f, 0f), new Color(0.2f, 0.1f, 0.1f), n); // dark orange/soot outer
+            }
+            else
+            {
+                // Unlit chamber (black/dark gray hollow)
+                return new Color(0.12f, 0.12f, 0.12f);
+            }
+        }
+
+        // Draw a small furnace vent/hatch outline at the top (y: 11..13, x: 4..11)
+        if (y >= 11 && y <= 13 && x >= 4 && x <= 11)
+        {
+            if (y == 12 && x >= 5 && x <= 10)
+                return new Color(0.28f, 0.28f, 0.30f); // iron handle
+            return new Color(0.18f, 0.18f, 0.20f); // dark frame
+        }
+
+        return stoneColor;
+    }
+
     static Color CraftingTableTop(int x, int y)
     {
         // Nice warm plank color base
@@ -749,6 +798,8 @@ public static class GrassTextureGenerator
             case 22: return MinecraftGlass(lx, ly);
             case 23: return CraftingTableTop(lx, ly);
             case 24: return CraftingTableSide(lx, ly);
+            case 25: return FurnaceFront(lx, ly, false);
+            case 26: return FurnaceFront(lx, ly, true);
             default: return Color.clear;
         }
     }

@@ -11,6 +11,7 @@ public class PlayerController : MonoBehaviour
     public float gravity = -20f; 
     public float mouseSensitivity = 0.1f; 
     public float lookSmoothTime = 0.02f; // Smoothing to fix jittery camera
+    public bool isCreativeMode = false;
 
     private CharacterController controller;
     private Transform cameraTransform;
@@ -44,6 +45,7 @@ public class PlayerController : MonoBehaviour
         controller = GetComponent<CharacterController>();
 
         controller.radius = 0.3f; // slim for 1-block-wide gaps
+        controller.stepOffset = 0.51f; // allow climbing 0.5-unit stair steps
 
         // Ignore collision with all existing chunk foliage colliders
         foreach (var chunk in FindObjectsByType<Chunk>())
@@ -73,6 +75,17 @@ public class PlayerController : MonoBehaviour
         Cursor.visible = false;
 
         spawnPoint = transform.position;
+
+        // Set initial game mode from Main Menu choice
+        if (SaveLoadManager.Instance != null && SaveLoadManager.Instance.HasSaveFile())
+        {
+            // Loaded game: the creative mode will be restored by SaveLoadManager.RestorePlayerAndInventory()
+        }
+        else
+        {
+            // New game: set based on Main Menu selectedGameMode
+            isCreativeMode = (MainMenu.selectedGameMode == "Creative");
+        }
 
         // Create procedural UIs
         Canvas canvas = FindAnyObjectByType<Canvas>();
@@ -162,7 +175,7 @@ public class PlayerController : MonoBehaviour
         if (controller.enabled)
         {
             isGrounded = controller.isGrounded;
-            if (isGrounded && velocity.y < 0)
+            if (isGrounded && velocity.y < 0 && !isCreativeMode)
             {
                 velocity.y = -2f; // Slight downward force to keep grounded
             }
@@ -290,6 +303,11 @@ public class PlayerController : MonoBehaviour
         if (isRunning) speed = runSpeed;
         else if (isSneaking) speed = sneakSpeed;
 
+        if (isCreativeMode)
+        {
+            speed *= 4f; // 100% faster than the previous speed factor of 2f
+        }
+
         // Prevent falling off edges when sneaking
         if (isSneaking && isGrounded)
         {
@@ -326,10 +344,23 @@ public class PlayerController : MonoBehaviour
             controller.Move(move * speed * Time.deltaTime);
         }
 
-        // Jump / Swim
+        // Jump / Swim / Flight
         if (Keyboard.current != null)
         {
-            if (inWater)
+            if (isCreativeMode)
+            {
+                velocity.y = 0f;
+                float verticalSpeed = (isRunning ? runSpeed : walkSpeed) * 4f; // 100% faster vertical flight speed
+                if (Keyboard.current.spaceKey.isPressed)
+                {
+                    velocity.y = verticalSpeed;
+                }
+                else if (Keyboard.current.leftShiftKey.isPressed || Keyboard.current.leftCtrlKey.isPressed)
+                {
+                    velocity.y = -verticalSpeed;
+                }
+            }
+            else if (inWater)
             {
                 if (Keyboard.current.spaceKey.isPressed)
                 {
@@ -403,7 +434,11 @@ public class PlayerController : MonoBehaviour
         }
 
         // Gravity / Buoyancy
-        if (inWater)
+        if (isCreativeMode)
+        {
+            // No gravity in creative mode
+        }
+        else if (inWater)
         {
             // Slower sinking and drag in water
             velocity.y += (gravity * 0.25f) * Time.deltaTime;
@@ -411,6 +446,7 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
+            // Normal gravity
             velocity.y += gravity * Time.deltaTime;
         }
         
@@ -420,7 +456,7 @@ public class PlayerController : MonoBehaviour
         }
 
         // ── Suffocation tick (player is pinned inside a block) ────────────────
-        if (isStuck)
+        if (isStuck && !isCreativeMode)
         {
             // Hard-pin position — keep controller disabled so physics can't push player out
             controller.enabled = false;

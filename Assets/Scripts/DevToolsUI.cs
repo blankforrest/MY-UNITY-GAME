@@ -270,6 +270,8 @@ public class DevToolsUI : MonoBehaviour
         CreateDevButton("SpawnHereBtn", "🚢 Spawn Boat Here (F9)",       SpawnBoatHere);
         CreateDevButton("TeleportBtn",  "🌊 Teleport & Spawn (F10)",     TeleportToSavedSpot);
 
+
+
         // Footer Hint Text
         var hintGO = CreateUIObject("Hint", _panel.transform);
         SetLayoutHeight(hintGO, 40f);
@@ -281,7 +283,7 @@ public class DevToolsUI : MonoBehaviour
         hintTmp.wordSpacing = -0.5f;
     }
 
-    private void CreateDevButton(string name, string label, UnityEngine.Events.UnityAction callback)
+    private GameObject CreateDevButton(string name, string label, UnityEngine.Events.UnityAction callback)
     {
         var go = CreateUIObject(name, _panel.transform);
         SetLayoutHeight(go, 32f);
@@ -307,7 +309,10 @@ public class DevToolsUI : MonoBehaviour
         tmp.fontSize = 11f;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.color = Color.white;
+
+        return go;
     }
+
 
     private static GameObject CreateUIObject(string name, Transform parent)
     {

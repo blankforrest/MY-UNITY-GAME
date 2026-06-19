@@ -9,7 +9,7 @@ using TMPro;
 /// </summary>
 public class SlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
-    public enum Owner { Inventory, Hotbar, CraftingInput, CraftingOutput, TableCraftingInput, TableCraftingOutput }
+    public enum Owner { Inventory, Hotbar, CraftingInput, CraftingOutput, TableCraftingInput, TableCraftingOutput, FurnaceInput, FurnaceFuel, FurnaceOutput }
 
     [HideInInspector] public Owner              owner;
     [HideInInspector] public int                index;
@@ -56,6 +56,18 @@ public class SlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
             if (Inventory.Instance == null) return null;
             return Inventory.Instance.tableCraftingResultSlot;
         }
+        else if (owner == Owner.FurnaceInput)
+        {
+            return FurnaceManager.ActiveFurnace?.inputSlot;
+        }
+        else if (owner == Owner.FurnaceFuel)
+        {
+            return FurnaceManager.ActiveFurnace?.fuelSlot;
+        }
+        else if (owner == Owner.FurnaceOutput)
+        {
+            return FurnaceManager.ActiveFurnace?.outputSlot;
+        }
         return Hotbar.Instance?.GetSlotData(index);
     }
 
@@ -97,6 +109,30 @@ public class SlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
             {
                 Inventory.Instance.tableCraftingResultSlot = (item != null) ? new InventorySlot(item, amount) : null;
                 if (!silent) Inventory.Instance.onInventoryChangedCallback?.Invoke();
+            }
+        }
+        else if (owner == Owner.FurnaceInput)
+        {
+            if (FurnaceManager.ActiveFurnace != null)
+            {
+                FurnaceManager.ActiveFurnace.inputSlot = (item != null) ? new InventorySlot(item, amount) : null;
+                if (!silent) InventoryUI.Instance?.RefreshFurnaceUI();
+            }
+        }
+        else if (owner == Owner.FurnaceFuel)
+        {
+            if (FurnaceManager.ActiveFurnace != null)
+            {
+                FurnaceManager.ActiveFurnace.fuelSlot = (item != null) ? new InventorySlot(item, amount) : null;
+                if (!silent) InventoryUI.Instance?.RefreshFurnaceUI();
+            }
+        }
+        else if (owner == Owner.FurnaceOutput)
+        {
+            if (FurnaceManager.ActiveFurnace != null)
+            {
+                FurnaceManager.ActiveFurnace.outputSlot = (item != null) ? new InventorySlot(item, amount) : null;
+                if (!silent) InventoryUI.Instance?.RefreshFurnaceUI();
             }
         }
         else                          Hotbar.Instance?.SetSlot(index, item, amount);

@@ -368,6 +368,11 @@ public class Chunk : MonoBehaviour
                     voxelMap[x, surfaceY + 1, z] = 1; // replaced by trunk
             }
         }
+
+        if (SaveLoadManager.Instance != null)
+        {
+            SaveLoadManager.Instance.ApplyChunkModifications(chunkPos, voxelMap);
+        }
     }
 
     public void EditVoxel(Vector3 localPosition, byte newID)
@@ -565,6 +570,21 @@ public class Chunk : MonoBehaviour
             return;
         }
 
+        // ── Wooden Stairs (IDs 38, 40, 41, 42) & Stone Stairs (IDs 39, 43, 44, 45) ──────────────────
+        if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42 ||
+            blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45)
+        {
+            AddStairsBlock(pos, blockType);
+            return;
+        }
+
+        // ── Wooden Slab (ID 46) & Stone Slab (ID 47) ──────────────────
+        if (blockType == 46 || blockType == 47)
+        {
+            AddSlabBlock(pos, blockType);
+            return;
+        }
+
         bool isWater = (blockType == 7);
         byte uvBlockType = blockType;
 
@@ -624,7 +644,17 @@ public class Chunk : MonoBehaviour
                 }
 
                 // Per-face atlas UVs based on block type
-                Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, uvBlockType);
+                bool isFurnaceLit = false;
+                if (uvBlockType == 37 && FurnaceManager.Instance != null)
+                {
+                    Vector3Int worldPos = new Vector3Int(
+                        Mathf.FloorToInt(transform.position.x + pos.x),
+                        Mathf.FloorToInt(transform.position.y + pos.y),
+                        Mathf.FloorToInt(transform.position.z + pos.z)
+                    );
+                    isFurnaceLit = FurnaceManager.Instance.IsFurnaceBurning(worldPos);
+                }
+                Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, uvBlockType, isFurnaceLit);
                 if (isWater)
                 {
                     waterUvs.AddRange(faceUVs);
@@ -750,6 +780,121 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    void AddStairsBlock(Vector3 pos, byte blockType)
+    {
+        // 38, 40, 41, 42 are Wooden (uses Plank ID 2), 39, 43, 44, 45 are Stone (uses Stone ID 3)
+        bool isWood = (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42);
+        byte textureBlockType = isWood ? (byte)2 : (byte)3;
+
+        // Bottom box: (0, 0, 0) to (1, 0.5, 1)
+        AddSubBox(pos, new Vector3(0f, 0f, 0f), new Vector3(1f, 0.5f, 1f), textureBlockType);
+
+        // Top box: depends on orientation
+        Vector3 topMin = Vector3.zero;
+        Vector3 topMax = Vector3.zero;
+
+        if (blockType == 38 || blockType == 39) // South: step rises to +Z (back half is solid)
+        {
+            topMin = new Vector3(0f, 0.5f, 0.5f);
+            topMax = new Vector3(1f, 1f, 1f);
+        }
+        else if (blockType == 40 || blockType == 43) // North: step rises to -Z (front half is solid)
+        {
+            topMin = new Vector3(0f, 0.5f, 0f);
+            topMax = new Vector3(1f, 1f, 0.5f);
+        }
+        else if (blockType == 41 || blockType == 44) // West: step rises to +X (right half is solid)
+        {
+            topMin = new Vector3(0.5f, 0.5f, 0f);
+            topMax = new Vector3(1f, 1f, 1f);
+        }
+        else if (blockType == 42 || blockType == 45) // East: step rises to -X (left half is solid)
+        {
+            topMin = new Vector3(0f, 0.5f, 0f);
+            topMax = new Vector3(0.5f, 1f, 1f);
+        }
+
+        AddSubBox(pos, topMin, topMax, textureBlockType);
+    }
+
+    void AddSlabBlock(Vector3 pos, byte blockType)
+    {
+        // 46 is Wooden Slab (uses Plank ID 2), 47 is Stone Slab (uses Stone ID 3)
+        byte textureBlockType = (blockType == 46) ? (byte)2 : (byte)3;
+
+        // Slab box: (0, 0, 0) to (1, 0.5, 1)
+        AddSubBox(pos, new Vector3(0f, 0f, 0f), new Vector3(1f, 0.5f, 1f), textureBlockType);
+    }
+
+    void AddSubBox(Vector3 pos, Vector3 min, Vector3 max, byte textureBlockType)
+    {
+        for (int p = 0; p < 6; p++)
+        {
+            Vector3[] faceVerts = GetBoxFaceVertices(p, min, max);
+            for (int i = 0; i < 4; i++)
+            {
+                vertices.Add(pos + faceVerts[i]);
+            }
+
+            Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, textureBlockType);
+            uvs.AddRange(faceUVs);
+
+            triangles.Add(vertexIndex);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 3);
+
+            vertexIndex += 4;
+        }
+    }
+
+    Vector3[] GetBoxFaceVertices(int face, Vector3 min, Vector3 max)
+    {
+        Vector3[] verts = new Vector3[4];
+        switch (face)
+        {
+            case 0: // Back
+                verts[0] = new Vector3(min.x, min.y, min.z);
+                verts[1] = new Vector3(min.x, max.y, min.z);
+                verts[2] = new Vector3(max.x, min.y, min.z);
+                verts[3] = new Vector3(max.x, max.y, min.z);
+                break;
+            case 1: // Front
+                verts[0] = new Vector3(max.x, min.y, max.z);
+                verts[1] = new Vector3(max.x, max.y, max.z);
+                verts[2] = new Vector3(min.x, min.y, max.z);
+                verts[3] = new Vector3(min.x, max.y, max.z);
+                break;
+            case 2: // Top
+                verts[0] = new Vector3(min.x, max.y, min.z);
+                verts[1] = new Vector3(min.x, max.y, max.z);
+                verts[2] = new Vector3(max.x, max.y, min.z);
+                verts[3] = new Vector3(max.x, max.y, max.z);
+                break;
+            case 3: // Bottom
+                verts[0] = new Vector3(max.x, min.y, min.z);
+                verts[1] = new Vector3(max.x, min.y, max.z);
+                verts[2] = new Vector3(min.x, min.y, min.z);
+                verts[3] = new Vector3(min.x, min.y, max.z);
+                break;
+            case 4: // Left
+                verts[0] = new Vector3(min.x, min.y, max.z);
+                verts[1] = new Vector3(min.x, max.y, max.z);
+                verts[2] = new Vector3(min.x, min.y, min.z);
+                verts[3] = new Vector3(min.x, max.y, min.z);
+                break;
+            case 5: // Right
+                verts[0] = new Vector3(max.x, min.y, min.z);
+                verts[1] = new Vector3(max.x, max.y, min.z);
+                verts[2] = new Vector3(max.x, min.y, max.z);
+                verts[3] = new Vector3(max.x, max.y, max.z);
+                break;
+        }
+        return verts;
+    }
+
     void EnsureGlassChild()
     {
         Transform t = transform.Find("Glass");
@@ -866,8 +1011,11 @@ public class Chunk : MonoBehaviour
 
         bool currentIsWater  = (currentBlockType == 7);
         bool neighborIsWater = (neighbor == 7);
-        // Flowers, leaves, and glass (ID 35) are transparent — treat like air for solid-mesh culling purposes
-        bool neighborIsFlower = (neighbor == 9 || neighbor == 10 || neighbor == 11 || neighbor == 12 || neighbor == 35);
+        // Flowers, leaves, glass (ID 35), and stairs are transparent — treat like air for solid-mesh culling purposes
+        bool neighborIsFlower = (neighbor == 9 || neighbor == 10 || neighbor == 11 || neighbor == 12 || neighbor == 35 ||
+                                 neighbor == 38 || neighbor == 40 || neighbor == 41 || neighbor == 42 ||
+                                 neighbor == 39 || neighbor == 43 || neighbor == 44 || neighbor == 45 ||
+                                 neighbor == 46 || neighbor == 47);
 
         if (currentIsWater)
         {

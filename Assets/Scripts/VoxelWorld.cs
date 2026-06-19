@@ -392,7 +392,7 @@ public class VoxelWorld : MonoBehaviour
         if (blockID == 0 && !suppressDrop)
         {
             byte existing = chunk.GetVoxel(lx, ly, lz);
-            if (existing != 0 && (existing <= 12 || existing == 20 || existing == 21 || existing == 22 || existing == 23 || existing == 50 || existing == 36 || (existing >= 30 && existing <= 35)))
+            if (existing != 0 && (existing <= 12 || existing == 20 || existing == 21 || existing == 22 || existing == 23 || existing == 50 || existing == 36 || (existing >= 30 && existing <= 47)))
             {
                 Item drop = null;
                 if (blockDrops != null && existing < blockDrops.Length)
@@ -400,10 +400,21 @@ public class VoxelWorld : MonoBehaviour
                     drop = blockDrops[existing];
                 }
 
+                // Pickaxe requirement check
+                bool isPickaxeRequired = (existing == 3 || existing == 30 || existing == 31 || existing == 32 || existing == 33 || existing == 37 || existing == 47 || existing == 39 || existing == 43 || existing == 44 || existing == 45);
+                InventorySlot selectedSlot = Hotbar.Instance != null ? Hotbar.Instance.GetSelectedSlot() : null;
+                Item heldItem = selectedSlot?.item;
+                bool hasPickaxe = (heldItem != null && heldItem.toolType == ToolType.Pickaxe);
+
                 // Robust fallback for Wood (1), Plank (2), Stone (3)
                 if (drop == null)
                 {
-                    if (existing == 1)
+                    if (isPickaxeRequired && !hasPickaxe)
+                    {
+                        // Drops nothing!
+                        drop = null;
+                    }
+                    else if (existing == 1)
                     {
                         drop = ScriptableObject.CreateInstance<Item>();
                         drop.itemName = "Wood";
@@ -439,7 +450,6 @@ public class VoxelWorld : MonoBehaviour
                         Sprite loaded = Resources.Load<Sprite>("Sprites/dirt_block");
                         drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.45f, 0.30f, 0.18f));
                     }
-
                     else if (existing == 8 || existing == 34)
                     {
                         drop = ScriptableObject.CreateInstance<Item>();
@@ -449,10 +459,23 @@ public class VoxelWorld : MonoBehaviour
                     }
                     else if (existing == 30)
                     {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Coal Ore";
-                        drop.blockTypeID = 30;
-                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.2f, 0.2f, 0.2f), 30);
+                        if (hasPickaxe && UnityEngine.Random.value < 0.10f)
+                        {
+                            drop = Inventory.Instance != null ? Inventory.Instance.CreateItem("Diamond", 0) : null;
+                            if (drop == null)
+                            {
+                                drop = ScriptableObject.CreateInstance<Item>();
+                                drop.itemName = "Diamond";
+                                drop.blockTypeID = 0;
+                            }
+                        }
+                        else
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Coal Ore";
+                            drop.blockTypeID = 30;
+                            drop.icon = StarterItems.MakeBlockIcon(new Color(0.2f, 0.2f, 0.2f), 30);
+                        }
                     }
                     else if (existing == 31)
                     {
@@ -486,6 +509,46 @@ public class VoxelWorld : MonoBehaviour
                         drop.blockTypeID = 36;
                         Sprite loaded = Resources.Load<Sprite>("Sprites/crafting_table");
                         drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f), 36);
+                    }
+                    else if (existing == 37)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Furnace";
+                        drop.blockTypeID = 37;
+                        Sprite loaded = Resources.Load<Sprite>("Sprites/furnace");
+                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.5f, 0.5f, 0.5f), 37);
+                    }
+                    else if (existing == 38 || existing == 40 || existing == 41 || existing == 42)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Wooden Stairs";
+                        drop.blockTypeID = 38;
+                        Sprite loaded = Resources.Load<Sprite>("Sprites/wooden_stairs");
+                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f), 38);
+                    }
+                    else if (existing == 39 || existing == 43 || existing == 44 || existing == 45)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Stone Stairs";
+                        drop.blockTypeID = 39;
+                        Sprite loaded = Resources.Load<Sprite>("Sprites/stone_stairs");
+                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.52f, 0.52f, 0.54f), 39);
+                    }
+                    else if (existing == 46)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Wooden Slab";
+                        drop.blockTypeID = 46;
+                        Sprite loaded = Resources.Load<Sprite>("Sprites/wooden_slab");
+                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f), 46);
+                    }
+                    else if (existing == 47)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Stone Slab";
+                        drop.blockTypeID = 47;
+                        Sprite loaded = Resources.Load<Sprite>("Sprites/stone_slab");
+                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.52f, 0.52f, 0.54f), 47);
                     }
                     else if (existing == 9)
                     {
@@ -548,9 +611,13 @@ public class VoxelWorld : MonoBehaviour
                 if (drop != null) DroppedItem.Spawn(drop, 1, pos, existing);
             }
         }
-
         chunk.EditVoxel(local, blockID);
         UpdateNeighbors(local, chunk.chunkPos);
+
+        if (SaveLoadManager.Instance != null)
+        {
+            SaveLoadManager.Instance.RecordModification(pos, blockID);
+        }
 
         // If we broke a block, break any flower sitting directly on top of it
         if (blockID == 0)
@@ -728,5 +795,16 @@ public class VoxelWorld : MonoBehaviour
         if (x == VoxelData.ChunkWidth-1  && chunks.TryGetValue(cp + Vector2.right, out Chunk cr)) cr.UpdateChunk();
         if (z == 0                       && chunks.TryGetValue(cp + Vector2.down,  out Chunk cd)) cd.UpdateChunk();
         if (z == VoxelData.ChunkWidth-1  && chunks.TryGetValue(cp + Vector2.up,    out Chunk cu)) cu.UpdateChunk();
+    }
+
+    public void RebuildAllChunks()
+    {
+        foreach (var kvp in chunks)
+        {
+            if (kvp.Value != null)
+            {
+                kvp.Value.Initialize(kvp.Key, chunkMaterial);
+            }
+        }
     }
 }

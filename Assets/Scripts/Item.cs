@@ -1,5 +1,8 @@
 using UnityEngine;
 
+public enum ToolType { None, Pickaxe, Axe, Shovel, Rake, Sword }
+public enum ToolTier { None, Wood, Stone, Iron, Diamond }
+
 [CreateAssetMenu(fileName = "New Item", menuName = "Inventory/Item")]
 public class Item : ScriptableObject
 {
@@ -12,4 +15,7 @@ public class Item : ScriptableObject
 
     [Tooltip("Voxel block type this item places when right-clicked (0 = not a block item, e.g. tools).")]
     public int blockTypeID = 0;
+
+    public ToolType toolType = ToolType.None;
+    public ToolTier toolTier = ToolTier.None;
 }

@@ -30,6 +30,7 @@ public class DroppedItem : MonoBehaviour
 
     void Start()
     {
+        gameObject.layer = 2; // "Ignore Raycast" layer
         startY = transform.position.y;
 
         trigger = GetComponent<SphereCollider>();
@@ -66,6 +67,7 @@ public class DroppedItem : MonoBehaviour
     void BuildMiniCube()
     {
         GameObject visual = new GameObject("Visual");
+        visual.layer = 2; // "Ignore Raycast" layer
         visual.transform.SetParent(transform);
         visual.transform.localPosition = Vector3.zero;
         visual.transform.localScale    = Vector3.one;
@@ -108,9 +110,21 @@ public class DroppedItem : MonoBehaviour
             }
             else
             {
-                // Default: mini voxel cube
+                // Default: mini voxel cube/stair
                 const float SIZE = 0.175f;
-                mf.mesh = BuildCubeMesh(SIZE);
+                if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42 ||
+                    blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45)
+                {
+                    mf.mesh = BuildStairMesh(SIZE);
+                }
+                else if (blockType == 46 || blockType == 47)
+                {
+                    mf.mesh = BuildSlabMesh(SIZE);
+                }
+                else
+                {
+                    mf.mesh = BuildCubeMesh(SIZE);
+                }
 
                 if (VoxelWorld.Instance != null && VoxelWorld.Instance.chunkMaterial != null)
                 {
@@ -169,6 +183,129 @@ public class DroppedItem : MonoBehaviour
         mesh.SetTriangles(tris, 0);
         mesh.RecalculateNormals();
         return mesh;
+    }
+
+    Mesh BuildSlabMesh(float s)
+    {
+        var verts = new System.Collections.Generic.List<Vector3>();
+        var uvs2  = new System.Collections.Generic.List<Vector2>();
+        var tris  = new System.Collections.Generic.List<int>();
+
+        // Slab: from (-s, -s, -s) to (s, 0, s)
+        AddMiniBox(verts, uvs2, tris, new Vector3(-s, -s, -s), new Vector3(s, 0f, s));
+
+        Mesh mesh = new Mesh();
+        mesh.vertices = verts.ToArray();
+        mesh.uv = uvs2.ToArray();
+        mesh.triangles = tris.ToArray();
+        mesh.RecalculateNormals();
+        return mesh;
+    }
+
+    Mesh BuildStairMesh(float s)
+    {
+        var verts = new System.Collections.Generic.List<Vector3>();
+        var uvs2  = new System.Collections.Generic.List<Vector2>();
+        var tris  = new System.Collections.Generic.List<int>();
+
+        // We build two boxes:
+        // Box 1 (Bottom): (-s, -s, -s) to (s, 0, s)
+        AddMiniBox(verts, uvs2, tris, new Vector3(-s, -s, -s), new Vector3(s, 0f, s));
+
+        // Box 2 (Top): depends on orientation
+        Vector3 topMin = new Vector3(-s, 0f, 0f);
+        Vector3 topMax = new Vector3(s, s, s);
+
+        if (blockType == 38 || blockType == 39) // South
+        {
+            topMin = new Vector3(-s, 0f, 0f);
+            topMax = new Vector3(s, s, s);
+        }
+        else if (blockType == 40 || blockType == 43) // North
+        {
+            topMin = new Vector3(-s, 0f, -s);
+            topMax = new Vector3(s, s, 0f);
+        }
+        else if (blockType == 41 || blockType == 44) // West
+        {
+            topMin = new Vector3(0f, 0f, -s);
+            topMax = new Vector3(s, s, s);
+        }
+        else if (blockType == 42 || blockType == 45) // East
+        {
+            topMin = new Vector3(-s, 0f, -s);
+            topMax = new Vector3(0f, s, s);
+        }
+
+        AddMiniBox(verts, uvs2, tris, topMin, topMax);
+
+        Mesh mesh = new Mesh();
+        mesh.vertices = verts.ToArray();
+        mesh.uv = uvs2.ToArray();
+        mesh.triangles = tris.ToArray();
+        mesh.RecalculateNormals();
+        return mesh;
+    }
+
+    void AddMiniBox(System.Collections.Generic.List<Vector3> verts, System.Collections.Generic.List<Vector2> uvs2, System.Collections.Generic.List<int> tris, Vector3 min, Vector3 max)
+    {
+        for (int face = 0; face < 6; face++)
+        {
+            int vi = verts.Count;
+            Vector3[] faceVerts = GetMiniBoxFaceVertices(face, min, max);
+            foreach (var v in faceVerts) verts.Add(v);
+
+            Vector2[] fuv = GrassTextureGenerator.GetBlockUVs(face, blockType);
+            uvs2.Add(fuv[0]); uvs2.Add(fuv[1]); uvs2.Add(fuv[2]); uvs2.Add(fuv[3]);
+
+            tris.Add(vi);     tris.Add(vi + 1); tris.Add(vi + 2);
+            tris.Add(vi + 2); tris.Add(vi + 1); tris.Add(vi + 3);
+        }
+    }
+
+    Vector3[] GetMiniBoxFaceVertices(int face, Vector3 min, Vector3 max)
+    {
+        Vector3[] verts = new Vector3[4];
+        switch (face)
+        {
+            case 0: // Back (z-)
+                verts[0] = new Vector3(min.x, min.y, min.z);
+                verts[1] = new Vector3(min.x, max.y, min.z);
+                verts[2] = new Vector3(max.x, min.y, min.z);
+                verts[3] = new Vector3(max.x, max.y, min.z);
+                break;
+            case 1: // Front (z+)
+                verts[0] = new Vector3(max.x, min.y, max.z);
+                verts[1] = new Vector3(max.x, max.y, max.z);
+                verts[2] = new Vector3(min.x, min.y, max.z);
+                verts[3] = new Vector3(min.x, max.y, max.z);
+                break;
+            case 2: // Top (y+)
+                verts[0] = new Vector3(min.x, max.y, min.z);
+                verts[1] = new Vector3(min.x, max.y, max.z);
+                verts[2] = new Vector3(max.x, max.y, min.z);
+                verts[3] = new Vector3(max.x, max.y, max.z);
+                break;
+            case 3: // Bottom (y-)
+                verts[0] = new Vector3(max.x, min.y, min.z);
+                verts[1] = new Vector3(max.x, min.y, max.z);
+                verts[2] = new Vector3(min.x, min.y, min.z);
+                verts[3] = new Vector3(min.x, min.y, max.z);
+                break;
+            case 4: // Left (x-)
+                verts[0] = new Vector3(min.x, min.y, max.z);
+                verts[1] = new Vector3(min.x, max.y, max.z);
+                verts[2] = new Vector3(min.x, min.y, min.z);
+                verts[3] = new Vector3(min.x, max.y, min.z);
+                break;
+            case 5: // Right (x+)
+                verts[0] = new Vector3(max.x, min.y, min.z);
+                verts[1] = new Vector3(max.x, max.y, min.z);
+                verts[2] = new Vector3(max.x, min.y, max.z);
+                verts[3] = new Vector3(max.x, max.y, max.z);
+                break;
+        }
+        return verts;
     }
 
     Mesh BuildCrossedQuadsMesh(float s)

@@ -358,9 +358,9 @@ public class VehicleSpawner : MonoBehaviour
                     if (mr != null) mr.material.color = GetDebugColor(entry.blockTypeID);
                 }
 
-                // Apply correct procedural texture and face UVs for blocks (IDs 1–12, 30–36, 50)
+                // Apply correct procedural texture and face UVs for blocks (IDs 1–12, 30–37, 50)
                 if ((entry.blockTypeID >= 1 && entry.blockTypeID <= 12) || 
-                    (entry.blockTypeID >= 30 && entry.blockTypeID <= 36) || 
+                    (entry.blockTypeID >= 30 && entry.blockTypeID <= 37) || 
                     entry.blockTypeID == 50)
                 {
                     ApplyVoxelTexture(blockGO, (byte)entry.blockTypeID);

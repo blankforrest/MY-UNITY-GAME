@@ -50,7 +50,9 @@ public class WrenchItem : MonoBehaviour
         _wrenchItem          = ScriptableObject.CreateInstance<Item>();
         _wrenchItem.itemName = "Wrench";
         _wrenchItem.itemID   = wrenchItemID;
-        _wrenchItem.icon     = DrawWrenchIcon();
+
+        Sprite loaded = Resources.Load<Sprite>("WrenchIcon");
+        _wrenchItem.icon     = (loaded != null) ? loaded : DrawWrenchIcon();
 
         if (Hotbar.Instance != null)
         {

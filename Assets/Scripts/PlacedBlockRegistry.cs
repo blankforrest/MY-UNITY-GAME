@@ -46,4 +46,10 @@ public class PlacedBlockRegistry : MonoBehaviour
 
     /// <summary>Total number of player-placed blocks currently registered.</summary>
     public int Count => _placedPositions.Count;
+
+    /// <summary>Clear all registered player-placed blocks.</summary>
+    public void Clear()
+    {
+        _placedPositions.Clear();
+    }
 }
