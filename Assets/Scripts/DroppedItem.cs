@@ -93,7 +93,7 @@ public class DroppedItem : MonoBehaviour
         }
         else
         {
-            if (blockType == 9 || blockType == 10 || blockType == 11) // Flower varieties (Rose, Dandelion, Iris)
+            if (blockType == 9 || blockType == 10 || blockType == 11 || blockType == 13 || blockType == 14) // Flower varieties and Grasses (Rose, Dandelion, Iris, Short/Tall Grass)
             {
                 mf.mesh = BuildCrossedQuadsMesh(0.18f);
                 if (VoxelWorld.Instance != null && VoxelWorld.Instance.foliageMaterial != null)
@@ -414,7 +414,7 @@ public class DroppedItem : MonoBehaviour
         // ── Stack same-type items ─────────────────────────────────────────────
         DroppedItem other = collision.gameObject.GetComponent<DroppedItem>();
         if (other == null) other = collision.gameObject.GetComponentInParent<DroppedItem>();
-        if (other != null && other != this && other.item != null && item != null && other.item.itemName == item.itemName && other.blockType == blockType)
+        if (other != null && other != this && other.item != null && item != null && other.item.itemName == item.itemName && other.blockType == blockType && item.toolType == ToolType.None)
         {
             // Older item absorbs newer one
             if (aliveTime >= other.aliveTime)
@@ -463,6 +463,7 @@ public class DroppedItem : MonoBehaviour
         if (item == null) return null;
         worldPosition.y += 0.3f;
         GameObject go = new GameObject($"DroppedItem_{item.itemName}");
+        go.layer = 2; // "Ignore Raycast" layer immediately
         go.transform.position = worldPosition;
         DroppedItem dropped  = go.AddComponent<DroppedItem>();
         dropped.item      = item;

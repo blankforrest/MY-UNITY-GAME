@@ -78,16 +78,20 @@ public class Chunk : MonoBehaviour
 
     private static void GetTreeNoise(float gX, float gZ, out float forestZone, out float clusterNoise, out float gapNoise)
     {
-        forestZone   = Mathf.PerlinNoise(gX * 0.025f + 500f, gZ * 0.025f + 700f);
-        clusterNoise = Mathf.PerlinNoise(gX * 0.10f + 900f,  gZ * 0.10f + 1100f);
-        gapNoise     = Mathf.PerlinNoise(gX * 0.28f + 333f,  gZ * 0.28f + 444f);
+        float ox = gX + SaveLoadManager.worldSeedOffsetX;
+        float oz = gZ + SaveLoadManager.worldSeedOffsetZ;
+        forestZone   = Mathf.PerlinNoise(ox * 0.025f + 500f, oz * 0.025f + 700f);
+        clusterNoise = Mathf.PerlinNoise(ox * 0.10f + 900f,  oz * 0.10f + 1100f);
+        gapNoise     = Mathf.PerlinNoise(ox * 0.28f + 333f,  oz * 0.28f + 444f);
     }
 
     private static bool WouldSpawnTree(float gX, float gZ, out float priority)
     {
+        float ox = gX + SaveLoadManager.worldSeedOffsetX;
+        float oz = gZ + SaveLoadManager.worldSeedOffsetZ;
         GetTreeNoise(gX, gZ, out float f, out float c, out float g);
         // High-frequency noise for local packing peaks
-        priority = Mathf.PerlinNoise(gX * 0.75f + 123.4f, gZ * 0.75f + 567.8f);
+        priority = Mathf.PerlinNoise(ox * 0.75f + 123.4f, oz * 0.75f + 567.8f);
         return (f >= 0.58f && c >= 0.52f && g <= 0.68f);
     }
 
@@ -104,13 +108,16 @@ public class Chunk : MonoBehaviour
                     float globalX = x + chunkPos.x * VoxelData.ChunkWidth;
                     float globalZ = z + chunkPos.y * VoxelData.ChunkWidth;
 
+                    float ox = globalX + SaveLoadManager.worldSeedOffsetX;
+                    float oz = globalZ + SaveLoadManager.worldSeedOffsetZ;
+
                     // Base rolling noise (lower frequency = wider features)
-                    float baseNoise = Mathf.PerlinNoise(globalX * 0.02f, globalZ * 0.02f);
+                    float baseNoise = Mathf.PerlinNoise(ox * 0.02f, oz * 0.02f);
                     // Exponentiate the noise to widen valleys (pushes mid-values lower)
                     baseNoise = Mathf.Pow(baseNoise, 2.5f);
                     
                     // Minor detail noise to prevent it from looking unnaturally smooth
-                    float detailNoise = Mathf.PerlinNoise(globalX * 0.08f, globalZ * 0.08f) * 0.15f;
+                    float detailNoise = Mathf.PerlinNoise(ox * 0.08f, oz * 0.08f) * 0.15f;
 
                     // Combine and lower the overall multiplier to make it less mountainy
                     float finalNoise = baseNoise + detailNoise;
@@ -122,7 +129,7 @@ public class Chunk : MonoBehaviour
                     //   < 0.45f: Dry land (height boosted, no oceans)
                     //   > 0.55f: Ocean (height lowered, deep water)
                     //   0.45f - 0.55f: Transition/Coastline
-                    float continentNoise = Mathf.PerlinNoise(globalX * 0.00015f + 1234.5f, globalZ * 0.00015f + 5678.9f);
+                    float continentNoise = Mathf.PerlinNoise(ox * 0.00015f + 1234.5f, oz * 0.00015f + 5678.9f);
 
                     // Smoothly blend the starting area around (0,0) towards dry land to guarantee solid ground on spawn
                     float startScale = Mathf.Clamp01(Mathf.Max(Mathf.Abs(globalX), Mathf.Abs(globalZ)) / 300f);
@@ -149,15 +156,15 @@ public class Chunk : MonoBehaviour
                     float seaLevel = 14f;
                     
                     // Domain warp using noise to bend/wiggle the river coordinates
-                    float warpX = Mathf.PerlinNoise(globalX * 0.015f + 10f, globalZ * 0.015f + 20f) * 60f;
-                    float warpZ = Mathf.PerlinNoise(globalX * 0.015f + 30f, globalZ * 0.015f + 40f) * 60f;
+                    float warpX = Mathf.PerlinNoise(ox * 0.015f + 10f, oz * 0.015f + 20f) * 60f;
+                    float warpZ = Mathf.PerlinNoise(ox * 0.015f + 30f, oz * 0.015f + 40f) * 60f;
 
                     // Lower frequency (0.002f) river noise creates long, continuous meandering rivers
-                    float riverNoise = Mathf.PerlinNoise((globalX + warpX) * 0.002f + 400f, (globalZ + warpZ) * 0.002f + 800f);
+                    float riverNoise = Mathf.PerlinNoise((ox + warpX) * 0.002f + 400f, (oz + warpZ) * 0.002f + 800f);
                     float riverCenterDist = Mathf.Abs(riverNoise - 0.5f);
                     
                     // Dynamic width variation (scaled for the lower frequency)
-                    float widthNoise = Mathf.PerlinNoise(globalX * 0.01f + 150f, globalZ * 0.01f + 250f);
+                    float widthNoise = Mathf.PerlinNoise(ox * 0.01f + 150f, oz * 0.01f + 250f);
                     float riverWidth = 0.01f + widthNoise * 0.008f; // clean, continuous channel width
                     
                     // Smoothly fade rivers in/out as they transition to desert/ocean
@@ -191,7 +198,7 @@ public class Chunk : MonoBehaviour
                     int floorY = Mathf.FloorToInt(exactHeight);
 
                     // Determine dirt thickness dynamically using noise (between 3 and 5 blocks)
-                    float dirtNoise = Mathf.PerlinNoise(globalX * 0.1f, globalZ * 0.1f);
+                    float dirtNoise = Mathf.PerlinNoise(ox * 0.1f, oz * 0.1f);
                     int dirtThickness = 3 + Mathf.FloorToInt(dirtNoise * 3f); // 3, 4, or 5 layers of dirt
 
                     if (y > seaLevel && y > floorY)
@@ -229,29 +236,39 @@ public class Chunk : MonoBehaviour
                         voxelMap[x, y, z] = 3; // Stone (deep)
                     }
 
-                    // ── Flower spawning on full grass blocks ──────────────────────
-                    // Only place flower one block above a *full* grass block (not slab)
-                    // and only above sea level so flowers don't appear on the sea floor.
+                    // ── Flower & Grass spawning on full grass blocks ──────────────────────
+                    // Only place flower or grass one block above a *full* grass block (not slab)
+                    // and only above sea level so they don't appear on the sea floor.
                     if (y == floorY + 1                       // cell directly above surface
                         && voxelMap[x, floorY, z] == 4        // surface is full grass (not slab/sand)
                         && floorY > seaLevel + 1)             // strictly above sea level
                     {
-                        float flowerNoise = Mathf.PerlinNoise(
-                            globalX * 0.18f + 77.3f,
-                            globalZ * 0.18f + 53.1f);
-                        // Second octave for clustering variety
-                        float flowerNoise2 = Mathf.PerlinNoise(
-                            globalX * 0.42f + 200f,
-                            globalZ * 0.42f + 300f);
-                        if (flowerNoise > 0.62f && flowerNoise2 > 0.45f)
+                        float foliageNoise = Mathf.PerlinNoise(
+                            ox * 0.15f + 120.3f,
+                            oz * 0.15f + 340.1f);
+                        if (foliageNoise > 0.42f) // Grass/Flower patches
                         {
-                            float typeNoise = Mathf.PerlinNoise(globalX * 0.7f + 50f, globalZ * 0.7f + 90f);
-                            if (typeNoise < 0.33f)
-                                voxelMap[x, y, z] = 9; // Rose
-                            else if (typeNoise < 0.66f)
-                                voxelMap[x, y, z] = 10; // Dandelion
+                            float subNoise = Mathf.PerlinNoise(ox * 0.6f + 85f, oz * 0.6f + 15f);
+                            if (subNoise < 0.12f)
+                            {
+                                // Flowers (Rose, Dandelion, Iris)
+                                float typeNoise = Mathf.PerlinNoise(ox * 0.7f + 50f, oz * 0.7f + 90f);
+                                if (typeNoise < 0.33f)
+                                    voxelMap[x, y, z] = 9; // Rose
+                                else if (typeNoise < 0.66f)
+                                    voxelMap[x, y, z] = 10; // Dandelion
+                                else
+                                    voxelMap[x, y, z] = 11; // Iris
+                            }
                             else
-                                voxelMap[x, y, z] = 11; // Iris
+                            {
+                                // Grass (Short Grass ID 13 or Tall Grass ID 14)
+                                float grassTypeNoise = Mathf.PerlinNoise(ox * 0.8f + 144f, oz * 0.8f + 788f);
+                                if (grassTypeNoise < 0.7f)
+                                    voxelMap[x, y, z] = 13; // Short Grass
+                                else
+                                    voxelMap[x, y, z] = 14; // Tall Grass
+                            }
                         }
                     }
                 }
@@ -317,7 +334,9 @@ public class Chunk : MonoBehaviour
                 if (surfaceY + 7 >= VoxelData.ChunkHeight) continue; // not enough vertical space
 
                 // Randomised tree height between 4 and 6
-                float heightNoise = Mathf.PerlinNoise(globalX * 0.9f + 888f, globalZ * 0.9f + 333f);
+                float hox = globalX + SaveLoadManager.worldSeedOffsetX;
+                float hoz = globalZ + SaveLoadManager.worldSeedOffsetZ;
+                float heightNoise = Mathf.PerlinNoise(hox * 0.9f + 888f, hoz * 0.9f + 333f);
                 int trunkHeight   = 4 + Mathf.FloorToInt(heightNoise * 3f); // 4, 5, or 6
 
                 // ── Trunk ──
@@ -354,7 +373,7 @@ public class Chunk : MonoBehaviour
                             if (dist2 > 5) continue;             // trim outer corners
 
                             // Add slight natural noise to avoid a perfectly flat canopy
-                            float leafNoise = Mathf.PerlinNoise((globalX + lx) * 0.4f + 22f, (globalZ + lz) * 0.4f + 55f);
+                            float leafNoise = Mathf.PerlinNoise((hox + lx) * 0.4f + 22f, (hoz + lz) * 0.4f + 55f);
                             if (dist2 == 5 && leafNoise < 0.45f) continue; // thin out outermost ring
 
                             voxelMap[cx, cy, cz] = 12; // Leaves
@@ -550,7 +569,7 @@ public class Chunk : MonoBehaviour
     void UpdateVoxelMeshData(Vector3 pos, byte blockType)
     {
         // ── Flower: render as two crossed quads (X-billboard) ──────────────────
-        if (blockType == 9 || blockType == 10 || blockType == 11)
+        if (blockType == 9 || blockType == 10 || blockType == 11 || blockType == 13 || blockType == 14)
         {
             AddFlowerQuads(pos, blockType);
             return;
@@ -1013,6 +1032,7 @@ public class Chunk : MonoBehaviour
         bool neighborIsWater = (neighbor == 7);
         // Flowers, leaves, glass (ID 35), and stairs are transparent — treat like air for solid-mesh culling purposes
         bool neighborIsFlower = (neighbor == 9 || neighbor == 10 || neighbor == 11 || neighbor == 12 || neighbor == 35 ||
+                                 neighbor == 13 || neighbor == 14 ||
                                  neighbor == 38 || neighbor == 40 || neighbor == 41 || neighbor == 42 ||
                                  neighbor == 39 || neighbor == 43 || neighbor == 44 || neighbor == 45 ||
                                  neighbor == 46 || neighbor == 47);

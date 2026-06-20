@@ -11,14 +11,14 @@ public class InventoryUI : MonoBehaviour
     public static bool IsInventoryOpen = false;
     public static InventoryUI Instance { get; private set; }
 
-    private const int   COLS       = 5;
+    private const int   COLS       = 7;
     private const int   ROWS       = 5;
     private const float SLOT_SIZE  = 52f;   // matches hotbar slot size
     private const float SLOT_GAP   = 5f;
     private const float PADDING    = 12f;
 
     private GameObject  panel;
-    private SlotUI[]    slotUIs; // initialized in BuildPanel with COLS*ROWS
+    private System.Collections.Generic.List<SlotUI> slotUIs = new System.Collections.Generic.List<SlotUI>();
     private SlotUI[]    craftingInputUIs = new SlotUI[4];
     private SlotUI      craftingOutputUI;
 
@@ -36,6 +36,11 @@ public class InventoryUI : MonoBehaviour
     private Image       furnaceArrowImg;
 
     private bool subscribed = false;
+    private GameObject  tabsContainer;
+    private string      activeCategory = "ALL";
+    private Image[]     tabImages = new Image[5];
+    private string[]    categories = new string[] { "ALL", "BLOCKS", "TOOLS", "VEHICLES", "FOLIAGE" };
+    private RectTransform contentRT;
 
     void Awake()
     {
@@ -85,11 +90,17 @@ public class InventoryUI : MonoBehaviour
             subscribed = true;
         }
 
-        // Press I to open/close inventory
-        if (UnityEngine.InputSystem.Keyboard.current != null &&
-            UnityEngine.InputSystem.Keyboard.current.iKey.wasPressedThisFrame)
+        // Press I or Escape to open/close inventory
+        if (UnityEngine.InputSystem.Keyboard.current != null)
         {
-            ToggleInventory();
+            if (UnityEngine.InputSystem.Keyboard.current.iKey.wasPressedThisFrame)
+            {
+                ToggleInventory();
+            }
+            else if (UnityEngine.InputSystem.Keyboard.current.escapeKey.wasPressedThisFrame && IsInventoryOpen)
+            {
+                ToggleInventory();
+            }
         }
     }
 
@@ -109,8 +120,8 @@ public class InventoryUI : MonoBehaviour
         float W = COLS * SLOT_SIZE + (COLS - 1) * SLOT_GAP + PADDING * 2 + 260f; // extra space for 3x3 crafting
         float H = ROWS * SLOT_SIZE + (ROWS - 1) * SLOT_GAP + PADDING * 2 + 32f;
 
-        // Initialize with LOCAL constants — avoids stale Inventory.MaxSlots cache
-        slotUIs = new SlotUI[COLS * ROWS];
+        // Initialize slots list
+        slotUIs = new System.Collections.Generic.List<SlotUI>();
 
         // Background panel
         panel = new GameObject("InventoryPanel", typeof(RectTransform), typeof(Image));
@@ -138,22 +149,118 @@ public class InventoryUI : MonoBehaviour
         title.text = "Inventory & Crafting"; title.fontSize = 15; title.alignment = TextAlignmentOptions.Center;
         title.color = new Color(0.8f, 0.8f, 0.8f);
 
-        // Build 5x5 grid
-        for (int i = 0; i < Inventory.MaxSlots; i++)
+        // ── Create Creative Tabs Container ─────────────────────────────────────
+        tabsContainer = new GameObject("CreativeTabs", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+        tabsContainer.transform.SetParent(panel.transform, false);
+        RectTransform tabsRT = tabsContainer.GetComponent<RectTransform>();
+        float gridWidth = COLS * SLOT_SIZE + (COLS - 1) * SLOT_GAP;
+        tabsRT.anchorMin = new Vector2(0f, 1f);
+        tabsRT.anchorMax = new Vector2(0f, 1f);
+        tabsRT.pivot = new Vector2(0f, 0f);
+        tabsRT.anchoredPosition = new Vector2(PADDING, 0f); // sits exactly above the grid slots
+        tabsRT.sizeDelta = new Vector2(gridWidth, 36f);
+
+        HorizontalLayoutGroup tabLayout = tabsContainer.GetComponent<HorizontalLayoutGroup>();
+        tabLayout.spacing = 4f;
+        tabLayout.childAlignment = TextAnchor.LowerCenter;
+        tabLayout.childControlWidth = true;
+        tabLayout.childControlHeight = true;
+        tabLayout.childForceExpandWidth = true;
+        tabLayout.childForceExpandHeight = true;
+
+        for (int i = 0; i < categories.Length; i++)
         {
-            int col = i % COLS;
-            int row = i / COLS;
+            string cat = categories[i];
+            int index = i;
 
-            float x = PADDING + col * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE * 0.5f;
-            float y = -PADDING - 28f - row * (SLOT_SIZE + SLOT_GAP) - SLOT_SIZE * 0.5f;
+            GameObject tabBtn = new GameObject("Tab_" + cat, typeof(RectTransform), typeof(Image), typeof(Button));
+            tabBtn.transform.SetParent(tabsContainer.transform, false);
 
-            slotUIs[i] = CreateSlot(panel, i, x, y);
+            tabImages[index] = tabBtn.GetComponent<Image>();
+            tabImages[index].color = new Color(0.12f, 0.14f, 0.18f, 0.95f);
+
+            Outline outline = tabBtn.AddComponent<Outline>();
+            outline.effectColor = new Color(1f, 1f, 1f, 0.15f);
+            outline.effectDistance = new Vector2(1f, -1f);
+
+            Button btn = tabBtn.GetComponent<Button>();
+            btn.onClick.AddListener(() => SelectCategory(cat));
+
+            GameObject txtGO = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+            txtGO.transform.SetParent(tabBtn.transform, false);
+            RectTransform txtRT = txtGO.GetComponent<RectTransform>();
+            txtRT.anchorMin = Vector2.zero;
+            txtRT.anchorMax = Vector2.one;
+            txtRT.sizeDelta = Vector2.zero;
+
+            TextMeshProUGUI tmp = txtGO.GetComponent<TextMeshProUGUI>();
+            tmp.text = cat;
+            tmp.fontSize = 11;
+            tmp.fontStyle = FontStyles.Bold;
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.color = Color.white;
         }
+        tabsContainer.SetActive(false);
 
+        float gridW = COLS * SLOT_SIZE + (COLS - 1) * SLOT_GAP;
         float gridH = ROWS * SLOT_SIZE + (ROWS - 1) * SLOT_GAP;
         float gridTop = -PADDING - 28f;
         float gridCenter = gridTop - gridH * 0.5f;
         float craftingStartX = PADDING + COLS * SLOT_SIZE + (COLS - 1) * SLOT_GAP + 30f;
+
+        // ── Create ScrollView container ─────────────────────────────────────
+        GameObject scrollGO = new GameObject("ScrollView", typeof(RectTransform), typeof(ScrollRect));
+        scrollGO.transform.SetParent(panel.transform, false);
+        RectTransform scrollRT = scrollGO.GetComponent<RectTransform>();
+        scrollRT.anchorMin = new Vector2(0f, 1f);
+        scrollRT.anchorMax = new Vector2(0f, 1f);
+        scrollRT.pivot = new Vector2(0f, 1f);
+        scrollRT.anchoredPosition = new Vector2(PADDING, gridTop);
+        scrollRT.sizeDelta = new Vector2(gridW + 8f, gridH);
+
+        ScrollRect scrollRect = scrollGO.GetComponent<ScrollRect>();
+        scrollRect.horizontal = false;
+        scrollRect.vertical = true;
+        scrollRect.movementType = ScrollRect.MovementType.Clamped;
+        scrollRect.inertia = false;
+        scrollRect.scrollSensitivity = 35f;
+
+        // ── Create Viewport ──────────────────────────────────────────
+        GameObject viewportGO = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
+        viewportGO.transform.SetParent(scrollGO.transform, false);
+        RectTransform viewportRT = viewportGO.GetComponent<RectTransform>();
+        viewportRT.anchorMin = Vector2.zero;
+        viewportRT.anchorMax = Vector2.one;
+        viewportRT.sizeDelta = Vector2.zero;
+        viewportRT.anchoredPosition = Vector2.zero;
+        viewportGO.GetComponent<Image>().color = Color.clear;
+        scrollRect.viewport = viewportRT;
+
+        // ── Create Content ───────────────────────────────────────────
+        GameObject contentGO = new GameObject("Content", typeof(RectTransform));
+        contentGO.transform.SetParent(viewportGO.transform, false);
+        contentRT = contentGO.GetComponent<RectTransform>();
+        contentRT.anchorMin = new Vector2(0f, 1f);
+        contentRT.anchorMax = new Vector2(0f, 1f);
+        contentRT.pivot = new Vector2(0f, 1f);
+
+        int totalRows = Mathf.CeilToInt((float)Inventory.MaxSlots / COLS);
+        float contentHeight = totalRows * SLOT_SIZE + (totalRows - 1) * SLOT_GAP;
+        contentRT.sizeDelta = new Vector2(gridW, contentHeight);
+        contentRT.anchoredPosition = Vector2.zero;
+        scrollRect.content = contentRT;
+
+        // Build initial slots (minimum of 35)
+        for (int i = 0; i < 35; i++)
+        {
+            int col = i % COLS;
+            int row = i / COLS;
+
+            float x = col * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE * 0.5f;
+            float y = -row * (SLOT_SIZE + SLOT_GAP) - SLOT_SIZE * 0.5f;
+
+            slotUIs.Add(CreateSlot(contentGO, i, x, y));
+        }
 
         // ── Create 2x2 Crafting Group ──────────────────────────────────────────
         crafting2x2Group = new GameObject("Crafting2x2Group", typeof(RectTransform));
@@ -518,7 +625,40 @@ public class InventoryUI : MonoBehaviour
 
     void RefreshAll()
     {
-        foreach (var s in slotUIs) s?.Refresh();
+        int neededCount = 35;
+        if (Inventory.Instance != null && Inventory.Instance.slots != null)
+        {
+            neededCount = Inventory.Instance.slots.Length;
+        }
+        neededCount = Mathf.Max(neededCount, 35);
+
+        UpdateContentHeight(activeCategory, resetScroll: false);
+
+        // Dynamically add SlotUI elements if we don't have enough
+        while (slotUIs.Count < neededCount)
+        {
+            int idx = slotUIs.Count;
+            int col = idx % COLS;
+            int row = idx / COLS;
+            float x = col * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE * 0.5f;
+            float y = -row * (SLOT_SIZE + SLOT_GAP) - SLOT_SIZE * 0.5f;
+
+            slotUIs.Add(CreateSlot(contentRT.gameObject, idx, x, y));
+        }
+
+        // Refresh and set active states for indefinite slot support
+        for (int i = 0; i < slotUIs.Count; i++)
+        {
+            if (slotUIs[i] != null)
+            {
+                slotUIs[i].gameObject.SetActive(i < neededCount);
+                if (i < neededCount)
+                {
+                    slotUIs[i].Refresh();
+                }
+            }
+        }
+
         foreach (var s in craftingInputUIs) s?.Refresh();
         craftingOutputUI?.Refresh();
         foreach (var s in tableCraftingInputUIs) s?.Refresh();
@@ -536,12 +676,19 @@ public class InventoryUI : MonoBehaviour
         {
             // Opening via 'I' key always shows the 2x2 personal crafting grid
             Open2x2Crafting();
+            PlayerController pc = FindFirstObjectByType<PlayerController>();
+            if (pc != null && pc.isCreativeMode)
+            {
+                SelectCategory("ALL");
+            }
             RefreshAll();
         }
         else
         {
             CloseInventoryCleanup();
         }
+
+        UpdateTabsState();
 
         if (Crosshair.Instance != null)
         {
@@ -563,7 +710,13 @@ public class InventoryUI : MonoBehaviour
         if (furnaceGroup != null) furnaceGroup.SetActive(false);
         IsInventoryOpen = true;
         panel.SetActive(true);
+        PlayerController pc = FindFirstObjectByType<PlayerController>();
+        if (pc != null && pc.isCreativeMode)
+        {
+            SelectCategory("ALL");
+        }
         RefreshAll();
+        UpdateTabsState();
         if (Crosshair.Instance != null) Crosshair.Instance.SetVisible(false);
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible   = true;
@@ -590,7 +743,13 @@ public class InventoryUI : MonoBehaviour
         if (furnaceGroup != null) furnaceGroup.SetActive(true);
         IsInventoryOpen = true;
         panel.SetActive(true);
+        PlayerController pc = FindFirstObjectByType<PlayerController>();
+        if (pc != null && pc.isCreativeMode)
+        {
+            SelectCategory("ALL");
+        }
         RefreshAll();
+        UpdateTabsState();
         if (Crosshair.Instance != null) Crosshair.Instance.SetVisible(false);
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible   = true;
@@ -633,6 +792,7 @@ public class InventoryUI : MonoBehaviour
         }
         isFurnaceActive = false;
         FurnaceManager.ActiveFurnace = null;
+        UpdateTabsState();
     }
 
     SlotUI CreateFurnaceSlot(GameObject parent, int idx, float x, float y, SlotUI.Owner owner)
@@ -722,6 +882,84 @@ public class InventoryUI : MonoBehaviour
         }
         tex.Apply();
         return Sprite.Create(tex, new Rect(0, 0, 32, 32), new Vector2(0.5f, 0.5f));
+    }
+
+    public void SelectCategory(string category)
+    {
+        activeCategory = category;
+        if (Inventory.Instance != null)
+        {
+            Inventory.Instance.PopulateCreativeCategory(category);
+        }
+        UpdateTabVisuals();
+        UpdateContentHeight(category, resetScroll: true);
+        RefreshAll();
+    }
+
+    private void UpdateContentHeight(string category, bool resetScroll = false)
+    {
+        if (contentRT == null) return;
+
+        int slotCount = 35;
+        if (Inventory.Instance != null && Inventory.Instance.slots != null)
+        {
+            slotCount = Inventory.Instance.slots.Length;
+        }
+        slotCount = Mathf.Max(slotCount, 35);
+
+        int totalRows = Mathf.CeilToInt((float)slotCount / COLS);
+        float contentHeight = totalRows * SLOT_SIZE + (totalRows - 1) * SLOT_GAP;
+        contentRT.sizeDelta = new Vector2(0f, contentHeight);
+
+        if (resetScroll)
+        {
+            contentRT.anchoredPosition = Vector2.zero;
+        }
+    }
+
+    private int GetCategoryItemCount(string category)
+    {
+        switch (category)
+        {
+            case "ALL": return 49; // wood, dirt, etc. + tools
+            case "BLOCKS": return 17;
+            case "TOOLS": return 24;
+            case "VEHICLES": return 5;
+            case "FOLIAGE": return 4;
+            default: return 35;
+        }
+    }
+
+    private void UpdateTabVisuals()
+    {
+        for (int i = 0; i < categories.Length; i++)
+        {
+            if (tabImages[i] != null)
+            {
+                if (categories[i] == activeCategory)
+                {
+                    tabImages[i].color = new Color(0.2f, 0.45f, 0.85f, 1f);
+                }
+                else
+                {
+                    tabImages[i].color = new Color(0.12f, 0.14f, 0.18f, 0.95f);
+                }
+            }
+        }
+    }
+
+    private void UpdateTabsState()
+    {
+        if (tabsContainer != null)
+        {
+            PlayerController pc = FindFirstObjectByType<PlayerController>();
+            bool isCreative = (pc != null && pc.isCreativeMode);
+            tabsContainer.SetActive(isCreative && IsInventoryOpen);
+            if (isCreative && IsInventoryOpen)
+            {
+                UpdateTabVisuals();
+            }
+        }
     }
 
     public void OnInventoryButtonClicked() => ToggleInventory();

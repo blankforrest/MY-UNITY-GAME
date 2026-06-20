@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 27; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side, furnace front unlit, furnace front lit
+    public const int TILE_COUNT = 29; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side, furnace front unlit, furnace front lit, short grass, tall grass
 
     public static Texture2D Create()
     {
@@ -53,7 +53,9 @@ public static class GrassTextureGenerator
                               : tile == 23 ? CraftingTableTop(lx, y)
                               : tile == 24 ? CraftingTableSide(lx, y)
                               : tile == 25 ? FurnaceFront(lx, y, false)
-                                           : FurnaceFront(lx, y, true);
+                              : tile == 26 ? FurnaceFront(lx, y, true)
+                              : tile == 27 ? ShortGrass(lx, y)
+                                           : TallGrass(lx, y);
             }
         }
 
@@ -504,6 +506,10 @@ public static class GrassTextureGenerator
             tile = 11;
         else if (blockType == 12) // Leaves: all faces leaves
             tile = 12;
+        else if (blockType == 13) // Short Grass: all faces short grass
+            tile = 27;
+        else if (blockType == 14) // Tall Grass: all faces tall grass
+            tile = 28;
         else if (blockType == 20) // Small Wheel: sides are wheel side, others are tire tread
             tile = (face == 4 || face == 5) ? 16 : 15;
         else if (blockType == 21 || blockType == 23) // Large Wheel & Helper: sides are wheel side, others are tire tread
@@ -800,7 +806,53 @@ public static class GrassTextureGenerator
             case 24: return CraftingTableSide(lx, ly);
             case 25: return FurnaceFront(lx, ly, false);
             case 26: return FurnaceFront(lx, ly, true);
+            case 27: return ShortGrass(lx, ly);
+            case 28: return TallGrass(lx, ly);
             default: return Color.clear;
         }
+    }
+
+    static Color ShortGrass(int x, int y)
+    {
+        Color key = new Color(1f, 0f, 1f); // pure magenta -> transparent
+        Color darkGreen = new Color(0.18f, 0.48f, 0.08f);
+        Color midGreen  = new Color(0.22f, 0.55f, 0.18f);
+        Color lightGreen = new Color(0.28f, 0.68f, 0.15f);
+
+        // Draw pixel-art grass blades in 16x16 grid
+        bool b1 = (x == 7 && y <= 3) || (x == 6 && y >= 4 && y <= 8) || (x == 5 && y >= 9 && y <= 13);
+        bool b2 = (x == 8 && y <= 4) || (x == 9 && y >= 5 && y <= 9) || (x == 10 && y >= 10 && y <= 11);
+        bool b3 = (x == 12 && y <= 2) || (x == 13 && y >= 3 && y <= 5) || (x == 14 && y >= 6 && y <= 7);
+        bool b4 = (x == 5 && y <= 1) || (x == 4 && y >= 2 && y <= 4) || (x == 3 && y >= 5 && y <= 6);
+        bool b5 = (x == 2 && y <= 0) || (x == 1 && y >= 1 && y <= 2);
+
+        if (b1) return midGreen;
+        if (b2) return lightGreen;
+        if (b3) return lightGreen;
+        if (b4) return darkGreen;
+        if (b5) return darkGreen;
+
+        return key;
+    }
+
+    static Color TallGrass(int x, int y)
+    {
+        Color key = new Color(1f, 0f, 1f); // pure magenta -> transparent
+        Color darkGreen = new Color(0.15f, 0.42f, 0.05f);
+        Color midGreen  = new Color(0.20f, 0.50f, 0.12f);
+        Color lightGreen = new Color(0.25f, 0.62f, 0.15f);
+
+        // Tall Grass is taller and denser:
+        bool b1 = (x == 4 && y <= 4) || (x == 3 && y >= 5 && y <= 8) || (x == 2 && y >= 9 && y <= 12);
+        bool b2 = (x == 6 && y <= 5) || (x == 5 && y >= 6 && y <= 10) || (x == 4 && y >= 11 && y <= 15);
+        bool b3 = (x == 8 && y <= 4) || (x == 9 && y >= 5 && y <= 9) || (x == 10 && y >= 10 && y <= 14);
+        bool b4 = (x == 10 && y <= 3) || (x == 11 && y >= 4 && y <= 7) || (x == 12 && y >= 8 && y <= 15);
+        bool b5 = (x == 12 && y <= 2) || (x == 13 && y >= 3 && y <= 6) || (x == 14 && y >= 7 && y <= 11);
+
+        if (b2 || b4) return lightGreen;
+        if (b3) return midGreen;
+        if (b1 || b5) return darkGreen;
+
+        return key;
     }
 }

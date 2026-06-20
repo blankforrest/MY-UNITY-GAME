@@ -13,11 +13,13 @@ public class PlayerInteraction : MonoBehaviour
     private byte breakingBlockID;
     private float breakProgress = 0f;
     private bool isBreakingBlock = false;
+    private float creativeBreakCooldown = 0f;
 
     private GameObject crackOverlay;
     private MeshRenderer crackRenderer;
     private Material crackMaterial;
     private Texture2D[] crackTextures;
+    private Dictionary<Vector2Int, float> crackMap;
 
     void Start()
     {
@@ -33,6 +35,16 @@ public class PlayerInteraction : MonoBehaviour
     void Update()
     {
         if (playerCam == null) return;
+
+        if (creativeBreakCooldown > 0f)
+        {
+            creativeBreakCooldown -= Time.deltaTime;
+        }
+
+        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+        {
+            creativeBreakCooldown = 0f;
+        }
 
         // Don't interact with the world if the pointer is over any UI element
         // IMPORTANT: Only block raycasts if the cursor is unlocked! If the cursor is locked, 
@@ -88,9 +100,19 @@ public class PlayerInteraction : MonoBehaviour
 
                         if (isCreative || hardness <= 0f)
                         {
+                            if (isCreative && creativeBreakCooldown > 0f)
+                            {
+                                return;
+                            }
+
                             // Instant break in creative mode or for flowers/grass
                             BreakBlockInstantly(targetGridPos, voxelCenter, blockID);
                             ResetBreakingState();
+
+                            if (isCreative)
+                            {
+                                creativeBreakCooldown = 0.18f;
+                            }
                         }
                         else
                         {
@@ -255,11 +277,11 @@ public class PlayerInteraction : MonoBehaviour
 
                 if (VoxelWorld.Instance != null)
                 {
-                    if (blockType == 9 || blockType == 10 || blockType == 11) // Flower varieties (Rose, Dandelion, Iris)
+                    if (blockType == 9 || blockType == 10 || blockType == 11 || blockType == 13 || blockType == 14) // Flower and Grass varieties
                     {
                         Vector3 belowPos = voxelCenter + Vector3.down;
                         byte blockBelow = VoxelWorld.Instance.GetBlock(belowPos);
-                        // Flower can only be placed on Grass (4), Dirt (5), or Sand (8)
+                        // Can only be placed on Grass (4), Dirt (5), or Sand (8)
                         if (blockBelow != 4 && blockBelow != 5 && blockBelow != 8)
                         {
                             return;
@@ -376,10 +398,14 @@ public class PlayerInteraction : MonoBehaviour
         switch (blockType)
         {
             case 7:
+                return 0.0f;
+
             case 9:
             case 10:
             case 11:
-                return 0.0f;
+            case 13:
+            case 14:
+                return 0.05f;
 
             case 12:
                 return 0.2f;
@@ -562,6 +588,23 @@ public class PlayerInteraction : MonoBehaviour
 
     private void InitializeCrackTextures()
     {
+        crackMap = new Dictionary<Vector2Int, float>();
+        
+        Random.State oldState = Random.state;
+        Random.InitState(1337); // Use a fixed seed for deterministic cracks
+
+        int numBranches = 5;
+        float baseAngleOffset = 0.2f;
+        int branchLength = 14;
+
+        for (int i = 0; i < numBranches; i++)
+        {
+            float angle = baseAngleOffset + i * 2f * Mathf.PI / numBranches;
+            GrowBranch(new Vector2Int(16, 16), angle, branchLength, 0f, 1.0f);
+        }
+
+        Random.state = oldState;
+
         crackTextures = new Texture2D[10];
         for (int i = 0; i < 10; i++)
         {
@@ -570,41 +613,92 @@ public class PlayerInteraction : MonoBehaviour
         }
     }
 
+    private void GrowBranch(Vector2Int start, float angle, int length, float startProgress, float endProgress)
+    {
+        float currentX = start.x;
+        float currentY = start.y;
+        
+        AddCrackPixel(start.x, start.y, startProgress);
+
+        for (int step = 1; step <= length; step++)
+        {
+            float t = (float)step / length;
+            float progress = Mathf.Lerp(startProgress, endProgress, t);
+            
+            float wobble = Random.Range(-0.4f, 0.4f);
+            float stepAngle = angle + wobble;
+            
+            currentX += Mathf.Cos(stepAngle);
+            currentY += Mathf.Sin(stepAngle);
+            
+            int ix = Mathf.RoundToInt(currentX);
+            int iy = Mathf.RoundToInt(currentY);
+            
+            if (ix < 0 || ix >= 32 || iy < 0 || iy >= 32)
+                break;
+                
+            AddCrackPixel(ix, iy, progress);
+            
+            // Spawn sub-branches from main branches
+            if (startProgress == 0f && (step == length / 3 || step == 2 * length / 3))
+            {
+                float subAngle = angle + (step == length / 3 ? 0.8f : -0.8f);
+                int subLength = length / 2;
+                GrowBranch(new Vector2Int(ix, iy), subAngle, subLength, progress, 1.0f);
+            }
+        }
+    }
+
+    private void AddCrackPixel(int x, int y, float p)
+    {
+        Vector2Int pos = new Vector2Int(x, y);
+        if (crackMap.TryGetValue(pos, out float existingP))
+        {
+            if (p < existingP)
+                crackMap[pos] = p;
+        }
+        else
+        {
+            crackMap[pos] = p;
+        }
+    }
+
     private Texture2D GenerateCrackTexture(float progress)
     {
         Texture2D tex = new Texture2D(32, 32);
         tex.filterMode = FilterMode.Point;
         tex.wrapMode = TextureWrapMode.Clamp;
+        
         Color[] cols = new Color[32 * 32];
         for (int i = 0; i < cols.Length; i++) cols[i] = Color.clear;
         tex.SetPixels(cols);
 
-        Random.State oldState = Random.state;
-        Random.InitState(1337);
+        Color crackColor = new Color(0.12f, 0.12f, 0.12f, 0.85f);
 
-        int numLines = Mathf.FloorToInt(progress * 15);
-        for (int l = 0; l < numLines; l++)
+        if (crackMap != null)
         {
-            int x = 16;
-            int y = 16;
-            int length = Random.Range(3, 8 + Mathf.FloorToInt(progress * 12));
-            for (int step = 0; step < length; step++)
+            foreach (var kvp in crackMap)
             {
-                if (x >= 0 && x < 32 && y >= 0 && y < 32)
+                Vector2Int pos = kvp.Key;
+                float minP = kvp.Value;
+
+                if (progress >= minP)
                 {
-                    tex.SetPixel(x, y, new Color(0.12f, 0.12f, 0.12f, 0.85f));
+                    tex.SetPixel(pos.x, pos.y, crackColor);
+
+                    // Thicken the older parts of the crack
+                    if (progress - minP > 0.35f)
+                    {
+                        if (pos.x + 1 < 32) tex.SetPixel(pos.x + 1, pos.y, crackColor);
+                        if (pos.x - 1 >= 0) tex.SetPixel(pos.x - 1, pos.y, crackColor);
+                        if (pos.y + 1 < 32) tex.SetPixel(pos.x, pos.y + 1, crackColor);
+                        if (pos.y - 1 >= 0) tex.SetPixel(pos.x, pos.y - 1, crackColor);
+                    }
                 }
-                
-                int dx = 0;
-                int dy = 0;
-                if (Random.value < 0.5f) dx = (Random.value < 0.5f) ? -1 : 1;
-                if (Random.value < 0.5f) dy = (Random.value < 0.5f) ? -1 : 1;
-                x += dx;
-                y += dy;
             }
         }
+
         tex.Apply();
-        Random.state = oldState;
         return tex;
     }
 }

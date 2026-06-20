@@ -216,6 +216,14 @@ public class GameSaveUI : MonoBehaviour
             player.isCreativeMode = !player.isCreativeMode;
             UpdateCreativeButtonLabel();
             Debug.Log($"[GameSaveUI] Creative Mode toggled: {player.isCreativeMode}");
+
+            if (player.isCreativeMode)
+            {
+                if (Inventory.Instance != null)
+                {
+                    Inventory.Instance.PopulateCreativeInventory();
+                }
+            }
         }
     }
 

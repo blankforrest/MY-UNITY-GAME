@@ -17,6 +17,21 @@ public class SaveLoadManager : MonoBehaviour
     }
 
     public static int activeWorldSlot = 1;
+    public static int activeWorldSeed = 0;
+    public static float worldSeedOffsetX = 0f;
+    public static float worldSeedOffsetZ = 0f;
+
+    public void UpdateSeedOffsets()
+    {
+        Random.State oldState = Random.state;
+        Random.InitState(activeWorldSeed);
+        worldSeedOffsetX = Random.Range(-100000f, 100000f);
+        Random.InitState(activeWorldSeed + 1);
+        worldSeedOffsetZ = Random.Range(-100000f, 100000f);
+        Random.state = oldState;
+        Debug.Log($"[SaveLoadManager] Seed updated: {activeWorldSeed}, OffsetX: {worldSeedOffsetX}, OffsetZ: {worldSeedOffsetZ}");
+    }
+
     private Dictionary<Vector3Int, byte> worldModifications = new Dictionary<Vector3Int, byte>();
     public string SaveFilePath => Path.Combine(Application.persistentDataPath, $"WorldSave_{activeWorldSlot}.json");
 
@@ -45,10 +60,73 @@ public class SaveLoadManager : MonoBehaviour
         LoadModificationsOnly();
     }
 
-    private void Start()
+    private void OnEnable()
     {
-        // Restore player position and inventory once other singletons are initialized
-        RestorePlayerAndInventory();
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private void OnDisable()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name != "MainMenu")
+        {
+            if (HasSaveFile())
+            {
+                LoadGame();
+            }
+            else
+            {
+                PrepareNewWorld();
+
+                // Initialize player creative mode based on MainMenu selectedGameMode for new world
+                var player = FindFirstObjectByType<PlayerController>();
+                if (player != null)
+                {
+                    player.isCreativeMode = (MainMenu.selectedGameMode == "Creative");
+                    if (player.isCreativeMode)
+                    {
+                        if (Inventory.Instance != null)
+                        {
+                            Inventory.Instance.PopulateCreativeInventory();
+                        }
+                    }
+                }
+            }
+
+            // Create PauseMenu dynamically if not already present
+            if (FindFirstObjectByType<PauseMenu>() == null)
+            {
+                GameObject pmGO = new GameObject("PauseMenuContainer");
+                pmGO.AddComponent<PauseMenu>();
+            }
+
+            // Start auto-save coroutine
+            StopAllCoroutines();
+            StartCoroutine(AutoSaveRoutine());
+        }
+    }
+
+    private System.Collections.IEnumerator AutoSaveRoutine()
+    {
+        // Wait 2 seconds so chunk generation initializes, player is spawned,
+        // and StarterItems has had a chance to run or bypass.
+        yield return new WaitForSeconds(2.0f);
+
+        SaveGame();
+
+        while (true)
+        {
+            yield return new WaitForSeconds(30.0f);
+
+            if (SceneManager.GetActiveScene().name != "MainMenu" && FindFirstObjectByType<PlayerController>() != null)
+            {
+                SaveGame();
+            }
+        }
     }
 
     public bool HasSaveFile() => File.Exists(SaveFilePath);
@@ -158,6 +236,7 @@ public class SaveLoadManager : MonoBehaviour
         data.playerRotZ = pRot.z;
 
         data.isCreativeMode = player.isCreativeMode;
+        data.seed = activeWorldSeed;
 
         // Save Block modifications
         data.modifications = new List<SavedBlock>();
@@ -198,9 +277,10 @@ public class SaveLoadManager : MonoBehaviour
 
         // Save Inventory
         data.inventory = new List<SavedItem>();
-        if (Inventory.Instance != null)
+        if (Inventory.Instance != null && Inventory.Instance.slots != null)
         {
-            for (int i = 0; i < Inventory.MaxSlots; i++)
+            int slotCount = Inventory.Instance.slots.Length;
+            for (int i = 0; i < slotCount; i++)
             {
                 var slot = Inventory.Instance.slots[i];
                 if (slot != null && slot.item != null)
@@ -247,6 +327,9 @@ public class SaveLoadManager : MonoBehaviour
         {
             string json = File.ReadAllText(SaveFilePath);
             SaveData data = JsonUtility.FromJson<SaveData>(json);
+
+            activeWorldSeed = data.seed;
+            UpdateSeedOffsets();
 
             worldModifications.Clear();
             if (data.modifications != null)
@@ -344,6 +427,16 @@ public class SaveLoadManager : MonoBehaviour
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         Debug.Log("[SaveLoadManager] Save cleared, scene reloaded.");
     }
+
+    public void DeleteSave(int slot)
+    {
+        string path = Path.Combine(Application.persistentDataPath, $"WorldSave_{slot}.json");
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+            Debug.Log($"[SaveLoadManager] Deleted world save file: {path}");
+        }
+    }
 }
 
 [System.Serializable]
@@ -379,4 +472,5 @@ public class SaveData
     public List<SavedItem> hotbar;
     public List<SavedItem> inventory;
     public bool isCreativeMode;
+    public int seed;
 }

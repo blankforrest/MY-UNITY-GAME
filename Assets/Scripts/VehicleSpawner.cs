@@ -29,48 +29,7 @@ public class VehicleSpawner : MonoBehaviour
         else { Destroy(this); return; }
     }
 
-    private void Start()
-    {
-        // Give the player the Control Block (ID 10) so they can actually build it!
-        // We delay slightly to ensure Hotbar is initialized.
-        Invoke(nameof(GiveControlBlock), 0.5f);
-    }
 
-    private void GiveControlBlock()
-    {
-        if (Hotbar.Instance != null)
-        {
-            Item controlBlockItem = ScriptableObject.CreateInstance<Item>();
-            controlBlockItem.itemName = "Control Block";
-            controlBlockItem.itemID = 50;
-            controlBlockItem.blockTypeID = 50;
-            controlBlockItem.icon = CreateControlBlockIcon();
-            Hotbar.Instance.TryAddItem(controlBlockItem, 64);
-
-            Item smallWheel = ScriptableObject.CreateInstance<Item>();
-            smallWheel.itemName = "Small Wheel";
-            smallWheel.itemID = 20;
-            smallWheel.blockTypeID = 20;
-            smallWheel.icon = CreateWheelIcon(isLarge: false);
-            Hotbar.Instance.TryAddItem(smallWheel, 64);
-
-            Item largeWheel = ScriptableObject.CreateInstance<Item>();
-            largeWheel.itemName = "Large Wheel";
-            largeWheel.itemID = 21;
-            largeWheel.blockTypeID = 21;
-            largeWheel.icon = CreateWheelIcon(isLarge: true);
-            Hotbar.Instance.TryAddItem(largeWheel, 64);
-
-            Item propeller = ScriptableObject.CreateInstance<Item>();
-            propeller.itemName = "Propeller";
-            propeller.itemID = 22;
-            propeller.blockTypeID = 22;
-            propeller.icon = CreatePropellerIcon();
-            Hotbar.Instance.TryAddItem(propeller, 64);
-
-            Debug.Log("[VehicleSpawner] Gave player Control Blocks, Wheels, and Propellers!");
-        }
-    }
 
     private static Sprite _cachedControlBlockIcon;
     private static Sprite _cachedSmallWheelIcon;

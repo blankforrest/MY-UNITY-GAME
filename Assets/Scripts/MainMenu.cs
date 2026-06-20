@@ -19,11 +19,13 @@ public class MainMenu : MonoBehaviour
     private GameObject helpPanel;
     private GameObject createWorldPanel;
     private GameObject worldSelectionPanel;
+    private GameObject confirmationPanel;
 
     private string chosenMode = "Survival";
     private TextMeshProUGUI modeDescriptionText;
     private TextMeshProUGUI survivalBtnText;
     private TextMeshProUGUI creativeBtnText;
+    private TMP_InputField seedInputField;
 
     void Start()
     {
@@ -227,6 +229,8 @@ public class MainMenu : MonoBehaviour
 
     private void SwitchToPanel(string panelName)
     {
+        if (confirmationPanel != null) Destroy(confirmationPanel);
+
         // Deactivate all panels first
         if (mainPanel) mainPanel.SetActive(false);
         if (settingsPanel) settingsPanel.SetActive(false);
@@ -304,9 +308,9 @@ public class MainMenu : MonoBehaviour
         TextMeshProUGUI infoText = infoGO.GetComponent<TextMeshProUGUI>();
         infoText.text = "<b>CONTROLS & SHORTCUTS</b>\n\n" +
                         "<b>Movement:</b> WASD | <b>Look around:</b> Mouse\n" +
-                        "<b>Sneak Mode:</b> Left Control (Toggle)\n" +
-                        "<b>Inventory / Crafting:</b> I | <b>Enter Vehicle:</b> E\n" +
-                        "<b>Return to Boat (Rescue):</b> R\n\n" +
+                        "<b>Sneak Mode:</b> Left Control | <b>Show Cursor:</b> ` (Backquote)\n" +
+                        "<b>Inventory / Crafting:</b> I | <b>Toggle Pause:</b> Escape / P\n" +
+                        "<b>Enter Vehicle:</b> E | <b>Return to Boat (Rescue):</b> R\n\n" +
                         "<b>Save Progress:</b> K | <b>Load Progress:</b> L\n" +
                         "<b>Reset Save File:</b> Delete\n" +
                         "<b>Creative Mode (Flight):</b> C\n" +
@@ -391,33 +395,75 @@ public class MainMenu : MonoBehaviour
                 int currentSlot = slot;
                 string mode = SaveLoadManager.Instance.GetSavedGameMode(currentSlot);
 
-                GameObject worldItem = new GameObject("WorldItem_" + currentSlot, typeof(RectTransform), typeof(Image), typeof(Button));
+                GameObject worldItem = new GameObject("WorldItem_" + currentSlot, typeof(RectTransform), typeof(HorizontalLayoutGroup));
                 worldItem.transform.SetParent(listContainer.transform, false);
                 var itemRT = worldItem.GetComponent<RectTransform>();
                 itemRT.sizeDelta = new Vector2(380, 50);
 
-                var itemImg = worldItem.GetComponent<Image>();
-                itemImg.color = new Color(0.18f, 0.20f, 0.25f, 0.9f);
-                
-                var btn = worldItem.GetComponent<Button>();
-                btn.onClick.AddListener(() => {
+                HorizontalLayoutGroup hlgItem = worldItem.GetComponent<HorizontalLayoutGroup>();
+                hlgItem.spacing = 10;
+                hlgItem.childControlWidth = false;
+                hlgItem.childControlHeight = true;
+                hlgItem.childForceExpandWidth = false;
+                hlgItem.childForceExpandHeight = true;
+
+                // Play Button (Left, width 290)
+                GameObject playBtnGO = new GameObject("PlayButton", typeof(RectTransform), typeof(Image), typeof(Button));
+                playBtnGO.transform.SetParent(worldItem.transform, false);
+                var playRT = playBtnGO.GetComponent<RectTransform>();
+                playRT.sizeDelta = new Vector2(290, 50);
+
+                var playImg = playBtnGO.GetComponent<Image>();
+                playImg.color = new Color(0.18f, 0.20f, 0.25f, 0.9f);
+                var playBtn = playBtnGO.GetComponent<Button>();
+                playBtn.onClick.AddListener(() => {
                     SaveLoadManager.activeWorldSlot = currentSlot;
                     LoadGameScene();
                 });
 
-                GameObject txtGO = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
-                txtGO.transform.SetParent(worldItem.transform, false);
-                var txtRT = txtGO.GetComponent<RectTransform>();
-                txtRT.anchorMin = Vector2.zero;
-                txtRT.anchorMax = Vector2.one;
-                txtRT.sizeDelta = Vector2.zero;
+                GameObject playTxtGO = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+                playTxtGO.transform.SetParent(playBtnGO.transform, false);
+                var playTxtRT = playTxtGO.GetComponent<RectTransform>();
+                playTxtRT.anchorMin = Vector2.zero;
+                playTxtRT.anchorMax = Vector2.one;
+                playTxtRT.sizeDelta = Vector2.zero;
+                var playTmp = playTxtGO.GetComponent<TextMeshProUGUI>();
+                playTmp.text = $"🌍 World {currentSlot} ({mode})";
+                playTmp.fontSize = 16;
+                playTmp.fontStyle = FontStyles.Bold;
+                playTmp.alignment = TextAlignmentOptions.Center;
+                playTmp.color = Color.white;
 
-                var tmp = txtGO.GetComponent<TextMeshProUGUI>();
-                tmp.text = $"🌍 World {currentSlot} ({mode})";
-                tmp.fontSize = 16;
-                tmp.fontStyle = FontStyles.Bold;
-                tmp.alignment = TextAlignmentOptions.Center;
-                tmp.color = Color.white;
+                // Delete Button (Right, width 80)
+                GameObject delBtnGO = new GameObject("DeleteButton", typeof(RectTransform), typeof(Image), typeof(Button));
+                delBtnGO.transform.SetParent(worldItem.transform, false);
+                var delRT = delBtnGO.GetComponent<RectTransform>();
+                delRT.sizeDelta = new Vector2(80, 50);
+
+                var delImg = delBtnGO.GetComponent<Image>();
+                delImg.color = new Color(0.75f, 0.15f, 0.15f, 0.9f);
+                var delBtn = delBtnGO.GetComponent<Button>();
+                delBtn.onClick.AddListener(() => {
+                    ShowDeleteConfirmation(currentSlot, () => {
+                        if (SaveLoadManager.Instance != null)
+                        {
+                            SaveLoadManager.Instance.DeleteSave(currentSlot);
+                            SwitchToPanel("WorldSelection");
+                        }
+                    });
+                });
+
+                GameObject delTxtGO = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+                delTxtGO.transform.SetParent(delBtnGO.transform, false);
+                var delTxtRT = delTxtGO.GetComponent<RectTransform>();
+                delTxtRT.anchorMin = Vector2.zero;
+                delTxtRT.anchorMax = Vector2.one;
+                delTxtRT.sizeDelta = Vector2.zero;
+                var delTmp = delTxtGO.GetComponent<TextMeshProUGUI>();
+                delTmp.text = "🗑️";
+                delTmp.fontSize = 18;
+                delTmp.alignment = TextAlignmentOptions.Center;
+                delTmp.color = Color.white;
             }
         }
         else
@@ -434,28 +480,32 @@ public class MainMenu : MonoBehaviour
             tmp.color = new Color(0.7f, 0.7f, 0.7f);
         }
 
-        // CREATE NEW WORLD button in the middle lower part of the screen
-        GameObject createBtnGO = new GameObject("CreateWorldButtonContainer", typeof(RectTransform));
-        createBtnGO.transform.SetParent(worldSelectionPanel.transform, false);
-        RectTransform createRT = createBtnGO.GetComponent<RectTransform>();
-        createRT.anchorMin = new Vector2(0.5f, 0.28f);
-        createRT.anchorMax = new Vector2(0.5f, 0.28f);
-        createRT.pivot = new Vector2(0.5f, 0.5f);
-        createRT.sizeDelta = new Vector2(300, 50);
-        createRT.anchoredPosition = Vector2.zero;
+        // Bottom Action Container for WorldSelectionPanel (Horizontal Layout)
+        GameObject selectActionsGO = new GameObject("SelectActionsContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+        selectActionsGO.transform.SetParent(worldSelectionPanel.transform, false);
+        RectTransform actionsRT = selectActionsGO.GetComponent<RectTransform>();
+        actionsRT.anchorMin = new Vector2(0.5f, 0.15f);
+        actionsRT.anchorMax = new Vector2(0.5f, 0.15f);
+        actionsRT.pivot = new Vector2(0.5f, 0.5f);
+        actionsRT.sizeDelta = new Vector2(450, 50);
+        actionsRT.anchoredPosition = Vector2.zero;
 
+        HorizontalLayoutGroup selectHlg = selectActionsGO.GetComponent<HorizontalLayoutGroup>();
+        selectHlg.spacing = 20;
+        selectHlg.childAlignment = TextAnchor.MiddleCenter;
+        selectHlg.childControlWidth = true;
+        selectHlg.childControlHeight = true;
+        selectHlg.childForceExpandWidth = true;
+        selectHlg.childForceExpandHeight = true;
+
+        // CREATE NEW WORLD button
+        GameObject createBtnGO = new GameObject("CreateWorldButtonContainer", typeof(RectTransform));
+        createBtnGO.transform.SetParent(selectActionsGO.transform, false);
         CreateMenuButton(createBtnGO.transform, "CREATE NEW WORLD", () => SwitchToPanel("CreateWorld"));
 
-        // BACK Button at the bottom
+        // BACK Button
         GameObject backGO = new GameObject("BackButtonContainer", typeof(RectTransform));
-        backGO.transform.SetParent(worldSelectionPanel.transform, false);
-        RectTransform backRT = backGO.GetComponent<RectTransform>();
-        backRT.anchorMin = new Vector2(0.5f, 0.14f);
-        backRT.anchorMax = new Vector2(0.5f, 0.14f);
-        backRT.pivot = new Vector2(0.5f, 0.5f);
-        backRT.sizeDelta = new Vector2(200, 50);
-        backRT.anchoredPosition = Vector2.zero;
-
+        backGO.transform.SetParent(selectActionsGO.transform, false);
         CreateMenuButton(backGO.transform, "BACK", () => SwitchToPanel("Main"));
     }
 
@@ -477,11 +527,11 @@ public class MainMenu : MonoBehaviour
         GameObject titleGO = new GameObject("Title", typeof(RectTransform), typeof(TextMeshProUGUI));
         titleGO.transform.SetParent(createWorldPanel.transform, false);
         RectTransform titleRT = titleGO.GetComponent<RectTransform>();
-        titleRT.anchorMin = new Vector2(0.5f, 1f);
-        titleRT.anchorMax = new Vector2(0.5f, 1f);
-        titleRT.pivot = new Vector2(0.5f, 1f);
+        titleRT.anchorMin = new Vector2(0.5f, 0.90f);
+        titleRT.anchorMax = new Vector2(0.5f, 0.90f);
+        titleRT.pivot = new Vector2(0.5f, 0.5f);
         titleRT.sizeDelta = new Vector2(400, 80);
-        titleRT.anchoredPosition = new Vector2(0, -20);
+        titleRT.anchoredPosition = Vector2.zero;
 
         TextMeshProUGUI titleText = titleGO.GetComponent<TextMeshProUGUI>();
         titleText.text = "CREATE NEW WORLD";
@@ -494,8 +544,8 @@ public class MainMenu : MonoBehaviour
         GameObject modeContainer = new GameObject("ModeContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         modeContainer.transform.SetParent(createWorldPanel.transform, false);
         RectTransform modeRT = modeContainer.GetComponent<RectTransform>();
-        modeRT.anchorMin = new Vector2(0.5f, 0.65f);
-        modeRT.anchorMax = new Vector2(0.5f, 0.65f);
+        modeRT.anchorMin = new Vector2(0.5f, 0.70f);
+        modeRT.anchorMax = new Vector2(0.5f, 0.70f);
         modeRT.pivot = new Vector2(0.5f, 0.5f);
         modeRT.sizeDelta = new Vector2(400, 60);
         modeRT.anchoredPosition = Vector2.zero;
@@ -548,14 +598,50 @@ public class MainMenu : MonoBehaviour
         creativeBtnText.alignment = TextAlignmentOptions.Center;
         creativeBtnText.color = Color.white;
 
+        // Seed Container (Horizontal)
+        GameObject seedContainer = new GameObject("SeedContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+        seedContainer.transform.SetParent(createWorldPanel.transform, false);
+        RectTransform seedRT = seedContainer.GetComponent<RectTransform>();
+        seedRT.anchorMin = new Vector2(0.5f, 0.53f);
+        seedRT.anchorMax = new Vector2(0.5f, 0.53f);
+        seedRT.pivot = new Vector2(0.5f, 0.5f);
+        seedRT.sizeDelta = new Vector2(400, 45);
+        seedRT.anchoredPosition = Vector2.zero;
+
+        HorizontalLayoutGroup seedHlg = seedContainer.GetComponent<HorizontalLayoutGroup>();
+        seedHlg.spacing = 15;
+        seedHlg.childAlignment = TextAnchor.MiddleCenter;
+        seedHlg.childControlWidth = false;
+        seedHlg.childControlHeight = true;
+        seedHlg.childForceExpandWidth = false;
+        seedHlg.childForceExpandHeight = true;
+
+        // Label
+        GameObject seedLabelGO = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        seedLabelGO.transform.SetParent(seedContainer.transform, false);
+        var labelRT = seedLabelGO.GetComponent<RectTransform>();
+        labelRT.sizeDelta = new Vector2(100, 45);
+        var labelTxt = seedLabelGO.GetComponent<TextMeshProUGUI>();
+        labelTxt.text = "World Seed:";
+        labelTxt.fontSize = 16;
+        labelTxt.fontStyle = FontStyles.Bold;
+        labelTxt.alignment = TextAlignmentOptions.Left;
+        labelTxt.color = Color.white;
+
+        // Input Field
+        GameObject seedInputGO;
+        seedInputField = CreateInputField(seedContainer.transform, "Random Seed...", out seedInputGO);
+        var inputRT = seedInputGO.GetComponent<RectTransform>();
+        inputRT.sizeDelta = new Vector2(285, 45);
+
         // Description
         GameObject descGO = new GameObject("Description", typeof(RectTransform), typeof(TextMeshProUGUI));
         descGO.transform.SetParent(createWorldPanel.transform, false);
         RectTransform descRT = descGO.GetComponent<RectTransform>();
-        descRT.anchorMin = new Vector2(0.5f, 0.4f);
-        descRT.anchorMax = new Vector2(0.5f, 0.4f);
+        descRT.anchorMin = new Vector2(0.5f, 0.33f);
+        descRT.anchorMax = new Vector2(0.5f, 0.33f);
         descRT.pivot = new Vector2(0.5f, 0.5f);
-        descRT.sizeDelta = new Vector2(400, 150);
+        descRT.sizeDelta = new Vector2(400, 140);
         descRT.anchoredPosition = Vector2.zero;
 
         modeDescriptionText = descGO.GetComponent<TextMeshProUGUI>();
@@ -567,8 +653,8 @@ public class MainMenu : MonoBehaviour
         GameObject actionContainer = new GameObject("ActionContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         actionContainer.transform.SetParent(createWorldPanel.transform, false);
         RectTransform actionRT = actionContainer.GetComponent<RectTransform>();
-        actionRT.anchorMin = new Vector2(0.5f, 0.15f);
-        actionRT.anchorMax = new Vector2(0.5f, 0.15f);
+        actionRT.anchorMin = new Vector2(0.5f, 0.13f);
+        actionRT.anchorMax = new Vector2(0.5f, 0.13f);
         actionRT.pivot = new Vector2(0.5f, 0.5f);
         actionRT.sizeDelta = new Vector2(400, 50);
         actionRT.anchoredPosition = Vector2.zero;
@@ -629,6 +715,24 @@ public class MainMenu : MonoBehaviour
             }
 
             SaveLoadManager.activeWorldSlot = newSlot;
+
+            // Parse Seed Input
+            int seed = 0;
+            if (seedInputField != null && !string.IsNullOrEmpty(seedInputField.text))
+            {
+                if (!int.TryParse(seedInputField.text, out seed))
+                {
+                    seed = seedInputField.text.GetHashCode();
+                }
+            }
+            else
+            {
+                seed = Random.Range(1, 1000000);
+            }
+
+            SaveLoadManager.activeWorldSeed = seed;
+            SaveLoadManager.Instance.UpdateSeedOffsets();
+
             SaveLoadManager.Instance.PrepareNewWorld();
         }
 
@@ -679,6 +783,165 @@ public class MainMenu : MonoBehaviour
         {
             yield return null;
         }
+    }
+
+    private void ShowDeleteConfirmation(int slot, System.Action onConfirm)
+    {
+        if (confirmationPanel != null)
+        {
+            Destroy(confirmationPanel);
+        }
+
+        confirmationPanel = new GameObject("DeleteConfirmationPanel", typeof(RectTransform), typeof(Image));
+        confirmationPanel.transform.SetParent(menuCanvasGO.transform, false);
+        RectTransform rt = confirmationPanel.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.5f, 0.5f);
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(400, 250);
+        rt.anchoredPosition = Vector2.zero;
+
+        Image img = confirmationPanel.GetComponent<Image>();
+        img.color = new Color(0.08f, 0.08f, 0.10f, 0.96f);
+
+        // Add outline
+        Outline outline = confirmationPanel.AddComponent<Outline>();
+        outline.effectColor = new Color(1f, 1f, 1f, 0.2f);
+        outline.effectDistance = new Vector2(1f, -1f);
+
+        // Title
+        GameObject titleGO = new GameObject("Title", typeof(RectTransform), typeof(TextMeshProUGUI));
+        titleGO.transform.SetParent(confirmationPanel.transform, false);
+        RectTransform titleRT = titleGO.GetComponent<RectTransform>();
+        titleRT.anchorMin = new Vector2(0.5f, 1f);
+        titleRT.anchorMax = new Vector2(0.5f, 1f);
+        titleRT.pivot = new Vector2(0.5f, 1f);
+        titleRT.sizeDelta = new Vector2(360, 80);
+        titleRT.anchoredPosition = new Vector2(0, -20);
+
+        TextMeshProUGUI titleText = titleGO.GetComponent<TextMeshProUGUI>();
+        titleText.text = $"DELETE WORLD {slot}?";
+        titleText.fontSize = 24;
+        titleText.fontStyle = FontStyles.Bold;
+        titleText.alignment = TextAlignmentOptions.Center;
+        titleText.color = new Color(1f, 0.2f, 0.2f);
+
+        // Subtitle
+        GameObject subGO = new GameObject("Subtitle", typeof(RectTransform), typeof(TextMeshProUGUI));
+        subGO.transform.SetParent(confirmationPanel.transform, false);
+        RectTransform subRT = subGO.GetComponent<RectTransform>();
+        subRT.anchorMin = new Vector2(0.5f, 0.5f);
+        subRT.anchorMax = new Vector2(0.5f, 0.5f);
+        subRT.pivot = new Vector2(0.5f, 0.5f);
+        subRT.sizeDelta = new Vector2(360, 60);
+        subRT.anchoredPosition = new Vector2(0, 10);
+
+        TextMeshProUGUI subText = subGO.GetComponent<TextMeshProUGUI>();
+        subText.text = "This action is permanent and cannot be undone.";
+        subText.fontSize = 14;
+        subText.alignment = TextAlignmentOptions.Center;
+        subText.color = new Color(0.8f, 0.8f, 0.8f);
+
+        // Buttons Container
+        GameObject btnContainer = new GameObject("ButtonContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+        btnContainer.transform.SetParent(confirmationPanel.transform, false);
+        RectTransform containerRT = btnContainer.GetComponent<RectTransform>();
+        containerRT.anchorMin = new Vector2(0.5f, 0.2f);
+        containerRT.anchorMax = new Vector2(0.5f, 0.2f);
+        containerRT.pivot = new Vector2(0.5f, 0.5f);
+        containerRT.sizeDelta = new Vector2(320, 50);
+        containerRT.anchoredPosition = Vector2.zero;
+
+        HorizontalLayoutGroup hlg = btnContainer.GetComponent<HorizontalLayoutGroup>();
+        hlg.spacing = 20;
+        hlg.childAlignment = TextAnchor.MiddleCenter;
+        hlg.childControlWidth = true;
+        hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = true;
+        hlg.childForceExpandHeight = true;
+
+        // Yes Button
+        GameObject yesBtn = new GameObject("ConfirmBtn", typeof(RectTransform), typeof(Image), typeof(Button), typeof(MenuButtonEffects));
+        yesBtn.transform.SetParent(btnContainer.transform, false);
+        yesBtn.GetComponent<Image>().color = new Color(0.75f, 0.15f, 0.15f, 0.9f);
+        yesBtn.GetComponent<Button>().onClick.AddListener(() => {
+            onConfirm?.Invoke();
+            Destroy(confirmationPanel);
+        });
+        GameObject yesTxt = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+        yesTxt.transform.SetParent(yesBtn.transform, false);
+        RectTransform yesTxtRT = yesTxt.GetComponent<RectTransform>();
+        yesTxtRT.anchorMin = Vector2.zero; yesTxtRT.anchorMax = Vector2.one; yesTxtRT.sizeDelta = Vector2.zero;
+        var yTmp = yesTxt.GetComponent<TextMeshProUGUI>();
+        yTmp.text = "DELETE"; yTmp.fontSize = 16; yTmp.fontStyle = FontStyles.Bold; yTmp.alignment = TextAlignmentOptions.Center; yTmp.color = Color.white;
+
+        // No Button
+        GameObject noBtn = new GameObject("CancelBtn", typeof(RectTransform), typeof(Image), typeof(Button), typeof(MenuButtonEffects));
+        noBtn.transform.SetParent(btnContainer.transform, false);
+        noBtn.GetComponent<Image>().color = new Color(0.18f, 0.20f, 0.25f, 0.9f);
+        noBtn.GetComponent<Button>().onClick.AddListener(() => {
+            Destroy(confirmationPanel);
+        });
+        GameObject noTxt = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+        noTxt.transform.SetParent(noBtn.transform, false);
+        RectTransform noTxtRT = noTxt.GetComponent<RectTransform>();
+        noTxtRT.anchorMin = Vector2.zero; noTxtRT.anchorMax = Vector2.one; noTxtRT.sizeDelta = Vector2.zero;
+        var nTmp = noTxt.GetComponent<TextMeshProUGUI>();
+        nTmp.text = "CANCEL"; nTmp.fontSize = 16; nTmp.fontStyle = FontStyles.Bold; nTmp.alignment = TextAlignmentOptions.Center; nTmp.color = Color.white;
+    }
+
+    private TMP_InputField CreateInputField(Transform parent, string placeholderText, out GameObject inputFieldGO)
+    {
+        inputFieldGO = new GameObject("InputField", typeof(RectTransform), typeof(Image), typeof(TMP_InputField));
+        inputFieldGO.transform.SetParent(parent, false);
+        
+        var img = inputFieldGO.GetComponent<Image>();
+        img.color = new Color(0.18f, 0.20f, 0.25f, 0.9f);
+        
+        var outline = inputFieldGO.AddComponent<Outline>();
+        outline.effectColor = new Color(1f, 1f, 1f, 0.15f);
+        outline.effectDistance = new Vector2(1f, -1f);
+
+        var inputField = inputFieldGO.GetComponent<TMP_InputField>();
+
+        GameObject textArea = new GameObject("TextArea", typeof(RectTransform), typeof(RectMask2D));
+        textArea.transform.SetParent(inputFieldGO.transform, false);
+        var taRT = textArea.GetComponent<RectTransform>();
+        taRT.anchorMin = Vector2.zero;
+        taRT.anchorMax = Vector2.one;
+        taRT.sizeDelta = new Vector2(-20, -10);
+
+        GameObject placeholderGO = new GameObject("Placeholder", typeof(RectTransform), typeof(TextMeshProUGUI));
+        placeholderGO.transform.SetParent(textArea.transform, false);
+        var placeholderRT = placeholderGO.GetComponent<RectTransform>();
+        placeholderRT.anchorMin = Vector2.zero;
+        placeholderRT.anchorMax = Vector2.one;
+        placeholderRT.sizeDelta = Vector2.zero;
+        
+        var placeholderTmp = placeholderGO.GetComponent<TextMeshProUGUI>();
+        placeholderTmp.text = placeholderText;
+        placeholderTmp.fontSize = 16;
+        placeholderTmp.fontStyle = FontStyles.Italic;
+        placeholderTmp.alignment = TextAlignmentOptions.Left;
+        placeholderTmp.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
+
+        GameObject textGO = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+        textGO.transform.SetParent(textArea.transform, false);
+        var textRT = textGO.GetComponent<RectTransform>();
+        textRT.anchorMin = Vector2.zero;
+        textRT.anchorMax = Vector2.one;
+        textRT.sizeDelta = Vector2.zero;
+        
+        var textTmp = textGO.GetComponent<TextMeshProUGUI>();
+        textTmp.fontSize = 16;
+        textTmp.alignment = TextAlignmentOptions.Left;
+        textTmp.color = Color.white;
+
+        inputField.textViewport = taRT;
+        inputField.textComponent = textTmp;
+        inputField.placeholder = placeholderTmp;
+
+        return inputField;
     }
 
     private void QuitGame()

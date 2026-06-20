@@ -157,7 +157,11 @@ public class SlotUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
         }
         if (amountText != null)
         {
-            string amtStr = (hasItem && data.amount > 1) ? data.amount.ToString() : "";
+            bool isCreative = false;
+            var player = FindFirstObjectByType<PlayerController>();
+            if (player != null && player.isCreativeMode) isCreative = true;
+
+            string amtStr = (hasItem && data.amount > 1 && !isCreative) ? data.amount.ToString() : "";
             amountText.text = amtStr;
             if (amountOutlineTexts != null)
             {

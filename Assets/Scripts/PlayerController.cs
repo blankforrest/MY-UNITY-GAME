@@ -70,6 +70,15 @@ public class PlayerController : MonoBehaviour
             r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
 
+        if (PlayerPrefs.HasKey("MouseSensitivity"))
+        {
+            mouseSensitivity = PlayerPrefs.GetFloat("MouseSensitivity");
+        }
+        if (cam != null && PlayerPrefs.HasKey("FOV"))
+        {
+            cam.fieldOfView = PlayerPrefs.GetFloat("FOV");
+        }
+
         // Initial cursor state
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -140,7 +149,7 @@ public class PlayerController : MonoBehaviour
         }
         if (cameraTransform == null) return;
 
-        bool isUIOpen = InventoryUI.IsInventoryOpen || ConfirmationWindow.IsOpen || DevToolsUI.IsCursorUnlocked || isDead;
+        bool isUIOpen = InventoryUI.IsInventoryOpen || ConfirmationWindow.IsOpen || DevToolsUI.IsCursorUnlocked || isDead || PauseMenu.IsPaused;
 
         // Handle cursor lock state based on UI
         if (isUIOpen)
@@ -160,8 +169,16 @@ public class PlayerController : MonoBehaviour
             if (controller.enabled)
             {
                 isGrounded = controller.isGrounded;
-                if (isGrounded && velocity.y < 0) velocity.y = -2f;
-                velocity.y += gravity * Time.deltaTime;
+                if (isCreativeMode)
+                {
+                    // Remain suspended/no gravity when inventory or pause menu is opened while flying
+                    velocity.y = 0f;
+                }
+                else
+                {
+                    if (isGrounded && velocity.y < 0) velocity.y = -2f;
+                    velocity.y += gravity * Time.deltaTime;
+                }
                 controller.Move(velocity * Time.deltaTime);
             }
             
@@ -305,7 +322,7 @@ public class PlayerController : MonoBehaviour
 
         if (isCreativeMode)
         {
-            speed *= 4f; // 100% faster than the previous speed factor of 2f
+            speed *= 2f;
         }
 
         // Prevent falling off edges when sneaking
@@ -350,7 +367,7 @@ public class PlayerController : MonoBehaviour
             if (isCreativeMode)
             {
                 velocity.y = 0f;
-                float verticalSpeed = (isRunning ? runSpeed : walkSpeed) * 4f; // 100% faster vertical flight speed
+                float verticalSpeed = (isRunning ? runSpeed : walkSpeed) * 2f; // flight speed
                 if (Keyboard.current.spaceKey.isPressed)
                 {
                     velocity.y = verticalSpeed;

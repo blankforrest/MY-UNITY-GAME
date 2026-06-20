@@ -49,6 +49,20 @@ public class Hotbar : MonoBehaviour
     {
         BuildHotbarUI();
         UpdateHighlight();
+
+        var player = FindFirstObjectByType<PlayerController>();
+        if (player != null && player.isCreativeMode)
+        {
+            for (int i = 0; i < SLOT_COUNT; i++)
+            {
+                hotbarSlots[i] = null;
+            }
+        }
+
+        for (int i = 0; i < SLOT_COUNT; i++)
+        {
+            RefreshSlotVisual(i);
+        }
     }
 
     void Update()
@@ -194,6 +208,7 @@ public class Hotbar : MonoBehaviour
 
     void HandleScroll()
     {
+        if (InventoryUI.IsInventoryOpen) return;
         if (Mouse.current == null) return;
         float scroll = Mouse.current.scroll.ReadValue().y;
         if (scroll > 0f)  SelectSlot((SelectedIndex - 1 + SLOT_COUNT) % SLOT_COUNT);
@@ -235,18 +250,22 @@ public class Hotbar : MonoBehaviour
         RefreshSlotVisual(index);
     }
 
-    /// <summary>Try to add an item — stacks if already in bar, else uses first empty slot.</summary>
     public bool TryAddItem(Item item, int amount)
     {
         if (item == null) return false;
 
-        for (int i = 0; i < SLOT_COUNT; i++)
+        // Tools are not stackable
+        bool isTool = item.toolType != ToolType.None;
+        if (!isTool)
         {
-            if (hotbarSlots[i] != null && hotbarSlots[i].item != null && hotbarSlots[i].item.itemName == item.itemName)
+            for (int i = 0; i < SLOT_COUNT; i++)
             {
-                hotbarSlots[i].amount += amount;
-                RefreshSlotVisual(i);
-                return true;
+                if (hotbarSlots[i] != null && hotbarSlots[i].item != null && hotbarSlots[i].item.itemName == item.itemName)
+                {
+                    hotbarSlots[i].amount += amount;
+                    RefreshSlotVisual(i);
+                    return true;
+                }
             }
         }
         for (int i = 0; i < SLOT_COUNT; i++)
@@ -293,7 +312,11 @@ public class Hotbar : MonoBehaviour
 
         // Stack count
         TextMeshProUGUI txt = slotTexts[index];
-        string amtStr = (data != null && data.amount > 1) ? data.amount.ToString() : "";
+        bool isCreative = false;
+        var player = FindFirstObjectByType<PlayerController>();
+        if (player != null && player.isCreativeMode) isCreative = true;
+
+        string amtStr = (data != null && data.amount > 1 && !isCreative) ? data.amount.ToString() : "";
         txt.text = amtStr;
         if (index < slotOutlineTexts.Count && slotOutlineTexts[index] != null)
         {

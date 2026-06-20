@@ -156,6 +156,13 @@ public class DragDropManager : MonoBehaviour
     {
         if (Mouse.current == null) return;
 
+        if (PauseMenu.IsPaused)
+        {
+            if (ghost != null && ghost.enabled) ghost.enabled = false;
+            if (ghostNameLabel != null && ghostNameLabel.gameObject.activeSelf) ghostNameLabel.gameObject.SetActive(false);
+            return;
+        }
+
         if (ghost == null)
         {
             InitializeGhost();
@@ -291,6 +298,11 @@ public class DragDropManager : MonoBehaviour
     {
         if (slot == null) return;
 
+        // In Creative Mode: do not split main inventory slots
+        var pc = FindFirstObjectByType<PlayerController>();
+        if (pc != null && pc.isCreativeMode && slot.owner == SlotUI.Owner.Inventory)
+            return;
+
         if (isInSplitMode)
         {
             ExitSplitMode();
@@ -350,7 +362,7 @@ public class DragDropManager : MonoBehaviour
             // Clicked an empty or same-item slot (split action)
             var clickedData = slot.GetItemData();
             bool isEmpty = clickedData == null || clickedData.item == null;
-            bool isSameType = !isEmpty && clickedData.item.itemName == srcData.item.itemName;
+            bool isSameType = !isEmpty && clickedData.item.itemName == srcData.item.itemName && srcData.item.toolType == ToolType.None;
 
             if (!isEmpty && !isSameType)
             {
@@ -420,25 +432,36 @@ public class DragDropManager : MonoBehaviour
             }
             else
             {
-                if (isLeftClick)
+                var pc = FindFirstObjectByType<PlayerController>();
+                bool isCreative = pc != null && pc.isCreativeMode;
+
+                if (isCreative && slot.owner == SlotUI.Owner.Inventory)
                 {
-                    heldItem = new InventorySlot(slotData.item, slotData.amount);
-                    slot.WriteItemData(null);
+                    int amountToPick = isLeftClick ? (slotData.item.toolType == ToolType.None ? 64 : 1) : 1;
+                    heldItem = new InventorySlot(slotData.item, amountToPick);
                 }
                 else
                 {
-                    // Pick up half (rounded up)
-                    int amountToPick = (slotData.amount + 1) / 2;
-                    int amountLeft = slotData.amount - amountToPick;
-
-                    heldItem = new InventorySlot(slotData.item, amountToPick);
-                    if (amountLeft <= 0)
+                    if (isLeftClick)
                     {
+                        heldItem = new InventorySlot(slotData.item, slotData.amount);
                         slot.WriteItemData(null);
                     }
                     else
                     {
-                        slot.WriteItemData(new InventorySlot(slotData.item, amountLeft));
+                        // Pick up half (rounded up)
+                        int amountToPick = (slotData.amount + 1) / 2;
+                        int amountLeft = slotData.amount - amountToPick;
+
+                        heldItem = new InventorySlot(slotData.item, amountToPick);
+                        if (amountLeft <= 0)
+                        {
+                            slot.WriteItemData(null);
+                        }
+                        else
+                        {
+                            slot.WriteItemData(new InventorySlot(slotData.item, amountLeft));
+                        }
                     }
                 }
             }
@@ -448,6 +471,25 @@ public class DragDropManager : MonoBehaviour
         else
         {
             // ── Floating item has items -> placing into slot ──
+            var pc = FindFirstObjectByType<PlayerController>();
+            bool isCreative = pc != null && pc.isCreativeMode;
+
+            if (isCreative && slot.owner == SlotUI.Owner.Inventory)
+            {
+                if (slotData != null && slotData.item != null)
+                {
+                    int amountToGet = isLeftClick ? (slotData.item.toolType == ToolType.None ? 64 : 1) : 1;
+                    heldItem = new InventorySlot(slotData.item, amountToGet);
+                }
+                else
+                {
+                    heldItem = null;
+                }
+                slot.Refresh();
+                UpdateGhostVisual();
+                return;
+            }
+
             if (slot.owner == SlotUI.Owner.CraftingOutput)
             {
                 if (slotData != null && slotData.item != null && slotData.item.itemName == heldItem.item.itemName)
@@ -522,7 +564,7 @@ public class DragDropManager : MonoBehaviour
                     if (heldItem.amount <= 0) heldItem = null;
                 }
             }
-            else if (slotData.item.itemName == heldItem.item.itemName)
+            else if (slotData.item.itemName == heldItem.item.itemName && heldItem.item.toolType == ToolType.None)
             {
                 if (isLeftClick)
                 {
@@ -678,6 +720,19 @@ public class DragDropManager : MonoBehaviour
         // 3. Shift-Clicking Main Inventory Slot -> Transfer to hotbar (or furnace if furnace open)
         if (slot.owner == SlotUI.Owner.Inventory)
         {
+            var pc = FindFirstObjectByType<PlayerController>();
+            bool isCreative = pc != null && pc.isCreativeMode;
+
+            if (isCreative)
+            {
+                if (Hotbar.Instance != null)
+                {
+                    int amountToMove = slotData.item.toolType == ToolType.None ? 64 : 1;
+                    Hotbar.Instance.TryAddItem(slotData.item, amountToMove);
+                }
+                return;
+            }
+
             if (InventoryUI.Instance != null && InventoryUI.Instance.isFurnaceActive && FurnaceManager.ActiveFurnace != null)
             {
                 if (FurnaceManager.IsFuel(slotData.item))
@@ -864,7 +919,11 @@ public class DragDropManager : MonoBehaviour
             ghost.enabled = true;
             if (ghostText != null)
             {
-                string amtStr = heldItem.amount > 1 ? heldItem.amount.ToString() : "";
+                bool isCreative = false;
+                var player = FindFirstObjectByType<PlayerController>();
+                if (player != null && player.isCreativeMode) isCreative = true;
+
+                string amtStr = (heldItem.amount > 1 && !isCreative) ? heldItem.amount.ToString() : "";
                 ghostText.text = amtStr;
                 ghostText.enabled = true;
                 if (ghostOutlineTexts != null)
@@ -923,10 +982,15 @@ public class DragDropManager : MonoBehaviour
         var results = new List<RaycastResult>();
         EventSystem.current.RaycastAll(ped, results);
 
-        foreach (var r in results)
+        if (results.Count > 0)
         {
-            SlotUI s = r.gameObject.GetComponentInParent<SlotUI>();
-            if (s != null) return s;
+            // If the topmost UI element is not a SlotUI, don't interact with it.
+            // This prevents click-through of pause panels to the inventory slots behind.
+            SlotUI topSlot = results[0].gameObject.GetComponentInParent<SlotUI>();
+            if (topSlot != null)
+            {
+                return topSlot;
+            }
         }
         return null;
     }

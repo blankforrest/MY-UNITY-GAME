@@ -235,6 +235,11 @@ public class VoxelWorld : MonoBehaviour
 
     void Start()
     {
+        if (PlayerPrefs.HasKey("RenderDistance"))
+        {
+            renderDistance = PlayerPrefs.GetInt("RenderDistance", 6);
+        }
+
         // Auto-find player
         if (playerTransform == null)
         {
@@ -262,6 +267,15 @@ public class VoxelWorld : MonoBehaviour
         if (current == lastChunk) return;
 
         lastChunk = current;
+        EnqueueChunksAround(current);
+        UnloadDistant(current);
+    }
+
+    public void RefreshRenderDistance(int newDistance)
+    {
+        renderDistance = newDistance;
+        if (playerTransform == null) return;
+        Vector2 current = PlayerChunkCoord();
         EnqueueChunksAround(current);
         UnloadDistant(current);
     }
@@ -392,7 +406,7 @@ public class VoxelWorld : MonoBehaviour
         if (blockID == 0 && !suppressDrop)
         {
             byte existing = chunk.GetVoxel(lx, ly, lz);
-            if (existing != 0 && (existing <= 12 || existing == 20 || existing == 21 || existing == 22 || existing == 23 || existing == 50 || existing == 36 || (existing >= 30 && existing <= 47)))
+            if (existing != 0 && (existing <= 14 || existing == 20 || existing == 21 || existing == 22 || existing == 23 || existing == 50 || existing == 36 || (existing >= 30 && existing <= 47)))
             {
                 Item drop = null;
                 if (blockDrops != null && existing < blockDrops.Length)
@@ -438,9 +452,23 @@ public class VoxelWorld : MonoBehaviour
                     else if (existing == 4)
                     {
                         drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Grass";
+                        drop.itemName = "Grass Block";
                         drop.blockTypeID = 4;
                         drop.icon = StarterItems.MakeGrassBlockIcon();
+                    }
+                    else if (existing == 13)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Short Grass";
+                        drop.blockTypeID = 13;
+                        drop.icon = StarterItems.MakeShortGrassIcon();
+                    }
+                    else if (existing == 14)
+                    {
+                        drop = ScriptableObject.CreateInstance<Item>();
+                        drop.itemName = "Tall Grass";
+                        drop.blockTypeID = 14;
+                        drop.icon = StarterItems.MakeTallGrassIcon();
                     }
                     else if (existing == 5)
                     {
@@ -619,12 +647,12 @@ public class VoxelWorld : MonoBehaviour
             SaveLoadManager.Instance.RecordModification(pos, blockID);
         }
 
-        // If we broke a block, break any flower sitting directly on top of it
+        // If we broke a block, break any flower or grass sitting directly on top of it
         if (blockID == 0)
         {
             Vector3 abovePos = pos + Vector3.up;
             byte aboveBlock = GetBlock(abovePos);
-            if (aboveBlock == 9 || aboveBlock == 10 || aboveBlock == 11) // Flower block types
+            if (aboveBlock == 9 || aboveBlock == 10 || aboveBlock == 11 || aboveBlock == 13 || aboveBlock == 14) // Flower and grass block types
             {
                 ModifyBlock(abovePos, 0);
             }
@@ -773,10 +801,10 @@ public class VoxelWorld : MonoBehaviour
             }
             else
             {
-                // Convert magenta key pixels in flower tiles to alpha=0
-                bool inFlowerTile = (px >= flowerTileXStart && px < flowerTileXEnd);
+                // Convert magenta key pixels in flower and grass tiles to alpha=0
+                bool inFlowerOrGrassTile = (px >= 9 * tileSize && px < 12 * tileSize) || (px >= 27 * tileSize && px < 29 * tileSize);
                 bool isMagenta    = (c.r > 0.8f && c.g < 0.2f && c.b > 0.8f);
-                out_[i] = inFlowerTile && isMagenta
+                out_[i] = inFlowerOrGrassTile && isMagenta
                     ? new Color(c.r, c.g, c.b, 0f)  // transparent
                     : new Color(c.r, c.g, c.b, 1f);  // opaque
             }

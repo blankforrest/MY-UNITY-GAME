@@ -53,16 +53,6 @@ public class WrenchItem : MonoBehaviour
 
         Sprite loaded = Resources.Load<Sprite>("WrenchIcon");
         _wrenchItem.icon     = (loaded != null) ? loaded : DrawWrenchIcon();
-
-        if (Hotbar.Instance != null)
-        {
-            bool added = Hotbar.Instance.TryAddItem(_wrenchItem, 1);
-            Debug.Log(added ? "[WrenchItem] Wrench added to hotbar." : "[WrenchItem] Hotbar full.");
-        }
-        else
-        {
-            Debug.LogError("[WrenchItem] Hotbar.Instance is null.");
-        }
     }
 
     // ── Procedural 64x64 pixel-art wrench icon ────────────────────────────────

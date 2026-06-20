@@ -32,6 +32,7 @@ public class StarterItems : MonoBehaviour
         { "Stone Stairs", "Sprites/stone_stairs" },
         { "Wooden Slab", "Sprites/wooden_slab" },
         { "Stone Slab", "Sprites/stone_slab" },
+        { "Leaves",     "Sprites/leaves_block" },
     };
 
     private IEnumerator Start()
@@ -40,6 +41,19 @@ public class StarterItems : MonoBehaviour
 
         // Wait one frame so Hotbar and Inventory have finished their Awake/Start
         yield return null;
+
+        var player = FindFirstObjectByType<PlayerController>();
+        if (player != null && !player.isCreativeMode)
+        {
+            Debug.Log("[StarterItems] Player is in Survival Mode — starting with empty inventory.");
+            yield break;
+        }
+
+        if (player != null && player.isCreativeMode)
+        {
+            Debug.Log("[StarterItems] Player is in Creative Mode — skipping giving starter items.");
+            yield break;
+        }
 
         if (SaveLoadManager.Instance != null && SaveLoadManager.Instance.HasSaveFile())
         {
@@ -53,10 +67,7 @@ public class StarterItems : MonoBehaviour
             yield break;
         }
 
-        // ── Hotbar: building blocks (quick-access) ────────────────────────────
-        GiveItem("Wood",  blockTypeID: 1, fallbackColor: new Color(0.55f, 0.38f, 0.17f), amount: 64);
-        GiveItem("Plank", blockTypeID: 2, fallbackColor: new Color(0.72f, 0.58f, 0.37f), amount: 64);
-        GiveItem("Stone", blockTypeID: 3, fallbackColor: new Color(0.52f, 0.52f, 0.54f), amount: 64);
+        // ── Hotbar: starts empty ────────────────────────────────────────────
 
         // ── Inventory bag: flowers & new blocks ───────────────────────────────
         GiveInventoryItem("Flower",    blockTypeID: 9,  fallbackColor: new Color(1.00f, 0.28f, 0.55f), amount: 64);
@@ -87,8 +98,13 @@ public class StarterItems : MonoBehaviour
             System.IO.Directory.CreateDirectory(dir);
         }
 
-        string[] names = { "coal_ore_block", "iron_ore_block", "gold_block", "iron_block", "sand_block", "glass_block", "crafting_table", "furnace", "wooden_slab", "stone_slab" };
-        int[] ids = { 30, 31, 32, 33, 34, 35, 36, 37, 46, 47 };
+        // Apply transparency key to coal, iron, and leaves AI-generated sprites if they exist
+        ApplyTransparencyKey(System.IO.Path.Combine(dir, "coal_ore_block.png"));
+        ApplyTransparencyKey(System.IO.Path.Combine(dir, "iron_ore_block.png"));
+        ApplyTransparencyKey(System.IO.Path.Combine(dir, "leaves_block.png"));
+
+        string[] names = { "gold_block", "iron_block", "sand_block", "glass_block", "crafting_table", "furnace", "wooden_slab", "stone_slab" };
+        int[] ids = { 32, 33, 34, 35, 36, 37, 46, 47 };
 
         bool createdAny = false;
         // Keep forceGenerate as false so we do not overwrite the permanent, hand-crafted sprites
@@ -118,6 +134,43 @@ public class StarterItems : MonoBehaviour
 #endif
     }
 
+    private void ApplyTransparencyKey(string path)
+    {
+        if (!System.IO.File.Exists(path)) return;
+        try
+        {
+            byte[] bytes = System.IO.File.ReadAllBytes(path);
+            Texture2D tex = new Texture2D(2, 2);
+            if (tex.LoadImage(bytes))
+            {
+                Color[] pixels = tex.GetPixels();
+                bool modified = false;
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    Color c = pixels[i];
+                    // If pixel is black or near-black
+                    if (c.r < 0.12f && c.g < 0.12f && c.b < 0.12f)
+                    {
+                        pixels[i] = Color.clear;
+                        modified = true;
+                    }
+                }
+                if (modified)
+                {
+                    tex.SetPixels(pixels);
+                    tex.Apply();
+                    byte[] outBytes = tex.EncodeToPNG();
+                    System.IO.File.WriteAllBytes(path, outBytes);
+                    Debug.Log($"[StarterItems] Keyed transparency for: {path}");
+                }
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[StarterItems] Error applying transparency key: {e}");
+        }
+    }
+
     public static Color GetBlockColor(int blockTypeID)
     {
         switch (blockTypeID)
@@ -129,6 +182,9 @@ public class StarterItems : MonoBehaviour
             case 9: return new Color(1.00f, 0.28f, 0.55f); // Flower
             case 10: return new Color(0.95f, 0.85f, 0.10f); // Dandelion
             case 11: return new Color(0.40f, 0.20f, 0.90f); // Iris
+            case 12: return new Color(0.22f, 0.55f, 0.18f); // Leaves
+            case 13: return new Color(0.22f, 0.55f, 0.18f); // Short Grass
+            case 14: return new Color(0.20f, 0.50f, 0.12f); // Tall Grass
             case 30: return new Color(0.20f, 0.20f, 0.20f); // Coal Ore
             case 31: return new Color(0.85f, 0.65f, 0.52f); // Iron Ore
             case 32: return new Color(0.98f, 0.82f, 0.15f); // Gold Block
@@ -147,6 +203,17 @@ public class StarterItems : MonoBehaviour
         Item item        = ScriptableObject.CreateInstance<Item>();
         item.itemName    = itemName;
         item.itemID      = 0;
+
+        ToolType tType;
+        ToolTier tTier;
+        Inventory.ParseToolName(itemName, out tType, out tTier);
+        if (tType != ToolType.None)
+        {
+            item.toolType = tType;
+            item.toolTier = tTier;
+            item.icon = Inventory.CreateToolIcon(tType, tTier);
+            return item;
+        }
         
         if (itemName.Equals("Wrench", System.StringComparison.OrdinalIgnoreCase))
         {
@@ -208,9 +275,17 @@ public class StarterItems : MonoBehaviour
         {
             item.icon = VoxelWorld.MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.40f, 0.20f, 0.90f), new Color(1.00f, 0.80f, 0.10f));
         }
-        else if (itemName.Equals("Grass", System.StringComparison.OrdinalIgnoreCase))
+        else if (itemName.Equals("Grass Block", System.StringComparison.OrdinalIgnoreCase) || blockTypeID == 4)
         {
             item.icon = MakeGrassBlockIcon();
+        }
+        else if (itemName.Equals("Short Grass", System.StringComparison.OrdinalIgnoreCase) || blockTypeID == 13)
+        {
+            item.icon = MakeShortGrassIcon();
+        }
+        else if (itemName.Equals("Tall Grass", System.StringComparison.OrdinalIgnoreCase) || blockTypeID == 14)
+        {
+            item.icon = MakeTallGrassIcon();
         }
         else
         {
@@ -283,6 +358,132 @@ public class StarterItems : MonoBehaviour
 
         // Fallback: procedural grass block using the unified isometric system
         return MakeIsometricBlock(4, Color.white);
+    }
+
+    private static Sprite _cachedGrassFoliageIcon;
+
+    public static Sprite MakeShortGrassIcon()
+    {
+        if (_cachedGrassFoliageIcon != null) return _cachedGrassFoliageIcon;
+
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        void Set(int x, int y, Color c)
+        { if (x >= 0 && x < SZ && y >= 0 && y < SZ) px[y * SZ + x] = c; }
+
+        Color darkGreen = new Color(0.18f, 0.48f, 0.08f);
+        Color midGreen  = new Color(0.22f, 0.55f, 0.18f);
+        Color lightGreen = new Color(0.28f, 0.68f, 0.15f);
+
+        // Draw multiple blades of grass starting from the bottom-center/bottom-sides
+        // Blade 1 (tall center, slightly left-leaning)
+        for (int y = 4; y < 48; y++)
+        {
+            int x = 32 - (y - 4) / 6;
+            Set(x, y, midGreen);
+            Set(x + 1, y, midGreen);
+        }
+        // Blade 2 (shorter left, leaning left)
+        for (int y = 4; y < 32; y++)
+        {
+            int x = 24 - (y - 4) / 2;
+            Set(x, y, darkGreen);
+            Set(x + 1, y, darkGreen);
+        }
+        // Blade 3 (shorter right, leaning right)
+        for (int y = 4; y < 36; y++)
+        {
+            int x = 40 + (y - 4) / 3;
+            Set(x, y, lightGreen);
+            Set(x - 1, y, lightGreen);
+        }
+        // Blade 4 (mid-tall center-right, straight-ish)
+        for (int y = 4; y < 42; y++)
+        {
+            int x = 35 + (y - 4) / 10;
+            Set(x, y, lightGreen);
+            Set(x + 1, y, lightGreen);
+        }
+        // Blade 5 (short center-left, straight-ish)
+        for (int y = 4; y < 24; y++)
+        {
+            int x = 28 - (y - 4) / 8;
+            Set(x, y, darkGreen);
+            Set(x + 1, y, darkGreen);
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+
+        _cachedGrassFoliageIcon = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+        return _cachedGrassFoliageIcon;
+    }
+
+    private static Sprite _cachedTallGrassFoliageIcon;
+
+    public static Sprite MakeTallGrassIcon()
+    {
+        if (_cachedTallGrassFoliageIcon != null) return _cachedTallGrassFoliageIcon;
+
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        void Set(int x, int y, Color c)
+        { if (x >= 0 && x < SZ && y >= 0 && y < SZ) px[y * SZ + x] = c; }
+
+        Color darkGreen = new Color(0.15f, 0.42f, 0.05f);
+        Color midGreen  = new Color(0.20f, 0.50f, 0.12f);
+        Color lightGreen = new Color(0.25f, 0.62f, 0.15f);
+
+        // Draw multiple tall blades of grass
+        // Blade 1 (tall center-left, leaning left)
+        for (int y = 4; y < 58; y++)
+        {
+            int x = 28 - (y - 4) / 4;
+            Set(x, y, lightGreen);
+            Set(x + 1, y, lightGreen);
+        }
+        // Blade 2 (tall center-right, leaning right)
+        for (int y = 4; y < 56; y++)
+        {
+            int x = 36 + (y - 4) / 5;
+            Set(x, y, lightGreen);
+            Set(x - 1, y, lightGreen);
+        }
+        // Blade 3 (straight center)
+        for (int y = 4; y < 52; y++)
+        {
+            int x = 32;
+            Set(x, y, midGreen);
+            Set(x + 1, y, midGreen);
+        }
+        // Blade 4 (shorter left)
+        for (int y = 4; y < 38; y++)
+        {
+            int x = 20 - (y - 4) / 2;
+            Set(x, y, darkGreen);
+            Set(x + 1, y, darkGreen);
+        }
+        // Blade 5 (shorter right)
+        for (int y = 4; y < 40; y++)
+        {
+            int x = 44 + (y - 4) / 2;
+            Set(x, y, darkGreen);
+            Set(x - 1, y, darkGreen);
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+
+        _cachedTallGrassFoliageIcon = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+        return _cachedTallGrassFoliageIcon;
     }
 
     private static Sprite _cachedGlassIcon;
@@ -443,6 +644,7 @@ public class StarterItems : MonoBehaviour
                 else if (blockTypeID == 32) tileIndex = 20; // Gold Block
                 else if (blockTypeID == 33) tileIndex = 21; // Iron Block
                 else if (blockTypeID == 8 || blockTypeID == 34) tileIndex = 8; // Sand
+                else if (blockTypeID == 12) tileIndex = 12; // Leaves
                 else if (blockTypeID == 35) tileIndex = 22; // Glass
                 else if (blockTypeID == 36) tileIndex = (face == 1) ? 23 : 24; // Crafting Table
                 else if (blockTypeID == 37) tileIndex = (face == 3) ? 25 : 3;  // Furnace front is 25, others are stone (3)

@@ -4,12 +4,12 @@ public class Inventory : MonoBehaviour
 {
     public static Inventory Instance { get; private set; }
 
-    public const int MaxSlots = 25; // 5x5
+    public const int MaxSlots = 84; // 7x12
 
     public delegate void OnInventoryChanged();
     public OnInventoryChanged onInventoryChangedCallback;
 
-    // Fixed 25-slot array — null means empty
+    // Fixed 35-slot array — null means empty
     public InventorySlot[] slots = new InventorySlot[MaxSlots];
 
     // 2x2 crafting grid and result slot
@@ -53,9 +53,14 @@ public class Inventory : MonoBehaviour
     {
         if (item == null) return false;
 
-        for (int i = 0; i < slots.Length; i++)
-            if (slots[i] != null && slots[i].item != null && slots[i].item.itemName == item.itemName)
-            { slots[i].amount += amount; onInventoryChangedCallback?.Invoke(); return true; }
+        // Tools are not stackable
+        bool isTool = item.toolType != ToolType.None;
+        if (!isTool)
+        {
+            for (int i = 0; i < slots.Length; i++)
+                if (slots[i] != null && slots[i].item != null && slots[i].item.itemName == item.itemName)
+                { slots[i].amount += amount; onInventoryChangedCallback?.Invoke(); return true; }
+        }
 
         for (int i = 0; i < slots.Length; i++)
             if (slots[i] == null || slots[i].item == null)
@@ -591,6 +596,11 @@ public class Inventory : MonoBehaviour
         item.blockTypeID = blockTypeID;
         item.itemID = 0;
 
+        if (itemName.Equals("Wrench", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.itemID = 99;
+        }
+
         // Parse tool characteristics
         ToolType tType;
         ToolTier tTier;
@@ -604,7 +614,7 @@ public class Inventory : MonoBehaviour
         }
 
         Sprite sprite = null;
-        if (itemName.Equals("Grass", System.StringComparison.OrdinalIgnoreCase))
+        if (itemName.Equals("Grass Block", System.StringComparison.OrdinalIgnoreCase))
         {
             sprite = StarterItems.MakeGrassBlockIcon();
         }
@@ -630,16 +640,226 @@ public class Inventory : MonoBehaviour
                 sprite = VehicleSpawner.CreateWheelIcon(true);
             else if (itemName == "Propeller")
                 sprite = VehicleSpawner.CreatePropellerIcon();
-            else if (itemName == "Plank")
-                sprite = StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f));
-            else if (itemName == "Crafting Table")
-                sprite = StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f), 36);
+            else if (itemName.Equals("Flower", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = VoxelWorld.MakeFlowerIcon();
+            }
+            else if (itemName.Equals("Dandelion", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = VoxelWorld.MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.95f, 0.85f, 0.10f), new Color(0.95f, 0.65f, 0.05f));
+            }
+            else if (itemName.Equals("Iris", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = VoxelWorld.MakeFlowerIcon(new Color(0.22f, 0.55f, 0.18f), new Color(0.40f, 0.20f, 0.90f), new Color(1.00f, 0.80f, 0.10f));
+            }
+            else if (itemName.Equals("Grass Block", System.StringComparison.OrdinalIgnoreCase) || blockTypeID == 4)
+            {
+                sprite = StarterItems.MakeGrassBlockIcon();
+            }
+            else if (itemName.Equals("Short Grass", System.StringComparison.OrdinalIgnoreCase) || blockTypeID == 13)
+            {
+                sprite = StarterItems.MakeShortGrassIcon();
+            }
+            else if (itemName.Equals("Tall Grass", System.StringComparison.OrdinalIgnoreCase) || blockTypeID == 14)
+            {
+                sprite = StarterItems.MakeTallGrassIcon();
+            }
+            else if (itemName == "Wrench")
+            {
+                Sprite wrenchLoaded = Resources.Load<Sprite>("WrenchIcon");
+                sprite = (wrenchLoaded != null) ? wrenchLoaded : StarterItems.MakeBlockIcon(new Color(0.75f, 0.75f, 0.75f));
+            }
+            else if (itemName == "Iron")
+                sprite = StarterItems.MakeBlockIcon(new Color(0.85f, 0.85f, 0.85f));
+            else if (blockTypeID != 0)
+            {
+                Color blockColor = StarterItems.GetBlockColor(blockTypeID);
+                sprite = StarterItems.MakeBlockIcon(blockColor, blockTypeID);
+            }
             else
+            {
                 sprite = StarterItems.MakeBlockIcon(Color.gray);
+            }
         }
 
         item.icon = sprite;
         return item;
+    }
+
+    private struct CreativeItemData
+    {
+        public string name;
+        public int typeId;
+        public int amount;
+        public CreativeItemData(string name, int typeId, int amount)
+        {
+            this.name = name;
+            this.typeId = typeId;
+            this.amount = amount;
+        }
+    }
+
+    public void PopulateCreativeCategory(string category)
+    {
+        for (int i = 0; i < MaxSlots; i++)
+        {
+            ClearSlot(i, silent: true);
+        }
+
+        System.Collections.Generic.List<CreativeItemData> items = new System.Collections.Generic.List<CreativeItemData>();
+
+        if (category == "ALL")
+        {
+            // ── 1. Blocks ──────────────────────────────────────────
+            items.Add(new CreativeItemData("Grass Block", 4, 64));
+            items.Add(new CreativeItemData("Stone", 3, 64));
+            items.Add(new CreativeItemData("Plank", 2, 64));
+            items.Add(new CreativeItemData("Wood", 1, 64));
+            items.Add(new CreativeItemData("Dirt", 5, 64));
+            items.Add(new CreativeItemData("Sand", 34, 64));
+            items.Add(new CreativeItemData("Glass", 35, 64));
+            items.Add(new CreativeItemData("Gold Block", 32, 64));
+            items.Add(new CreativeItemData("Iron Block", 33, 64));
+            items.Add(new CreativeItemData("Coal Ore", 30, 64));
+            items.Add(new CreativeItemData("Iron Ore", 31, 64));
+            items.Add(new CreativeItemData("Crafting Table", 36, 64));
+            items.Add(new CreativeItemData("Furnace", 37, 64));
+            items.Add(new CreativeItemData("Wooden Stairs", 38, 64));
+            items.Add(new CreativeItemData("Stone Stairs", 39, 64));
+            items.Add(new CreativeItemData("Wooden Slab", 46, 64));
+            items.Add(new CreativeItemData("Stone Slab", 47, 64));
+
+            // ── 2. Tools & Materials ────────────────────────────────
+            items.Add(new CreativeItemData("Diamond Pickaxe", 0, 1));
+            items.Add(new CreativeItemData("Diamond Axe", 0, 1));
+            items.Add(new CreativeItemData("Diamond Shovel", 0, 1));
+            items.Add(new CreativeItemData("Diamond Sword", 0, 1));
+            items.Add(new CreativeItemData("Diamond Rake", 0, 1));
+            items.Add(new CreativeItemData("Iron Pickaxe", 0, 1));
+            items.Add(new CreativeItemData("Iron Axe", 0, 1));
+            items.Add(new CreativeItemData("Iron Shovel", 0, 1));
+            items.Add(new CreativeItemData("Iron Sword", 0, 1));
+            items.Add(new CreativeItemData("Iron Rake", 0, 1));
+            items.Add(new CreativeItemData("Stone Pickaxe", 0, 1));
+            items.Add(new CreativeItemData("Stone Axe", 0, 1));
+            items.Add(new CreativeItemData("Stone Shovel", 0, 1));
+            items.Add(new CreativeItemData("Stone Sword", 0, 1));
+            items.Add(new CreativeItemData("Stone Rake", 0, 1));
+            items.Add(new CreativeItemData("Wooden Pickaxe", 0, 1));
+            items.Add(new CreativeItemData("Wooden Axe", 0, 1));
+            items.Add(new CreativeItemData("Wooden Shovel", 0, 1));
+            items.Add(new CreativeItemData("Wooden Sword", 0, 1));
+            items.Add(new CreativeItemData("Wooden Rake", 0, 1));
+            items.Add(new CreativeItemData("Wrench", 0, 1));
+            items.Add(new CreativeItemData("Iron", 0, 64));
+            items.Add(new CreativeItemData("Diamond", 0, 64));
+            items.Add(new CreativeItemData("Stick", 0, 64));
+
+            // ── 3. Vehicles ─────────────────────────────────────────
+            items.Add(new CreativeItemData("Control Block", 50, 64));
+            items.Add(new CreativeItemData("Small Wheel", 20, 64));
+            items.Add(new CreativeItemData("Large Wheel", 21, 64));
+            items.Add(new CreativeItemData("Propeller", 22, 64));
+
+            // ── 4. Foliage ──────────────────────────────────────────
+            items.Add(new CreativeItemData("Short Grass", 13, 64));
+            items.Add(new CreativeItemData("Tall Grass", 14, 64));
+            items.Add(new CreativeItemData("Leaves", 12, 64));
+            items.Add(new CreativeItemData("Flower", 9, 64));
+            items.Add(new CreativeItemData("Dandelion", 10, 64));
+            items.Add(new CreativeItemData("Iris", 11, 64));
+        }
+        else if (category == "BLOCKS")
+        {
+            items.Add(new CreativeItemData("Grass Block", 4, 64));
+            items.Add(new CreativeItemData("Stone", 3, 64));
+            items.Add(new CreativeItemData("Plank", 2, 64));
+            items.Add(new CreativeItemData("Wood", 1, 64));
+            items.Add(new CreativeItemData("Dirt", 5, 64));
+            items.Add(new CreativeItemData("Sand", 34, 64));
+            items.Add(new CreativeItemData("Glass", 35, 64));
+            items.Add(new CreativeItemData("Gold Block", 32, 64));
+            items.Add(new CreativeItemData("Iron Block", 33, 64));
+            items.Add(new CreativeItemData("Coal Ore", 30, 64));
+            items.Add(new CreativeItemData("Iron Ore", 31, 64));
+            items.Add(new CreativeItemData("Crafting Table", 36, 64));
+            items.Add(new CreativeItemData("Furnace", 37, 64));
+            items.Add(new CreativeItemData("Wooden Stairs", 38, 64));
+            items.Add(new CreativeItemData("Stone Stairs", 39, 64));
+            items.Add(new CreativeItemData("Wooden Slab", 46, 64));
+            items.Add(new CreativeItemData("Stone Slab", 47, 64));
+        }
+        else if (category == "TOOLS")
+        {
+            // Diamond
+            items.Add(new CreativeItemData("Diamond Pickaxe", 0, 1));
+            items.Add(new CreativeItemData("Diamond Axe", 0, 1));
+            items.Add(new CreativeItemData("Diamond Shovel", 0, 1));
+            items.Add(new CreativeItemData("Diamond Sword", 0, 1));
+            items.Add(new CreativeItemData("Diamond Rake", 0, 1));
+            // Iron
+            items.Add(new CreativeItemData("Iron Pickaxe", 0, 1));
+            items.Add(new CreativeItemData("Iron Axe", 0, 1));
+            items.Add(new CreativeItemData("Iron Shovel", 0, 1));
+            items.Add(new CreativeItemData("Iron Sword", 0, 1));
+            items.Add(new CreativeItemData("Iron Rake", 0, 1));
+            // Stone
+            items.Add(new CreativeItemData("Stone Pickaxe", 0, 1));
+            items.Add(new CreativeItemData("Stone Axe", 0, 1));
+            items.Add(new CreativeItemData("Stone Shovel", 0, 1));
+            items.Add(new CreativeItemData("Stone Sword", 0, 1));
+            items.Add(new CreativeItemData("Stone Rake", 0, 1));
+            // Wood
+            items.Add(new CreativeItemData("Wooden Pickaxe", 0, 1));
+            items.Add(new CreativeItemData("Wooden Axe", 0, 1));
+            items.Add(new CreativeItemData("Wooden Shovel", 0, 1));
+            items.Add(new CreativeItemData("Wooden Sword", 0, 1));
+            items.Add(new CreativeItemData("Wooden Rake", 0, 1));
+            // Wrench, materials
+            items.Add(new CreativeItemData("Wrench", 0, 1));
+            items.Add(new CreativeItemData("Iron", 0, 64));
+            items.Add(new CreativeItemData("Diamond", 0, 64));
+        }
+        else if (category == "VEHICLES")
+        {
+            items.Add(new CreativeItemData("Control Block", 50, 64));
+            items.Add(new CreativeItemData("Small Wheel", 20, 64));
+            items.Add(new CreativeItemData("Large Wheel", 21, 64));
+            items.Add(new CreativeItemData("Propeller", 22, 64));
+            items.Add(new CreativeItemData("Wrench", 0, 1));
+        }
+        else if (category == "FOLIAGE")
+        {
+            items.Add(new CreativeItemData("Short Grass", 13, 64));
+            items.Add(new CreativeItemData("Tall Grass", 14, 64));
+            items.Add(new CreativeItemData("Leaves", 12, 64));
+            items.Add(new CreativeItemData("Flower", 9, 64));
+            items.Add(new CreativeItemData("Dandelion", 10, 64));
+            items.Add(new CreativeItemData("Iris", 11, 64));
+        }
+
+        // Dynamically size the slots array to match the populated items list size (indefinite slots)
+        slots = new InventorySlot[items.Count];
+        for (int i = 0; i < items.Count; i++)
+        {
+            var itemData = items[i];
+            slots[i] = new InventorySlot(CreateItem(itemData.name, itemData.typeId), itemData.amount);
+        }
+
+        onInventoryChangedCallback?.Invoke();
+    }
+
+    public void PopulateCreativeInventory()
+    {
+        if (Hotbar.Instance != null)
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                Hotbar.Instance.SetSlot(i, null, 0);
+            }
+        }
+
+        PopulateCreativeCategory("ALL");
     }
 
     private static Sprite CreateStickIcon()
@@ -702,7 +922,8 @@ public class Inventory : MonoBehaviour
             case ToolTier.Diamond: matColor = new Color(0.20f, 0.80f, 0.85f, 1f); break;
         }
 
-        for (int i = 12; i <= 40; i++)
+        int stickLength = (type == ToolType.Pickaxe) ? 48 : 40;
+        for (int i = 12; i <= stickLength; i++)
         {
             SetPixelSafe(px, SZ, i, i, stickColor);
             SetPixelSafe(px, SZ, i + 1, i, stickColor);
@@ -730,8 +951,8 @@ public class Inventory : MonoBehaviour
                 int hx = 40 - offset;
                 int hy = 40 + offset;
                 int curve = (14 * 14 - offset * offset) / 18;
-                hx -= curve;
-                hy -= curve;
+                hx += curve;
+                hy += curve;
                 for (int dx = -1; dx <= 1; dx++)
                 {
                     for (int dy = -1; dy <= 1; dy++)
@@ -805,7 +1026,7 @@ public class Inventory : MonoBehaviour
         }
     }
 
-    private static void ParseToolName(string name, out ToolType type, out ToolTier tier)
+    public static void ParseToolName(string name, out ToolType type, out ToolTier tier)
     {
         type = ToolType.None;
         tier = ToolTier.None;
