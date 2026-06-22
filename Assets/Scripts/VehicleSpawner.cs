@@ -35,6 +35,73 @@ public class VehicleSpawner : MonoBehaviour
     private static Sprite _cachedSmallWheelIcon;
     private static Sprite _cachedLargeWheelIcon;
     private static Sprite _cachedPropellerIcon;
+    private static Sprite _cachedLargePropellerIcon;
+
+    public static Sprite CreateLargePropellerIcon()
+    {
+        if (_cachedLargePropellerIcon != null) return _cachedLargePropellerIcon;
+
+        const int SZ = 64;
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        Color[] px = new Color[SZ * SZ];
+
+        Color darkGray   = new Color(0.15f, 0.15f, 0.17f, 1f);
+        Color brassColor = new Color(0.82f, 0.58f, 0.16f, 1f);
+        Color lightBrass = new Color(0.92f, 0.72f, 0.25f, 1f);
+        Color shadowColor= new Color(0.08f, 0.08f, 0.08f, 0.5f);
+
+        float centerX = SZ / 2f;
+        float centerY = SZ / 2f;
+
+        for (int y = 0; y < SZ; y++)
+        {
+            for (int x = 0; x < SZ; x++)
+            {
+                float dx = x - centerX;
+                float dy = y - centerY;
+                float distSq = dx * dx + dy * dy;
+                float dist = Mathf.Sqrt(distSq);
+
+                Color c = Color.clear;
+
+                float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg + 180f; // 0 to 360
+                bool inBlade = false;
+
+                for (int i = 0; i < 3; i++)
+                {
+                    float targetAngle = i * 120f + 30f;
+                    float diff = Mathf.DeltaAngle(angle, targetAngle);
+                    if (Mathf.Abs(diff) < 18f && dist > 7f && dist < 31f)
+                    {
+                        inBlade = true;
+                        break;
+                    }
+                }
+
+                if (inBlade)
+                {
+                    float shade = Mathf.Clamp01(dist / 31f);
+                    c = Color.Lerp(lightBrass, brassColor, shade);
+                }
+                else if (dist <= 8f)
+                {
+                    c = darkGray;
+                }
+                else if (dist > 8f && dist <= 11f && dy < -3f)
+                {
+                    c = shadowColor;
+                }
+
+                px[y * SZ + x] = c;
+            }
+        }
+
+        tex.SetPixels(px);
+        tex.Apply();
+        _cachedLargePropellerIcon = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+        return _cachedLargePropellerIcon;
+    }
 
     public static Sprite CreatePropellerIcon()
     {
@@ -289,11 +356,11 @@ public class VehicleSpawner : MonoBehaviour
 
         foreach (BlockEntry entry in blueprint.blocks)
         {
-            // Large wheel helper blocks are voxel-world placeholders only — nothing to spawn on the vehicle.
-            if (entry.blockTypeID == 23) continue;
+            // Large wheel and Large propeller helper blocks are voxel-world placeholders only — nothing to spawn on the vehicle.
+            if (entry.blockTypeID == 23 || entry.blockTypeID == 27) continue;
 
             bool isWheel = (entry.blockTypeID == 20 || entry.blockTypeID == 21);
-            bool isPropeller = (entry.blockTypeID == 22);
+            bool isPropeller = (entry.blockTypeID == 22 || entry.blockTypeID == 26);
 
             GameObject blockGO;
             if (isWheel || isPropeller)
@@ -395,15 +462,28 @@ public class VehicleSpawner : MonoBehaviour
                 GameObject propVisual = new GameObject("PropellerVisual");
                 propVisual.transform.SetParent(blockGO.transform, false);
                 propVisual.transform.localRotation = Quaternion.identity; // Align with blockGO
-                PropellerMeshBuilder.Apply(propVisual, 0.6f, 0.6f);
+                
+                if (entry.blockTypeID == 26)
+                {
+                    propVisual.transform.localPosition = new Vector3(0f, 0f, 0.5f);
+                    PropellerMeshBuilder.Apply(propVisual, 1.5f, 2.0f);
+                }
+                else
+                {
+                    propVisual.transform.localPosition = Vector3.zero;
+                    PropellerMeshBuilder.Apply(propVisual, 0.6f, 0.6f);
+                }
 
                 // Auto-orient blockGO based on neighbors in blueprint
                 Quaternion blockRotation = Quaternion.identity;
                 
-                bool hasFrontNeighbor = blueprint.blocks.Exists(b => b.localPosition == entry.localPosition + Vector3Int.forward);
-                bool hasBackNeighbor  = blueprint.blocks.Exists(b => b.localPosition == entry.localPosition + Vector3Int.back);
-                bool hasLeftNeighbor  = blueprint.blocks.Exists(b => b.localPosition == entry.localPosition + Vector3Int.left);
-                bool hasRightNeighbor = blueprint.blocks.Exists(b => b.localPosition == entry.localPosition + Vector3Int.right);
+                // Exclude helper blocks (ID 23 and 27) from neighbor checks so we don't orient against them
+                bool hasFrontNeighbor = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.forward);
+                bool hasBackNeighbor  = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.back);
+                bool hasLeftNeighbor  = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.left);
+                bool hasRightNeighbor = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.right);
+                bool hasBottomNeighbor = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.down);
+                bool hasTopNeighbor    = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.up);
                 
                 if (hasFrontNeighbor && !hasBackNeighbor)
                 {
@@ -421,15 +501,33 @@ public class VehicleSpawner : MonoBehaviour
                 {
                     blockRotation = Quaternion.Euler(0f, 90f, 0f); // Point right (starboard)
                 }
+                else if (hasBottomNeighbor && !hasTopNeighbor)
+                {
+                    blockRotation = Quaternion.Euler(-90f, 0f, 0f); // Point UP (helicopter main rotor)
+                }
+                else if (hasTopNeighbor && !hasBottomNeighbor)
+                {
+                    blockRotation = Quaternion.Euler(90f, 0f, 0f); // Point DOWN
+                }
                 else
                 {
-                    blockRotation = Quaternion.Euler(0f, 180f, 0f); // Default to face backward
+                    if (hasBottomNeighbor)
+                        blockRotation = Quaternion.Euler(-90f, 0f, 0f); // Default to UP if sitting on something
+                    else
+                        blockRotation = Quaternion.Euler(0f, 180f, 0f); // Default to face backward
                 }
 
                 blockGO.transform.localRotation = blockRotation;
 
                 PropellerBlock pb = blockGO.AddComponent<PropellerBlock>();
                 pb.propellerMesh  = propVisual.transform;
+
+                if (entry.blockTypeID == 26)
+                {
+                    pb.thrustForce = 22000f;
+                    pb.steeringTorque = 15000f;
+                    pb.maxRotationSpeed = 600f;
+                }
             }
 
             Rigidbody childRb = blockGO.GetComponent<Rigidbody>();
@@ -443,10 +541,16 @@ public class VehicleSpawner : MonoBehaviour
         rb.angularDamping = angularDrag;
         rb.useGravity     = true;
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+        rb.constraints    = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
         rb.isKinematic    = true; // Start kinematic to prevent immediate physics explosion while colliders bake
 
-        // ── d. Add VehicleController ──────────────────────────────────────────
+        // ── d. Add VehicleController & HelicopterController if applicable ────
         vehicleGO.AddComponent<VehicleController>();
+        bool hasPropeller = blueprint.blocks.Exists(b => b.blockTypeID == 22 || b.blockTypeID == 26);
+        if (hasPropeller)
+        {
+            vehicleGO.AddComponent<HelicopterController>();
+        }
 
         // Warn if no Control Block present (E key won't work without one)
         bool hasControlBlock = blueprint.blocks.Exists(b => b.blockTypeID == 50);

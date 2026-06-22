@@ -94,25 +94,31 @@ public class PlayerInteraction : MonoBehaviour
                     // Don't mine water (7) or empty blocks (0)
                     if (blockID != 0 && blockID != 7)
                     {
-                        var pc = GetComponent<PlayerController>();
+                        var pc = GetComponent<PlayerController>() ?? GetComponentInParent<PlayerController>() ?? FindFirstObjectByType<PlayerController>();
                         bool isCreative = (pc != null && pc.isCreativeMode);
+                        Debug.Log($"[PlayerInteraction] Mining click. blockID={blockID}, isCreative={isCreative}, pcFound={pc != null}, pc.isCreativeMode={(pc != null ? pc.isCreativeMode.ToString() : "N/A")}");
                         float hardness = GetBlockHardness(blockID);
 
-                        if (isCreative || hardness <= 0f)
+                        if (isCreative)
                         {
-                            if (isCreative && creativeBreakCooldown > 0f)
+                            if (creativeBreakCooldown <= 0f)
                             {
-                                return;
+                                // Instant break in creative mode with 0.15s delay
+                                BreakBlockInstantly(targetGridPos, voxelCenter, blockID);
+                                ResetBreakingState();
+                                creativeBreakCooldown = 0.15f;
                             }
-
-                            // Instant break in creative mode or for flowers/grass
+                            else
+                            {
+                                // Keep resetting to hide crack overlay during cooldown
+                                ResetBreakingState();
+                            }
+                        }
+                        else if (hardness <= 0f)
+                        {
+                            // Instant break for flowers/grass
                             BreakBlockInstantly(targetGridPos, voxelCenter, blockID);
                             ResetBreakingState();
-
-                            if (isCreative)
-                            {
-                                creativeBreakCooldown = 0.18f;
-                            }
                         }
                         else
                         {
@@ -238,6 +244,41 @@ public class PlayerInteraction : MonoBehaviour
                     positionsToPlace.Add(gridPos + sideDir);
                     positionsToPlace.Add(gridPos + sideDir + Vector3Int.up);
                 }
+                else if (blockType == 26) // Large Propeller
+                {
+                    Vector3Int forwardDir = Vector3Int.RoundToInt(hit.normal);
+                    Vector3Int rightDir = Vector3Int.right;
+                    Vector3Int upDir = Vector3Int.forward;
+
+                    if (forwardDir == Vector3Int.up || forwardDir == Vector3Int.down)
+                    {
+                        rightDir = Vector3Int.right;
+                        upDir = Vector3Int.forward;
+                    }
+                    else if (forwardDir == Vector3Int.forward || forwardDir == Vector3Int.back)
+                    {
+                        rightDir = Vector3Int.right;
+                        upDir = Vector3Int.up;
+                    }
+                    else if (forwardDir == Vector3Int.left || forwardDir == Vector3Int.right)
+                    {
+                        rightDir = Vector3Int.forward;
+                        upDir = Vector3Int.up;
+                    }
+
+                    // 3x3 top part
+                    for (int u = -1; u <= 1; u++)
+                    {
+                        for (int r = -1; r <= 1; r++)
+                        {
+                            Vector3Int upperPos = gridPos + forwardDir + u * upDir + r * rightDir;
+                            if (upperPos != gridPos)
+                            {
+                                positionsToPlace.Add(upperPos);
+                            }
+                        }
+                    }
+                }
 
                 // Verify placement is not blocked for any of the blocks
                 bool placementBlocked = false;
@@ -296,6 +337,8 @@ public class PlayerInteraction : MonoBehaviour
                         byte idToPlace;
                         if (blockType == 21)
                             idToPlace = (pos == gridPos) ? (byte)21 : (byte)23;
+                        else if (blockType == 26)
+                            idToPlace = (pos == gridPos) ? (byte)26 : (byte)27;
                         else if (blockType == 38 || blockType == 39)
                         {
                             Vector3 forward = playerCam.transform.forward;
@@ -367,6 +410,46 @@ public class PlayerInteraction : MonoBehaviour
         return result;
     }
 
+    private List<Vector3Int> FindConnectedPropellerBlocks(Vector3Int startPos)
+    {
+        List<Vector3Int> result = new List<Vector3Int>();
+        if (VoxelWorld.Instance == null) return result;
+
+        Queue<Vector3Int> queue = new Queue<Vector3Int>();
+        HashSet<Vector3Int> visited = new HashSet<Vector3Int>();
+
+        queue.Enqueue(startPos);
+        visited.Add(startPos);
+
+        while (queue.Count > 0)
+        {
+            Vector3Int curr = queue.Dequeue();
+            result.Add(curr);
+
+            // Scan in a 5x5x5 grid around the current part to cover the 3x3 footprint and stem
+            for (int dx = -2; dx <= 2; dx++)
+            {
+                for (int dy = -2; dy <= 2; dy++)
+                {
+                    for (int dz = -2; dz <= 2; dz++)
+                    {
+                        Vector3Int neighbor = curr + new Vector3Int(dx, dy, dz);
+                        if (visited.Contains(neighbor)) continue;
+
+                        Vector3 center = new Vector3(neighbor.x + 0.5f, neighbor.y + 0.5f, neighbor.z + 0.5f);
+                        byte type = VoxelWorld.Instance.GetBlock(center);
+                        if (type == 26 || type == 27)
+                        {
+                            visited.Add(neighbor);
+                            queue.Enqueue(neighbor);
+                        }
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
     private void BreakBlockInstantly(Vector3Int gridPos, Vector3 voxelCenter, byte existing)
     {
         if (VoxelWorld.Instance == null) return;
@@ -374,10 +457,43 @@ public class PlayerInteraction : MonoBehaviour
         if (existing == 21 || existing == 23)
         {
             List<Vector3Int> parts = FindConnectedWheelBlocks(gridPos);
+            Vector3Int anchorPos = gridPos;
             foreach (var partPos in parts)
             {
                 Vector3 partCenter = new Vector3(partPos.x + 0.5f, partPos.y + 0.5f, partPos.z + 0.5f);
-                bool suppressDrop = (partPos != gridPos && VoxelWorld.Instance.GetBlock(partCenter) == 23);
+                if (VoxelWorld.Instance.GetBlock(partCenter) == 21)
+                {
+                    anchorPos = partPos;
+                    break;
+                }
+            }
+
+            foreach (var partPos in parts)
+            {
+                Vector3 partCenter = new Vector3(partPos.x + 0.5f, partPos.y + 0.5f, partPos.z + 0.5f);
+                bool suppressDrop = (partPos != anchorPos);
+                VoxelWorld.Instance.ModifyBlock(partCenter, 0, suppressDrop);
+                PlacedBlockRegistry.Instance?.Unregister(partPos);
+            }
+        }
+        else if (existing == 26 || existing == 27)
+        {
+            List<Vector3Int> parts = FindConnectedPropellerBlocks(gridPos);
+            Vector3Int anchorPos = gridPos;
+            foreach (var partPos in parts)
+            {
+                Vector3 partCenter = new Vector3(partPos.x + 0.5f, partPos.y + 0.5f, partPos.z + 0.5f);
+                if (VoxelWorld.Instance.GetBlock(partCenter) == 26)
+                {
+                    anchorPos = partPos;
+                    break;
+                }
+            }
+
+            foreach (var partPos in parts)
+            {
+                Vector3 partCenter = new Vector3(partPos.x + 0.5f, partPos.y + 0.5f, partPos.z + 0.5f);
+                bool suppressDrop = (partPos != anchorPos);
                 VoxelWorld.Instance.ModifyBlock(partCenter, 0, suppressDrop);
                 PlacedBlockRegistry.Instance?.Unregister(partPos);
             }

@@ -239,6 +239,71 @@ public class WrenchItem : MonoBehaviour
                         PlacedBlockRegistry.Instance?.Register(worldGrid);
                     }
                 }
+                else if (typeID == 26) // Large Propeller (anchor)
+                {
+                    Quaternion childRot = child.localRotation;
+                    Vector3Int forwardDir = Vector3Int.RoundToInt(childRot * Vector3.forward);
+                    Vector3Int rightDir = Vector3Int.right;
+                    Vector3Int upDir = Vector3Int.forward;
+
+                    if (forwardDir == Vector3Int.up || forwardDir == Vector3Int.down)
+                    {
+                        rightDir = Vector3Int.right;
+                        upDir = Vector3Int.forward;
+                    }
+                    else if (forwardDir == Vector3Int.forward || forwardDir == Vector3Int.back)
+                    {
+                        rightDir = Vector3Int.right;
+                        upDir = Vector3Int.up;
+                    }
+                    else if (forwardDir == Vector3Int.left || forwardDir == Vector3Int.right)
+                    {
+                        rightDir = Vector3Int.forward;
+                        upDir = Vector3Int.up;
+                    }
+
+                    Vector3 localPos = child.localPosition;
+                    Vector3Int anchorLocal = new Vector3Int(
+                        Mathf.RoundToInt(localPos.x),
+                        Mathf.RoundToInt(localPos.y),
+                        Mathf.RoundToInt(localPos.z)
+                    );
+
+                    // Add all 10 positions
+                    List<Vector3Int> localPositions = new List<Vector3Int>();
+                    localPositions.Add(anchorLocal);
+                    for (int u = -1; u <= 1; u++)
+                    {
+                        for (int r = -1; r <= 1; r++)
+                        {
+                            Vector3Int upperPos = anchorLocal + forwardDir + u * upDir + r * rightDir;
+                            if (upperPos != anchorLocal)
+                            {
+                                localPositions.Add(upperPos);
+                            }
+                        }
+                    }
+
+                    for (int i = 0; i < localPositions.Count; i++)
+                    {
+                        Vector3 worldPos = vehicle.transform.TransformPoint((Vector3)localPositions[i]);
+                        Vector3Int worldGrid = new Vector3Int(
+                            Mathf.RoundToInt(worldPos.x - 0.5f),
+                            Mathf.RoundToInt(worldPos.y - 0.5f),
+                            Mathf.RoundToInt(worldPos.z - 0.5f)
+                        );
+
+                        Vector3 voxelCentre = new Vector3(
+                            worldGrid.x + 0.5f,
+                            worldGrid.y + 0.5f,
+                            worldGrid.z + 0.5f
+                        );
+
+                        byte blockToPlace = (i == 0) ? (byte)26 : (byte)27;
+                        VoxelWorld.Instance.ModifyBlock(voxelCentre, blockToPlace, suppressDrop: true);
+                        PlacedBlockRegistry.Instance?.Register(worldGrid);
+                    }
+                }
                 else
                 {
                     Vector3 childPos = child.position;

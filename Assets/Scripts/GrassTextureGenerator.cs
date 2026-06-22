@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 29; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side, furnace front unlit, furnace front lit, short grass, tall grass
+    public const int TILE_COUNT = 32; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side, furnace front unlit, furnace front lit, short grass, tall grass, propeller face, propeller side, propeller blade brass
 
     public static Texture2D Create()
     {
@@ -55,7 +55,10 @@ public static class GrassTextureGenerator
                               : tile == 25 ? FurnaceFront(lx, y, false)
                               : tile == 26 ? FurnaceFront(lx, y, true)
                               : tile == 27 ? ShortGrass(lx, y)
-                                           : TallGrass(lx, y);
+                              : tile == 28 ? TallGrass(lx, y)
+                              : tile == 29 ? PropellerFace(lx, y)
+                              : tile == 30 ? PropellerSide(lx, y)
+                                           : PropellerBladeColor(lx, y);
             }
         }
 
@@ -514,8 +517,12 @@ public static class GrassTextureGenerator
             tile = (face == 4 || face == 5) ? 16 : 15;
         else if (blockType == 21 || blockType == 23) // Large Wheel & Helper: sides are wheel side, others are tire tread
             tile = (face == 4 || face == 5) ? 17 : 15;
-        else if (blockType == 22) // Propeller Block: render as wood planks in the world
-            tile = 6;
+        else if (blockType == 22 || blockType == 26) // Propeller / Large Propeller Block: show propeller face on front/back, propeller side on sides
+            tile = (face == 0 || face == 1) ? 29 : 30;
+        else if (blockType == 24) // Virtual Propeller Side / Hub
+            tile = 30;
+        else if (blockType == 25) // Virtual Propeller Blade
+            tile = 31;
         else if (blockType == 50) // Control Block: front is screen, others are striped sides
             tile = (face == 1) ? 14 : 13;
         else if (blockType == 30) // Coal Ore
@@ -808,6 +815,8 @@ public static class GrassTextureGenerator
             case 26: return FurnaceFront(lx, ly, true);
             case 27: return ShortGrass(lx, ly);
             case 28: return TallGrass(lx, ly);
+            case 29: return PropellerFace(lx, ly);
+            case 30: return PropellerSide(lx, ly);
             default: return Color.clear;
         }
     }
@@ -854,5 +863,91 @@ public static class GrassTextureGenerator
         if (b1 || b5) return darkGreen;
 
         return key;
+    }
+
+    static Color PropellerFace(int x, int y)
+    {
+        Color darkSteel = new Color(0.24f, 0.24f, 0.26f);
+        Color lightSteel = new Color(0.45f, 0.45f, 0.48f);
+        Color brassColor = new Color(0.82f, 0.58f, 0.16f);
+        Color shadowBrass = new Color(0.55f, 0.38f, 0.08f);
+        Color darkVoid = new Color(0.1f, 0.1f, 0.12f);
+
+        float dx = x - 7.5f;
+        float dy = y - 7.5f;
+        float dist = Mathf.Sqrt(dx * dx + dy * dy);
+
+        // 1. Center hub cap (radius 2f)
+        if (dist <= 2.0f)
+        {
+            float n = (dx - dy) / 4f;
+            return Color.Lerp(lightSteel, darkSteel, n + 0.5f);
+        }
+
+        // 2. Outer ducted casing ring (radius 6.8f to 7.8f)
+        if (dist >= 6.8f && dist <= 7.8f)
+        {
+            return lightSteel;
+        }
+        if (dist > 7.8f)
+        {
+            return darkSteel;
+        }
+
+        // 3. Three propeller blades spaced at 120 degrees
+        float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg + 180f; // 0 to 360
+        // Check distance to three lines at 0, 120, 240 degrees
+        bool onBlade = false;
+        bool isShadow = false;
+        for (int i = 0; i < 3; i++)
+        {
+            float targetAngle = i * 120f + 30f; // offset by 30 degrees to look dynamic
+            float diff = Mathf.DeltaAngle(angle, targetAngle);
+            if (diff >= -12f && diff <= 12f && dist < 6.8f)
+            {
+                onBlade = true;
+                if (diff < 0f) isShadow = true;
+                break;
+            }
+        }
+
+        if (onBlade)
+        {
+            return isShadow ? shadowBrass : brassColor;
+        }
+
+        // 4. Background inside the duct (dark void)
+        return darkVoid;
+    }
+
+    static Color PropellerSide(int x, int y)
+    {
+        Color darkSteel = new Color(0.24f, 0.24f, 0.26f);
+        Color lightSteel = new Color(0.45f, 0.45f, 0.48f);
+        Color highlight = new Color(0.6f, 0.6f, 0.64f);
+
+        // A metallic casing with longitudinal shaft/rivets
+        // Outer borders are dark steel
+        if (x == 0 || x == 15 || y == 0 || y == 15)
+            return darkSteel;
+
+        // Middle ring/band (x = 7 or 8)
+        if (x == 7 || x == 8)
+            return highlight;
+
+        // Rivets/Bolts along the edges
+        if ((x == 2 || x == 13) && (y == 2 || y == 6 || y == 9 || y == 13))
+            return highlight;
+
+        float n = Mathf.PerlinNoise(x * 0.4f, y * 0.4f) * 0.1f;
+        return new Color(lightSteel.r + n, lightSteel.g + n, lightSteel.b + n);
+    }
+
+    static Color PropellerBladeColor(int x, int y)
+    {
+        Color brassColor = new Color(0.82f, 0.58f, 0.16f);
+        Color shadowBrass = new Color(0.55f, 0.38f, 0.08f);
+        float n = Mathf.PerlinNoise(x * 0.8f, y * 0.8f);
+        return Color.Lerp(shadowBrass, brassColor, n * 0.7f + 0.3f);
     }
 }

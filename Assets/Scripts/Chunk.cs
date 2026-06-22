@@ -589,6 +589,26 @@ public class Chunk : MonoBehaviour
             return;
         }
 
+        // ── Propeller (ID 22) ──────────────────
+        if (blockType == 22)
+        {
+            AddPropellerBlock(pos);
+            return;
+        }
+
+        // ── Large Propeller (ID 26) ──────────────────
+        if (blockType == 26)
+        {
+            AddLargePropellerBlock(pos);
+            return;
+        }
+
+        // ── Large Propeller Helper (ID 27) ──────────────────
+        if (blockType == 27)
+        {
+            return;
+        }
+
         // ── Wooden Stairs (IDs 38, 40, 41, 42) & Stone Stairs (IDs 39, 43, 44, 45) ──────────────────
         if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42 ||
             blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45)
@@ -869,6 +889,201 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    bool HasNeighborBlock(Vector3 pos, Vector3 direction)
+    {
+        Vector3 neighborPos = pos + direction;
+        int nx = Mathf.FloorToInt(neighborPos.x);
+        int ny = Mathf.FloorToInt(neighborPos.y);
+        int nz = Mathf.FloorToInt(neighborPos.z);
+
+        byte neighbor = 0;
+        if (!IsVoxelInChunk(nx, ny, nz))
+        {
+            if (VoxelWorld.Instance != null)
+                neighbor = VoxelWorld.Instance.GetBlock(neighborPos + transform.position);
+        }
+        else
+        {
+            neighbor = voxelMap[nx, ny, nz];
+        }
+
+        return neighbor != 0 && neighbor != 7 && neighbor != 9 && neighbor != 10 && neighbor != 11 && neighbor != 13 && neighbor != 14 && neighbor != 23 && neighbor != 27;
+    }
+
+    void AddPropellerBlock(Vector3 pos)
+    {
+        bool hasFront = HasNeighborBlock(pos, Vector3.forward);
+        bool hasBack  = HasNeighborBlock(pos, Vector3.back);
+        bool hasLeft  = HasNeighborBlock(pos, Vector3.left);
+        bool hasRight = HasNeighborBlock(pos, Vector3.right);
+        bool hasBottom = HasNeighborBlock(pos, Vector3.down);
+        bool hasTop    = HasNeighborBlock(pos, Vector3.up);
+
+        Quaternion blockRotation = Quaternion.identity;
+        if (hasFront && !hasBack)
+        {
+            blockRotation = Quaternion.Euler(0f, 180f, 0f);
+        }
+        else if (hasBack && !hasFront)
+        {
+            blockRotation = Quaternion.identity;
+        }
+        else if (hasRight && !hasLeft)
+        {
+            blockRotation = Quaternion.Euler(0f, -90f, 0f);
+        }
+        else if (hasLeft && !hasRight)
+        {
+            blockRotation = Quaternion.Euler(0f, 90f, 0f);
+        }
+        else if (hasBottom && !hasTop)
+        {
+            blockRotation = Quaternion.Euler(-90f, 0f, 0f);
+        }
+        else if (hasTop && !hasBottom)
+        {
+            blockRotation = Quaternion.Euler(90f, 0f, 0f);
+        }
+        else
+        {
+            if (hasBottom)
+                blockRotation = Quaternion.Euler(-90f, 0f, 0f);
+            else
+                blockRotation = Quaternion.Euler(0f, 180f, 0f);
+        }
+
+        Vector3 centerOffset = new Vector3(0.5f, 0.5f, 0.5f);
+
+        // 1. Hub (Extended to touch base block at Z = -0.5f)
+        Vector3 hubSize = new Vector3(0.21f, 0.21f, 0.8f);
+        Vector3 hubLocalPos = blockRotation * new Vector3(0f, 0f, -0.1f) + centerOffset;
+        Quaternion hubRot = blockRotation;
+        AddSubBoxRotated(pos, hubLocalPos, hubSize, hubRot, 24);
+
+        // 2. Nose Cone
+        Vector3 noseSize = new Vector3(0.15f, 0.15f, 0.15f);
+        Vector3 noseLocalPos = blockRotation * new Vector3(0f, 0f, 0.3f) + centerOffset;
+        Quaternion noseRot = blockRotation;
+        AddSubBoxRotated(pos, noseLocalPos, noseSize, noseRot, 24);
+
+        // 3. Three blades
+        Vector3 bladeSize = new Vector3(0.132f, 0.48f, 0.03f);
+        for (int i = 0; i < 3; i++)
+        {
+            float angle = i * 120f;
+            Quaternion radialRotation = Quaternion.Euler(0f, 0f, angle);
+            Quaternion bladePitch = Quaternion.Euler(0f, 28f, 0f);
+            
+            Quaternion localBladeRot = radialRotation * bladePitch;
+            Vector3 localBladePos = radialRotation * new Vector3(0f, 0.33f, 0f);
+
+            Quaternion finalRot = blockRotation * localBladeRot;
+            Vector3 finalPos = blockRotation * localBladePos + centerOffset;
+
+            AddSubBoxRotated(pos, finalPos, bladeSize, finalRot, 25);
+        }
+    }
+
+    void AddLargePropellerBlock(Vector3 pos)
+    {
+        bool hasFront = HasNeighborBlock(pos, Vector3.forward);
+        bool hasBack  = HasNeighborBlock(pos, Vector3.back);
+        bool hasLeft  = HasNeighborBlock(pos, Vector3.left);
+        bool hasRight = HasNeighborBlock(pos, Vector3.right);
+        bool hasBottom = HasNeighborBlock(pos, Vector3.down);
+        bool hasTop    = HasNeighborBlock(pos, Vector3.up);
+
+        Quaternion blockRotation = Quaternion.identity;
+        if (hasFront && !hasBack)
+        {
+            blockRotation = Quaternion.Euler(0f, 180f, 0f);
+        }
+        else if (hasBack && !hasFront)
+        {
+            blockRotation = Quaternion.identity;
+        }
+        else if (hasRight && !hasLeft)
+        {
+            blockRotation = Quaternion.Euler(0f, -90f, 0f);
+        }
+        else if (hasLeft && !hasRight)
+        {
+            blockRotation = Quaternion.Euler(0f, 90f, 0f);
+        }
+        else if (hasBottom && !hasTop)
+        {
+            blockRotation = Quaternion.Euler(-90f, 0f, 0f);
+        }
+        else if (hasTop && !hasBottom)
+        {
+            blockRotation = Quaternion.Euler(90f, 0f, 0f);
+        }
+        else
+        {
+            if (hasBottom)
+                blockRotation = Quaternion.Euler(-90f, 0f, 0f);
+            else
+                blockRotation = Quaternion.Euler(0f, 180f, 0f);
+        }
+
+        Vector3 centerOffset = new Vector3(0.5f, 0.5f, 0.5f);
+
+        // Cylindrical/thick hub running along Z-axis (oriented by blockRotation, extended to touch base block at Z = -0.5f)
+        Vector3 hubSize = new Vector3(0.35f, 0.35f, 2.0f);
+        Vector3 hubLocalPos = blockRotation * new Vector3(0f, 0f, 0.5f) + centerOffset;
+        AddSubBoxRotated(pos, hubLocalPos, hubSize, blockRotation, 24);
+
+        // Nose Cone at the front tip
+        Vector3 noseSize = new Vector3(0.25f, 0.25f, 0.25f);
+        Vector3 noseLocalPos = blockRotation * new Vector3(0f, 0f, 1.5f) + centerOffset;
+        AddSubBoxRotated(pos, noseLocalPos, noseSize, blockRotation, 24);
+
+        // Three blades at the upper part (z = 1.35f)
+        Vector3 bladeSize = new Vector3(0.2f, 1.35f, 0.05f);
+        for (int i = 0; i < 3; i++)
+        {
+            float angle = i * 120f;
+            Quaternion radialRotation = Quaternion.Euler(0f, 0f, angle);
+            Quaternion bladePitch = Quaternion.Euler(0f, 28f, 0f);
+            
+            Quaternion localBladeRot = radialRotation * bladePitch;
+            Vector3 localBladePos = radialRotation * new Vector3(0f, 0.8f, 0f);
+
+            Quaternion finalRot = blockRotation * localBladeRot;
+            Vector3 finalPos = blockRotation * (new Vector3(0f, 0f, 1.35f) + localBladePos) + centerOffset;
+
+            AddSubBoxRotated(pos, finalPos, bladeSize, finalRot, 25);
+        }
+    }
+
+    void AddSubBoxRotated(Vector3 pos, Vector3 localCenter, Vector3 size, Quaternion rotation, byte textureBlockType)
+    {
+        Vector3 min = -size * 0.5f;
+        Vector3 max = size * 0.5f;
+
+        for (int p = 0; p < 6; p++)
+        {
+            Vector3[] faceVerts = GetBoxFaceVertices(p, min, max);
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 rotVert = rotation * faceVerts[i] + localCenter;
+                vertices.Add(pos + rotVert);
+            }
+
+            Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, textureBlockType);
+            uvs.AddRange(faceUVs);
+
+            triangles.Add(vertexIndex);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 3);
+
+            vertexIndex += 4;
+        }
+    }
+
     Vector3[] GetBoxFaceVertices(int face, Vector3 min, Vector3 max)
     {
         Vector3[] verts = new Vector3[4];
@@ -1035,7 +1250,7 @@ public class Chunk : MonoBehaviour
                                  neighbor == 13 || neighbor == 14 ||
                                  neighbor == 38 || neighbor == 40 || neighbor == 41 || neighbor == 42 ||
                                  neighbor == 39 || neighbor == 43 || neighbor == 44 || neighbor == 45 ||
-                                 neighbor == 46 || neighbor == 47);
+                                 neighbor == 46 || neighbor == 47 || neighbor == 22 || neighbor == 26 || neighbor == 27);
 
         if (currentIsWater)
         {

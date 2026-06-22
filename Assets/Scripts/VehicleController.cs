@@ -27,6 +27,10 @@ public class VehicleController : MonoBehaviour
     private Rigidbody _rb;
     public Vector3 CurrentVelocity => _rb != null ? _rb.linearVelocity : Vector3.zero;
 
+    [HideInInspector] public bool isRestoredFromSave = false;
+    [HideInInspector] public Vector3 savedLinearVelocity = Vector3.zero;
+    [HideInInspector] public Vector3 savedAngularVelocity = Vector3.zero;
+
     private List<WheelBlock> registeredWheels = new List<WheelBlock>();
     public float totalWheelForce = 0f;
     public int groundedWheelCount = 0;
@@ -214,18 +218,34 @@ public class VehicleController : MonoBehaviour
 
     private System.Collections.IEnumerator UnfreezePhysicsDelayed()
     {
-        // Wait 4 fixed updates to ensure Unity has fully baked the new chunk MeshColliders
-        // and any initial physics frame collisions have been resolved.
-        yield return new WaitForFixedUpdate();
-        yield return new WaitForFixedUpdate();
-        yield return new WaitForFixedUpdate();
-        yield return new WaitForFixedUpdate();
+        if (isRestoredFromSave)
+        {
+            // Give chunks ample time to generate and bake colliders
+            yield return new WaitForSeconds(1.5f);
+        }
+        else
+        {
+            // Wait 4 fixed updates to ensure Unity has fully baked the new chunk MeshColliders
+            // and any initial physics frame collisions have been resolved.
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForFixedUpdate();
+        }
 
         if (_rb != null)
         {
             _rb.isKinematic = false;
-            _rb.linearVelocity = Vector3.zero;
-            _rb.angularVelocity = Vector3.zero;
+            if (isRestoredFromSave)
+            {
+                _rb.linearVelocity = savedLinearVelocity;
+                _rb.angularVelocity = savedAngularVelocity;
+            }
+            else
+            {
+                _rb.linearVelocity = Vector3.zero;
+                _rb.angularVelocity = Vector3.zero;
+            }
         }
 
         if (VoxelWorld.Instance != null && VoxelWorld.Instance.playerTransform != null)
@@ -361,8 +381,9 @@ public class VehicleController : MonoBehaviour
         foreach (var w in registeredWheels)
             if (w.isGrounded) groundedNow++;
 
-        // Only apply the heavy 3G stomping force when truly airborne over land, never in water
-        if (registeredWheels.Count > 0 && groundedNow == 0 && !_isInWater)
+        // Only apply the heavy 3G stomping force when truly airborne over land, never in water or when flying/swimming (has propellers)
+        bool isFlying = GetComponentsInChildren<PropellerBlock>().Length > 0;
+        if (registeredWheels.Count > 0 && groundedNow == 0 && !_isInWater && !isFlying)
             _rb.AddForce(Vector3.down * _rb.mass * 29.4f, ForceMode.Force);
 
         // --- ANTI-FLIP GYROSCOPE ---

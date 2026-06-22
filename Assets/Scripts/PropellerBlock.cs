@@ -23,6 +23,7 @@ public class PropellerBlock : MonoBehaviour
 
     private Rigidbody rb;
     private VehicleController vehicleController;
+    private HelicopterController helicopterController;
     private float currentRotationSpeed = 0f;
 
     private float logTimer = 0f;
@@ -31,6 +32,7 @@ public class PropellerBlock : MonoBehaviour
     {
         rb = GetComponentInParent<Rigidbody>();
         vehicleController = GetComponentInParent<VehicleController>();
+        helicopterController = GetComponentInParent<HelicopterController>();
 
         // Auto-locate propeller visual child if not manually assigned
         if (propellerMesh == null && transform.childCount > 0)
@@ -44,6 +46,7 @@ public class PropellerBlock : MonoBehaviour
         // Try resolving references dynamically if they were not ready at Start
         if (rb == null) rb = GetComponentInParent<Rigidbody>();
         if (vehicleController == null) vehicleController = GetComponentInParent<VehicleController>();
+        if (helicopterController == null) helicopterController = GetComponentInParent<HelicopterController>();
 
         if (rb == null) return;
 
@@ -71,84 +74,174 @@ public class PropellerBlock : MonoBehaviour
         // }
 
         // ── PROPULSION & STEERING ──
-        // Fire propulsion when the vehicle's hull is in water.
-        // VehicleController already handles buoyancy and water drag centrally,
-        // so we only apply propulsion forces here.
-        bool vehicleInWater = vehicleController != null
-                              ? (currentWaterLevel - vehicleController.transform.position.y) > -1.5f
-                              : submersionDepth > 0f;
+        bool isControlled = vehicleController != null && vehicleController.isBeingControlled;
+        float targetSpinSpeed = 0f;
 
-        if (vehicleInWater)
+        if (isControlled)
         {
-            bool isControlled = vehicleController != null && vehicleController.isBeingControlled;
-            float targetSpinSpeed = 0f;
-
-            if (isControlled)
-            {
-                bool forward = false;
-                bool backward = false;
-                bool left = false;
-                bool right = false;
+            bool forward = false;
+            bool backward = false;
+            bool left = false;
+            bool right = false;
+            bool climb = false;
+            bool descend = false;
+            bool strafeLeft = false;
+            bool strafeRight = false;
 
 #if ENABLE_INPUT_SYSTEM
-                if (Keyboard.current != null)
-                {
-                    forward = Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed;
-                    backward = Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed;
-                    left = Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed;
-                    right = Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed;
-                }
+            if (Keyboard.current != null)
+            {
+                forward = Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed;
+                backward = Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed;
+                left = Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed;
+                right = Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed;
+                climb = Keyboard.current.spaceKey.isPressed;
+                descend = Keyboard.current.leftShiftKey.isPressed;
+                strafeLeft = Keyboard.current.qKey.isPressed;
+                strafeRight = Keyboard.current.fKey.isPressed;
+            }
 #else
-                forward = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
-                backward = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
-                left = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow);
-                right = Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow);
+            forward = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
+            backward = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
+            left = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow);
+            right = Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow);
+            climb = Input.GetKey(KeyCode.Space);
+            descend = Input.GetKey(KeyCode.LeftShift);
+            strafeLeft = Input.GetKey(KeyCode.Q);
+            strafeRight = Input.GetKey(KeyCode.F);
 #endif
 
-                // Project velocity onto vehicle forward (parent forward) to check speed limits
-                Vector3 vehicleUp = transform.parent != null ? transform.parent.up : Vector3.up;
-                // Speed limit: measure along the direction the propeller pushes the boat (-transform.forward)
-                float currentFwdSpeed = Vector3.Dot(rb.linearVelocity, -transform.forward);
+            // Identify orientation relative to vehicle's parent axes
+            Vector3 vehicleUp = transform.parent != null ? transform.parent.up : Vector3.up;
+            Vector3 vehicleForward = transform.parent != null ? transform.parent.forward : Vector3.forward;
+            Vector3 vehicleRight = transform.parent != null ? transform.parent.right : Vector3.right;
 
-                // Thrust is always full when the vehicle hull is in water
-                // (the propeller block itself may be above the waterline)
-                float thrustRatio = 1.0f;
+            // Project propeller's local thrust direction (-transform.forward) in parent space
+            Vector3 localThrustDir = transform.parent != null 
+                ? transform.parent.InverseTransformDirection(-transform.forward) 
+                : -transform.forward;
 
-                // The spawner rotates the propeller to face AWAY from the hull.
-                // Pushing in -transform.forward (opposite to facing) always drives the boat
-                // toward the hull, i.e. "forward", regardless of world orientation.
-                if (forward && currentFwdSpeed < maxForwardSpeed)
+            bool isLiftPropeller = Mathf.Abs(localThrustDir.y) > 0.8f;
+            bool isLateralPropeller = Mathf.Abs(localThrustDir.x) > 0.8f;
+            bool isLongitudinalPropeller = Mathf.Abs(localThrustDir.z) > 0.8f;
+
+            if (isLiftPropeller)
+            {
+                // Find total lift propellers to share weight
+                int liftPropCount = 0;
+                PropellerBlock[] allProps = transform.parent.GetComponentsInChildren<PropellerBlock>();
+                foreach (var p in allProps)
                 {
-                    rb.AddForce(-transform.forward * thrustForce * thrustRatio, ForceMode.Force);
+                    Vector3 pLocalDir = transform.parent.InverseTransformDirection(-p.transform.forward);
+                    if (Mathf.Abs(pLocalDir.y) > 0.8f) liftPropCount++;
+                }
+                if (liftPropCount == 0) liftPropCount = 1;
+
+                float gravityAcc = Physics.gravity.magnitude;
+                float hoverForce = (rb.mass * gravityAcc) / liftPropCount;
+
+                float finalLiftForce = 0f;
+
+                if (climb)
+                {
+                    finalLiftForce = hoverForce + (rb.mass * 8.0f) / liftPropCount;
                     targetSpinSpeed = maxRotationSpeed;
                 }
-                else if (backward && currentFwdSpeed > -maxReverseSpeed)
+                else if (descend)
                 {
-                    rb.AddForce(transform.forward * thrustForce * thrustRatio, ForceMode.Force);
+                    finalLiftForce = Mathf.Max(0f, hoverForce - (rb.mass * 5.0f) / liftPropCount);
+                    targetSpinSpeed = maxRotationSpeed * 0.2f;
+                }
+                else
+                {
+                    finalLiftForce = hoverForce;
+                    targetSpinSpeed = maxRotationSpeed * 0.6f;
+                }
+
+                // Apply lift force along vehicle's local up
+                if (helicopterController == null)
+                {
+                    rb.AddForceAtPosition(vehicleUp * finalLiftForce, transform.position, ForceMode.Force);
+                }
+            }
+            else if (isLongitudinalPropeller)
+            {
+                float targetForceZ = 0f;
+                if (forward)
+                {
+                    targetForceZ = 1.0f;
+                    targetSpinSpeed = maxRotationSpeed;
+                }
+                else if (backward)
+                {
+                    targetForceZ = -1.0f;
                     targetSpinSpeed = -maxRotationSpeed;
                 }
 
-                // Steering torque: rotate around the vehicle's up axis
-                if (left)
+                // If steering in water, let the boat propeller spin a bit for visuals
+                if (Mathf.Abs(targetForceZ) < 0.01f && (left || right))
                 {
-                    rb.AddTorque(-vehicleUp * steeringTorque * thrustRatio, ForceMode.Force);
-                    targetSpinSpeed = maxRotationSpeed * 0.6f;
+                    targetSpinSpeed = maxRotationSpeed * 0.4f * (left ? 1f : -1f);
                 }
-                else if (right)
+
+                if (Mathf.Abs(targetForceZ) > 0.01f)
                 {
-                    rb.AddTorque(vehicleUp * steeringTorque * thrustRatio, ForceMode.Force);
-                    targetSpinSpeed = -maxRotationSpeed * 0.6f;
+                    float thrustMultiplier = (transform.name.Contains("_26")) ? 2.5f : 1.0f;
+                    float force = targetForceZ * rb.mass * 6.0f * thrustMultiplier;
+                    if (helicopterController == null)
+                    {
+                        rb.AddForceAtPosition(vehicleForward * force, transform.position, ForceMode.Force);
+                    }
+                }
+            }
+            else if (isLateralPropeller)
+            {
+                float targetForceX = 0f;
+
+                // 1. Strafe input (Q/F)
+                if (strafeLeft)  targetForceX -= 1.0f;
+                if (strafeRight) targetForceX += 1.0f;
+
+                // 2. Yaw/Steering assistance
+                Vector3 localPos = transform.localPosition;
+                float zSign = 0f;
+                if (localPos.z > 0.2f) zSign = 1f;
+                else if (localPos.z < -0.2f) zSign = -1f;
+
+                if (left)  targetForceX -= zSign * 1.0f;
+                if (right) targetForceX += zSign * 1.0f;
+
+                targetForceX = Mathf.Clamp(targetForceX, -1f, 1f);
+
+                if (Mathf.Abs(targetForceX) > 0.01f)
+                {
+                    float thrustMultiplier = (transform.name.Contains("_26")) ? 2.5f : 1.0f;
+                    float force = targetForceX * rb.mass * 6.0f * thrustMultiplier;
+                    if (helicopterController == null)
+                    {
+                        rb.AddForceAtPosition(vehicleRight * force, transform.position, ForceMode.Force);
+                    }
+                    targetSpinSpeed = targetForceX * maxRotationSpeed;
                 }
             }
 
-            // Interpolate propeller rotation speed
-            currentRotationSpeed = Mathf.MoveTowards(currentRotationSpeed, targetSpinSpeed, maxRotationSpeed * 2.5f * Time.fixedDeltaTime);
+            // Apply yaw torque for steering
+            if (helicopterController == null)
+            {
+                float actualSteeringTorque = Mathf.Max(steeringTorque, rb.mass * 12f);
+                if (left)
+                {
+                    rb.AddTorque(-vehicleUp * actualSteeringTorque, ForceMode.Force);
+                }
+                else if (right)
+                {
+                    rb.AddTorque(vehicleUp * actualSteeringTorque, ForceMode.Force);
+                }
+            }
         }
-        else
-        {
-            // Propeller is out of water: spin down gradually
-            currentRotationSpeed = Mathf.MoveTowards(currentRotationSpeed, 0f, maxRotationSpeed * 0.8f * Time.fixedDeltaTime);
-        }
+
+        // Interpolate propeller rotation speed
+        currentRotationSpeed = Mathf.MoveTowards(currentRotationSpeed, targetSpinSpeed, maxRotationSpeed * 2.5f * Time.fixedDeltaTime);
 
         // Apply rotation to the propeller visual mesh
         if (propellerMesh != null && Mathf.Abs(currentRotationSpeed) > 0.01f)

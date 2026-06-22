@@ -86,7 +86,8 @@ public class SaveLoadManager : MonoBehaviour
                 var player = FindFirstObjectByType<PlayerController>();
                 if (player != null)
                 {
-                    player.isCreativeMode = (MainMenu.selectedGameMode == "Creative");
+                    string savedMode = PlayerPrefs.GetString("GameMode_" + activeWorldSlot, "Survival");
+                    player.isCreativeMode = (savedMode == "Creative") || (MainMenu.selectedGameMode == "Creative");
                     if (player.isCreativeMode)
                     {
                         if (Inventory.Instance != null)
@@ -251,6 +252,65 @@ public class SaveLoadManager : MonoBehaviour
             });
         }
 
+        // Save Vehicles
+        data.vehicles = new List<SavedVehicle>();
+        var activeVehicles = FindObjectsByType<VehicleController>(FindObjectsSortMode.None);
+        foreach (var v in activeVehicles)
+        {
+            var savedV = new SavedVehicle
+            {
+                name = v.gameObject.name,
+                posX = v.transform.position.x,
+                posY = v.transform.position.y,
+                posZ = v.transform.position.z,
+                rotX = v.transform.eulerAngles.x,
+                rotY = v.transform.eulerAngles.y,
+                rotZ = v.transform.eulerAngles.z
+            };
+
+            var rb = v.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                savedV.velX = rb.linearVelocity.x;
+                savedV.velY = rb.linearVelocity.y;
+                savedV.velZ = rb.linearVelocity.z;
+
+                savedV.angX = rb.angularVelocity.x;
+                savedV.angY = rb.angularVelocity.y;
+                savedV.angZ = rb.angularVelocity.z;
+            }
+
+            savedV.blocks = new List<SavedVehicleBlock>();
+            foreach (Transform child in v.transform)
+            {
+                if (child.name.StartsWith("Block_"))
+                {
+                    string[] parts = child.name.Split('_');
+                    if (parts.Length >= 3 && int.TryParse(parts[1], out int typeID))
+                    {
+                        // Parse localPosition from the child's name
+                        string clean = parts[2].Replace("(", "").Replace(")", "");
+                        string[] coords = clean.Split(',');
+                        if (coords.Length >= 3 &&
+                            int.TryParse(coords[0].Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int lx) &&
+                            int.TryParse(coords[1].Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int ly) &&
+                            int.TryParse(coords[2].Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int lz))
+                        {
+                            savedV.blocks.Add(new SavedVehicleBlock
+                            {
+                                blockTypeID = typeID,
+                                localX = lx,
+                                localY = ly,
+                                localZ = lz
+                            });
+                        }
+                    }
+                }
+            }
+            data.vehicles.Add(savedV);
+            Debug.Log($"[SaveLoadManager] Saved vehicle {savedV.name} at position {v.transform.position} with {savedV.blocks.Count} blocks.");
+        }
+
         // Save Hotbar
         data.hotbar = new List<SavedItem>();
         if (Hotbar.Instance != null)
@@ -310,6 +370,21 @@ public class SaveLoadManager : MonoBehaviour
         LoadModificationsOnly();
         RestorePlayerAndInventory();
 
+        // Restore vehicles from file
+        if (File.Exists(SaveFilePath))
+        {
+            try
+            {
+                string json = File.ReadAllText(SaveFilePath);
+                SaveData data = JsonUtility.FromJson<SaveData>(json);
+                RestoreVehicles(data);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[SaveLoadManager] Error restoring vehicles: {e}");
+            }
+        }
+
         // Re-populate and rebuild active chunks to show loaded modifications
         if (VoxelWorld.Instance != null)
         {
@@ -317,6 +392,115 @@ public class SaveLoadManager : MonoBehaviour
         }
 
         Debug.Log("[SaveLoadManager] Game state loaded and chunks rebuilt.");
+    }
+
+    private void RestoreVehicles(SaveData data)
+    {
+        // 1. Destroy existing vehicles in scene
+        var existingVehicles = FindObjectsByType<VehicleController>(FindObjectsSortMode.None);
+        foreach (var ev in existingVehicles)
+        {
+            Destroy(ev.gameObject);
+        }
+
+        var spawner = VehicleSpawner.Instance ?? FindFirstObjectByType<VehicleSpawner>();
+        Debug.Log($"[SaveLoadManager] RestoreVehicles starting. Saved vehicles count: {data.vehicles?.Count ?? 0}. Spawner found: {spawner != null}");
+
+        // 2. Re-create saved vehicles
+        if (data.vehicles != null && spawner != null)
+        {
+            foreach (var sv in data.vehicles)
+            {
+                StructureBlueprint bp = new StructureBlueprint();
+                bp.worldOrigin = new Vector3(sv.posX, sv.posY, sv.posZ) - new Vector3(0.5f, 0.5f, 0.5f);
+                bp.blocks = new List<BlockEntry>();
+
+                int minX = int.MaxValue, minY = int.MaxValue, minZ = int.MaxValue;
+                int maxX = int.MinValue, maxY = int.MinValue, maxZ = int.MinValue;
+
+                foreach (var sb in sv.blocks)
+                {
+                    bp.blocks.Add(new BlockEntry
+                    {
+                        blockTypeID = sb.blockTypeID,
+                        localPosition = new Vector3Int(sb.localX, sb.localY, sb.localZ)
+                    });
+
+                    minX = Mathf.Min(minX, sb.localX);
+                    minY = Mathf.Min(minY, sb.localY);
+                    minZ = Mathf.Min(minZ, sb.localZ);
+                    maxX = Mathf.Max(maxX, sb.localX);
+                    maxY = Mathf.Max(maxY, sb.localY);
+                    maxZ = Mathf.Max(maxZ, sb.localZ);
+                }
+
+                if (bp.blocks.Count == 0)
+                {
+                    Debug.LogWarning($"[SaveLoadManager] Saved vehicle {sv.name} has 0 blocks. Skipping restore.");
+                    continue;
+                }
+
+                bp.dimensions = new Vector3Int(maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1);
+
+                bp.totalMass = 0f;
+                bp.totalDurability = 0f;
+                foreach (var block in bp.blocks)
+                {
+                    float m = BlueprintGenerator.BlockMassTable.TryGetValue(block.blockTypeID, out float mass) ? mass : 10f;
+                    float d = BlueprintGenerator.BlockDurabilityTable.TryGetValue(block.blockTypeID, out float dur) ? dur : 100f;
+                    bp.totalMass += m;
+                    bp.totalDurability += d;
+                }
+
+                // Spawn vehicle GameObjects
+                Debug.Log($"[SaveLoadManager] Spawning restored vehicle {sv.name} with {bp.blocks.Count} blocks.");
+                spawner.SpawnVehicle(bp);
+
+                // Find the newly spawned vehicle near target position to restore exact transform/velocity
+                VehicleController newVehicle = null;
+                float closestDist = float.MaxValue;
+                var allVehicles = FindObjectsByType<VehicleController>(FindObjectsSortMode.None);
+                Vector3 targetCenter = new Vector3(sv.posX, sv.posY, sv.posZ);
+                foreach (var v in allVehicles)
+                {
+                    float d = Vector3.Distance(v.transform.position, targetCenter);
+                    if (d < closestDist)
+                    {
+                        closestDist = d;
+                        newVehicle = v;
+                    }
+                }
+
+                if (newVehicle != null)
+                {
+                    newVehicle.gameObject.name = sv.name;
+                    newVehicle.transform.position = targetCenter;
+                    newVehicle.transform.eulerAngles = new Vector3(sv.rotX, sv.rotY, sv.rotZ);
+
+                    newVehicle.isRestoredFromSave = true;
+                    newVehicle.savedLinearVelocity = new Vector3(sv.velX, sv.velY, sv.velZ);
+                    newVehicle.savedAngularVelocity = new Vector3(sv.angX, sv.angY, sv.angZ);
+
+                    Rigidbody rb = newVehicle.GetComponent<Rigidbody>();
+                    if (rb != null)
+                    {
+                        rb.isKinematic = true; // Stay kinematic during chunk/collider generation
+                    }
+                    Debug.Log($"[SaveLoadManager] Restored vehicle transform and configured delayed unfreeze for {newVehicle.gameObject.name}.");
+                }
+                else
+                {
+                    Debug.LogError($"[SaveLoadManager] Failed to find spawned vehicle object near {targetCenter} after calling SpawnVehicle.");
+                }
+            }
+
+            // Ensure player is unfrozen after restoring vehicles
+            var player = FindFirstObjectByType<PlayerController>();
+            if (player != null)
+            {
+                player.SetFrozen(false);
+            }
+        }
     }
 
     private void LoadModificationsOnly()
@@ -364,7 +548,9 @@ public class SaveLoadManager : MonoBehaviour
 
                 player.transform.position = new Vector3(data.playerX, data.playerY, data.playerZ);
                 player.transform.eulerAngles = new Vector3(data.playerRotX, data.playerRotY, data.playerRotZ);
-                player.isCreativeMode = data.isCreativeMode;
+                
+                string savedMode = PlayerPrefs.GetString("GameMode_" + activeWorldSlot, "Survival");
+                player.isCreativeMode = (savedMode == "Creative") || data.isCreativeMode;
 
                 if (cc != null) cc.enabled = true;
             }
@@ -458,6 +644,26 @@ public class SavedItem
 }
 
 [System.Serializable]
+public class SavedVehicleBlock
+{
+    public int blockTypeID;
+    public int localX;
+    public int localY;
+    public int localZ;
+}
+
+[System.Serializable]
+public class SavedVehicle
+{
+    public string name;
+    public float posX, posY, posZ;
+    public float rotX, rotY, rotZ;
+    public float velX, velY, velZ;
+    public float angX, angY, angZ;
+    public List<SavedVehicleBlock> blocks;
+}
+
+[System.Serializable]
 public class SaveData
 {
     public float playerX;
@@ -471,6 +677,7 @@ public class SaveData
     public List<SavedBlock> modifications;
     public List<SavedItem> hotbar;
     public List<SavedItem> inventory;
+    public List<SavedVehicle> vehicles;
     public bool isCreativeMode;
     public int seed;
 }

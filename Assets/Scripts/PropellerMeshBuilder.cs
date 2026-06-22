@@ -19,7 +19,12 @@ public static class PropellerMeshBuilder
         hub.name = "PropellerHub";
         hub.transform.SetParent(go.transform, false);
         hub.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        hub.transform.localScale = new Vector3(radius * 0.35f, depth * 0.5f, radius * 0.35f);
+        
+        float hubLength = (depth > 1.0f) ? 2.0f : 0.8f;
+        float hubZPos   = (depth > 1.0f) ? 0f : -0.1f;
+        
+        hub.transform.localPosition = new Vector3(0f, 0f, hubZPos);
+        hub.transform.localScale = new Vector3(radius * 0.35f, hubLength * 0.5f, radius * 0.35f);
         Object.DestroyImmediate(hub.GetComponent<Collider>());
         hub.GetComponent<MeshRenderer>().sharedMaterial = hubMat;
 
@@ -27,20 +32,28 @@ public static class PropellerMeshBuilder
         GameObject nose = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         nose.name = "NoseCone";
         nose.transform.SetParent(go.transform, false);
-        nose.transform.localPosition = new Vector3(0f, 0f, depth * 0.45f);
+        
+        float noseZPos = (depth > 1.0f) ? 1.0f : 0.3f;
+        nose.transform.localPosition = new Vector3(0f, 0f, noseZPos);
         nose.transform.localScale = new Vector3(radius * 0.35f, radius * 0.35f, depth * 0.4f);
         Object.DestroyImmediate(nose.GetComponent<Collider>());
         nose.GetComponent<MeshRenderer>().sharedMaterial = hubMat;
+
+        float zOffset = 0f;
+        if (depth > 1.0f)
+        {
+            zOffset = depth * 0.425f; // Shifts the blades 0.85 units (near the top) for the 2.0-unit deep propeller
+        }
 
         // 3. Three Angled Blades (spaced 120° apart in the local XY plane)
         for (int i = 0; i < 3; i++)
         {
             float angle = i * 120f;
-            CreateBlade(go, radius, depth, angle, bladeMat);
+            CreateBlade(go, radius, depth, angle, bladeMat, zOffset);
         }
     }
 
-    private static void CreateBlade(GameObject parent, float radius, float depth, float angleDeg, Material mat)
+    private static void CreateBlade(GameObject parent, float radius, float depth, float angleDeg, Material mat, float zOffset)
     {
         GameObject blade = GameObject.CreatePrimitive(PrimitiveType.Cube);
         blade.name = $"Blade_{angleDeg}";
@@ -58,8 +71,8 @@ public static class PropellerMeshBuilder
         float midRadius = (innerRadius + outerRadius) * 0.5f;
         float length = outerRadius - innerRadius;
 
-        // Position at the midpoint of the blade radius
-        blade.transform.localPosition = radialRotation * new Vector3(0f, midRadius, 0f);
+        // Position at the midpoint of the blade radius, shifted by zOffset along local Z
+        blade.transform.localPosition = radialRotation * new Vector3(0f, midRadius, 0f) + new Vector3(0f, 0f, zOffset);
 
         // Scale: X = width, Y = length, Z = thickness
         blade.transform.localScale = new Vector3(

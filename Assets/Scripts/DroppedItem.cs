@@ -27,6 +27,7 @@ public class DroppedItem : MonoBehaviour
     private bool           landed = false;
     private float          settleTimer = 0f;
     private float          aliveTime   = 0f;  // prevents premature settling on ledges
+    private bool           wasAttracted = false;
 
     void Start()
     {
@@ -366,6 +367,46 @@ public class DroppedItem : MonoBehaviour
 
     void Update()
     {
+        // ── Player Magnet Attraction ──────────────────────────────────────────
+        bool isAttracted = false;
+        if (VoxelWorld.Instance != null && VoxelWorld.Instance.playerTransform != null)
+        {
+            Transform player = VoxelWorld.Instance.playerTransform;
+            Vector3 targetPos = player.position + Vector3.up * 0.9f; // Waist/body center
+            float dist = Vector3.Distance(transform.position, targetPos);
+            float magnetRadius = 1.2f;
+
+            if (dist < magnetRadius)
+            {
+                isAttracted = true;
+                if (!wasAttracted)
+                {
+                    wasAttracted = true;
+                    if (rb != null) rb.isKinematic = true;
+                }
+
+                // Smoothly pull toward player, accelerating as it gets closer
+                float pullSpeed = Mathf.Lerp(12f, 3f, dist / magnetRadius);
+                transform.position = Vector3.MoveTowards(transform.position, targetPos, pullSpeed * Time.deltaTime);
+                transform.Rotate(0f, spinSpeed * 2.5f * Time.deltaTime, 0f, Space.World);
+            }
+        }
+
+        if (!isAttracted && wasAttracted)
+        {
+            // Player moved out of range (e.g. full inventory) — release item back to gravity
+            wasAttracted = false;
+            landed = false;
+            aliveTime = 0f;
+            if (rb != null)
+            {
+                rb.isKinematic = false;
+                rb.AddForce(Vector3.down * 2f, ForceMode.Impulse);
+            }
+        }
+
+        if (isAttracted) return;
+
         if (!landed)
         {
             transform.Rotate(0f, spinSpeed * Time.deltaTime, 0f, Space.World);

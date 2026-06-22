@@ -70,10 +70,7 @@ public class GameSaveUI : MonoBehaviour
         {
             LoadGame();
         }
-        if (Keyboard.current.cKey.wasPressedThisFrame)
-        {
-            ToggleCreative();
-        }
+
         if (Keyboard.current.deleteKey.wasPressedThisFrame)
         {
             ClearSave();
@@ -107,7 +104,7 @@ public class GameSaveUI : MonoBehaviour
         rt.anchorMin = new Vector2(1f, 1f);
         rt.anchorMax = new Vector2(1f, 1f);
         rt.pivot = new Vector2(1f, 1f);
-        rt.sizeDelta = new Vector2(430f, 38f);
+        rt.sizeDelta = new Vector2(320f, 38f);
         // Positioned next to DevTools (-230f offset to the left)
         rt.anchoredPosition = new Vector2(-230f, -10f);
 
@@ -128,12 +125,6 @@ public class GameSaveUI : MonoBehaviour
         CreateButton("LoadBtn", "🔄 Load [L]", LoadGame);
         CreateButton("ResetBtn", "❌ Reset [Delete]", ClearSave);
         
-        var creativeBtn = CreateButton("CreativeBtn", "🦄 Creative: OFF [C]", ToggleCreative);
-        if (creativeBtn != null)
-        {
-            creativeText = creativeBtn.GetComponentInChildren<TextMeshProUGUI>();
-            UpdateCreativeButtonLabel();
-        }
     }
 
     private GameObject CreateButton(string name, string label, UnityEngine.Events.UnityAction callback)
@@ -193,7 +184,7 @@ public class GameSaveUI : MonoBehaviour
         {
             SaveLoadManager.Instance.LoadGame();
         }
-        UpdateCreativeButtonLabel();
+
 
         // Load complete! Fade out and destroy loading screen
         StartCoroutine(HideLoadingRoutine());
@@ -208,32 +199,7 @@ public class GameSaveUI : MonoBehaviour
         }
     }
 
-    private void ToggleCreative()
-    {
-        var player = FindFirstObjectByType<PlayerController>();
-        if (player != null)
-        {
-            player.isCreativeMode = !player.isCreativeMode;
-            UpdateCreativeButtonLabel();
-            Debug.Log($"[GameSaveUI] Creative Mode toggled: {player.isCreativeMode}");
 
-            if (player.isCreativeMode)
-            {
-                if (Inventory.Instance != null)
-                {
-                    Inventory.Instance.PopulateCreativeInventory();
-                }
-            }
-        }
-    }
-
-    private void UpdateCreativeButtonLabel()
-    {
-        if (creativeText == null) return;
-        var player = FindFirstObjectByType<PlayerController>();
-        bool isCreative = player != null && player.isCreativeMode;
-        creativeText.text = isCreative ? "🦄 Creative: ON [C]" : "🦄 Creative: OFF [C]";
-    }
 
     private static GameObject CreateUIObject(string name, Transform parent)
     {

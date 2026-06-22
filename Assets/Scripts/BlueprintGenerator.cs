@@ -72,6 +72,8 @@ public static class BlueprintGenerator
         { 21, 4.0f },  // large wheel
         { 22, 2.5f },  // propeller
         { 23, 0.0f },  // large wheel helper
+        { 26, 6.0f },  // large propeller
+        { 27, 0.0f },  // large propeller helper
         { 50, 1.5f },  // control block
         { 30, 2.2f },  // coal ore
         { 31, 3.5f },  // iron ore
@@ -101,6 +103,8 @@ public static class BlueprintGenerator
         { 21, 40f },  // large wheel
         { 22, 20f },  // propeller
         { 23, 0f   },  // large wheel helper
+        { 26, 40f },  // large propeller
+        { 27, 0f   },  // large propeller helper
         { 50, 15f },  // control block
         { 30, 25f },  // coal ore
         { 31, 45f },  // iron ore

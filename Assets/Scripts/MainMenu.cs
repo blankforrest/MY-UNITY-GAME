@@ -715,6 +715,8 @@ public class MainMenu : MonoBehaviour
             }
 
             SaveLoadManager.activeWorldSlot = newSlot;
+            PlayerPrefs.SetString("GameMode_" + newSlot, chosenMode);
+            PlayerPrefs.Save();
 
             // Parse Seed Input
             int seed = 0;

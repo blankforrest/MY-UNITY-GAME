@@ -12,6 +12,8 @@ public class PlayerController : MonoBehaviour
     public float mouseSensitivity = 0.1f; 
     public float lookSmoothTime = 0.02f; // Smoothing to fix jittery camera
     public bool isCreativeMode = false;
+    private bool isFlying = false;
+    private float lastJumpPressTime = 0f;
 
     private CharacterController controller;
     private Transform cameraTransform;
@@ -60,6 +62,7 @@ public class PlayerController : MonoBehaviour
             Debug.LogError("PlayerController needs a Camera as a child object.");
             return;
         }
+        cam.nearClipPlane = 0.01f; // Prevents block faces close to the player view from clipping and becoming invisible
         cameraTransform = cam.transform;
         originalCameraLocalPosition = cameraTransform.localPosition;
 
@@ -85,10 +88,12 @@ public class PlayerController : MonoBehaviour
 
         spawnPoint = transform.position;
 
-        // Set initial game mode from Main Menu choice
+        // Set initial game mode from Main Menu or PlayerPrefs choice
         if (SaveLoadManager.Instance != null && SaveLoadManager.Instance.HasSaveFile())
         {
-            // Loaded game: the creative mode will be restored by SaveLoadManager.RestorePlayerAndInventory()
+            // Loaded game: restore game mode from PlayerPrefs or load data
+            string savedMode = PlayerPrefs.GetString("GameMode_" + SaveLoadManager.activeWorldSlot, "Survival");
+            isCreativeMode = (savedMode == "Creative");
         }
         else
         {
@@ -169,7 +174,7 @@ public class PlayerController : MonoBehaviour
             if (controller.enabled)
             {
                 isGrounded = controller.isGrounded;
-                if (isCreativeMode)
+                if (isCreativeMode && isFlying)
                 {
                     // Remain suspended/no gravity when inventory or pause menu is opened while flying
                     velocity.y = 0f;
@@ -192,7 +197,7 @@ public class PlayerController : MonoBehaviour
         if (controller.enabled)
         {
             isGrounded = controller.isGrounded;
-            if (isGrounded && velocity.y < 0 && !isCreativeMode)
+            if (isGrounded && velocity.y < 0 && !(isCreativeMode && isFlying))
             {
                 velocity.y = -2f; // Slight downward force to keep grounded
             }
@@ -361,10 +366,29 @@ public class PlayerController : MonoBehaviour
             controller.Move(move * speed * Time.deltaTime);
         }
 
+        // Creative flight toggle via double-jump
+        if (isCreativeMode && Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
+        {
+            float timeSinceLastJump = Time.time - lastJumpPressTime;
+            if (timeSinceLastJump < 0.25f)
+            {
+                isFlying = !isFlying;
+                if (isFlying)
+                {
+                    velocity.y = 2f; // lift off slightly
+                }
+                else
+                {
+                    velocity.y = 0f;
+                }
+            }
+            lastJumpPressTime = Time.time;
+        }
+
         // Jump / Swim / Flight
         if (Keyboard.current != null)
         {
-            if (isCreativeMode)
+            if (isCreativeMode && isFlying)
             {
                 velocity.y = 0f;
                 float verticalSpeed = (isRunning ? runSpeed : walkSpeed) * 2f; // flight speed
@@ -451,9 +475,9 @@ public class PlayerController : MonoBehaviour
         }
 
         // Gravity / Buoyancy
-        if (isCreativeMode)
+        if (isCreativeMode && isFlying)
         {
-            // No gravity in creative mode
+            // No gravity when flying in creative mode
         }
         else if (inWater)
         {

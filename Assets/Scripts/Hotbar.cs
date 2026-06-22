@@ -53,9 +53,12 @@ public class Hotbar : MonoBehaviour
         var player = FindFirstObjectByType<PlayerController>();
         if (player != null && player.isCreativeMode)
         {
-            for (int i = 0; i < SLOT_COUNT; i++)
+            if (SaveLoadManager.Instance == null || !SaveLoadManager.Instance.HasSaveFile())
             {
-                hotbarSlots[i] = null;
+                for (int i = 0; i < SLOT_COUNT; i++)
+                {
+                    hotbarSlots[i] = null;
+                }
             }
         }
 

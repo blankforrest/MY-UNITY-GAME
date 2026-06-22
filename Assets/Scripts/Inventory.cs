@@ -640,6 +640,8 @@ public class Inventory : MonoBehaviour
                 sprite = VehicleSpawner.CreateWheelIcon(true);
             else if (itemName == "Propeller")
                 sprite = VehicleSpawner.CreatePropellerIcon();
+            else if (itemName == "Large Propeller")
+                sprite = VehicleSpawner.CreateLargePropellerIcon();
             else if (itemName.Equals("Flower", System.StringComparison.OrdinalIgnoreCase))
             {
                 sprite = VoxelWorld.MakeFlowerIcon();
@@ -760,6 +762,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Small Wheel", 20, 64));
             items.Add(new CreativeItemData("Large Wheel", 21, 64));
             items.Add(new CreativeItemData("Propeller", 22, 64));
+            items.Add(new CreativeItemData("Large Propeller", 26, 64));
 
             // ── 4. Foliage ──────────────────────────────────────────
             items.Add(new CreativeItemData("Short Grass", 13, 64));
@@ -826,6 +829,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Small Wheel", 20, 64));
             items.Add(new CreativeItemData("Large Wheel", 21, 64));
             items.Add(new CreativeItemData("Propeller", 22, 64));
+            items.Add(new CreativeItemData("Large Propeller", 26, 64));
             items.Add(new CreativeItemData("Wrench", 0, 1));
         }
         else if (category == "FOLIAGE")

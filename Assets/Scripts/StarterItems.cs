@@ -194,6 +194,7 @@ public class StarterItems : MonoBehaviour
             case 37: return new Color(0.50f, 0.50f, 0.50f); // Furnace
             case 46: return new Color(0.72f, 0.58f, 0.37f); // Wooden Slab
             case 47: return new Color(0.52f, 0.52f, 0.54f); // Stone Slab
+            case 26: return new Color(0.82f, 0.58f, 0.16f); // Large Propeller (brass)
             default: return Color.white;
         }
     }
@@ -262,6 +263,10 @@ public class StarterItems : MonoBehaviour
         else if (itemName.Equals("Propeller", System.StringComparison.OrdinalIgnoreCase) || blockTypeID == 22)
         {
             item.icon = VehicleSpawner.CreatePropellerIcon();
+        }
+        else if (itemName.Equals("Large Propeller", System.StringComparison.OrdinalIgnoreCase) || blockTypeID == 26)
+        {
+            item.icon = VehicleSpawner.CreateLargePropellerIcon();
         }
         else if (itemName.Equals("Flower", System.StringComparison.OrdinalIgnoreCase))
         {
