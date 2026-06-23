@@ -1,9 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Jobs;
+using Unity.Collections;
+using Unity.Burst;
+using Unity.Mathematics;
 
 // ── Data types ────────────────────────────────────────────────────────────────
 
 /// <summary>A single block's position (relative to structure origin) and type.</summary>
+[System.Serializable]
 public struct BlockEntry
 {
     /// <summary>Position in local structure space (origin = min corner of bounding box).</summary>
@@ -125,12 +130,7 @@ public static class BlueprintGenerator
     /// <summary>
     /// Builds a <see cref="StructureBlueprint"/> from a list of world grid positions
     /// returned by <see cref="StructureScanner.FloodFillStructure"/>.
-    ///
-    /// Block type IDs are read live from <see cref="VoxelWorld.GetBlock"/> so no
-    /// stale component data is involved.
     /// </summary>
-    /// <param name="gridPositions">Connected player-placed voxel positions.</param>
-    /// <returns>A fully populated blueprint, or null if the list is empty.</returns>
     public static StructureBlueprint GenerateBlueprint(List<Vector3Int> gridPositions)
     {
         if (gridPositions == null || gridPositions.Count == 0)
@@ -139,48 +139,89 @@ public static class BlueprintGenerator
             return null;
         }
 
-        // ── Step 1: Find bounding box min corner (world origin) ───────────────
-        Vector3Int min = gridPositions[0];
-        Vector3Int max = gridPositions[0];
+        int count = gridPositions.Count;
 
-        foreach (Vector3Int pos in gridPositions)
+        // Allocate NativeArrays for the Job inputs and outputs using Unity.Mathematics int3
+        NativeArray<int3> gridPositionsNative = new NativeArray<int3>(count, Allocator.TempJob);
+        NativeArray<int> blockTypeIDsNative = new NativeArray<int>(count, Allocator.TempJob);
+        NativeArray<float> massTableNative = new NativeArray<float>(256, Allocator.TempJob);
+        NativeArray<float> durabilityTableNative = new NativeArray<float>(256, Allocator.TempJob);
+
+        // Output arrays
+        NativeArray<int3> minOut = new NativeArray<int3>(1, Allocator.TempJob);
+        NativeArray<int3> maxOut = new NativeArray<int3>(1, Allocator.TempJob);
+        NativeArray<float> totalMassOut = new NativeArray<float>(1, Allocator.TempJob);
+        NativeArray<float> totalDurabilityOut = new NativeArray<float>(1, Allocator.TempJob);
+        NativeArray<BlockEntry> outBlocks = new NativeArray<BlockEntry>(count, Allocator.TempJob);
+
+        // Fetch block type IDs on the main thread
+        for (int i = 0; i < count; i++)
         {
-            min = Vector3Int.Min(min, pos);
-            max = Vector3Int.Max(max, pos);
-        }
+            Vector3Int worldPos = gridPositions[i];
+            gridPositionsNative[i] = new int3(worldPos.x, worldPos.y, worldPos.z);
 
-        // ── Step 2: Populate blueprint ────────────────────────────────────────
-        StructureBlueprint blueprint = new StructureBlueprint();
-        blueprint.worldOrigin = new Vector3(min.x, min.y, min.z);
-        blueprint.dimensions  = (max - min) + Vector3Int.one; // +1 because max is inclusive
-
-        float totalMass = 0f, totalDurability = 0f;
-
-        foreach (Vector3Int worldPos in gridPositions)
-        {
-            // Read block type from voxel world (center of voxel for GetBlock)
             int typeID = 0;
             if (VoxelWorld.Instance != null)
             {
                 Vector3 center = new Vector3(worldPos.x + 0.5f, worldPos.y + 0.5f, worldPos.z + 0.5f);
                 typeID = VoxelWorld.Instance.GetBlock(center);
             }
-
-            Vector3Int localPos = worldPos - min;
-
-            blueprint.blocks.Add(new BlockEntry(localPos, typeID));
-
-            // Accumulate mass
-            totalMass += BlockMassTable.TryGetValue(typeID, out float m) ? m : DefaultMass;
-
-            // Accumulate durability
-            totalDurability += BlockDurabilityTable.TryGetValue(typeID, out float d) ? d : DefaultDurability;
+            blockTypeIDsNative[i] = typeID;
         }
 
-        blueprint.totalMass       = totalMass;
-        blueprint.totalDurability = totalDurability;
+        // Populate flat arrays for fast Burst-compatible lookup
+        for (int i = 0; i < 256; i++)
+        {
+            massTableNative[i] = BlockMassTable.TryGetValue(i, out float m) ? m : DefaultMass;
+            durabilityTableNative[i] = BlockDurabilityTable.TryGetValue(i, out float d) ? d : DefaultDurability;
+        }
 
-        // ── Step 3: Log summary ───────────────────────────────────────────────
+        // Schedule and execute the job
+        GenerateBlueprintJob job = new GenerateBlueprintJob
+        {
+            GridPositions = gridPositionsNative,
+            BlockTypeIDs = blockTypeIDsNative,
+            MassTable = massTableNative,
+            DurabilityTable = durabilityTableNative,
+            DefaultMass = DefaultMass,
+            DefaultDurability = DefaultDurability,
+            MinOut = minOut,
+            MaxOut = maxOut,
+            TotalMassOut = totalMassOut,
+            TotalDurabilityOut = totalDurabilityOut,
+            OutBlocks = outBlocks
+        };
+
+        JobHandle handle = job.Schedule();
+        handle.Complete();
+
+        // Convert the outputs back to the managed StructureBlueprint class
+        StructureBlueprint blueprint = new StructureBlueprint();
+        int3 min = minOut[0];
+        int3 max = maxOut[0];
+        blueprint.worldOrigin = new Vector3(min.x, min.y, min.z);
+        blueprint.dimensions  = new Vector3Int(max.x - min.x + 1, max.y - min.y + 1, max.z - min.z + 1);
+        blueprint.totalMass = totalMassOut[0];
+        blueprint.totalDurability = totalDurabilityOut[0];
+
+        blueprint.blocks = new List<BlockEntry>(count);
+        for (int i = 0; i < count; i++)
+        {
+            blueprint.blocks.Add(outBlocks[i]);
+        }
+
+        // Dispose temporary NativeArrays
+        gridPositionsNative.Dispose();
+        blockTypeIDsNative.Dispose();
+        massTableNative.Dispose();
+        durabilityTableNative.Dispose();
+        minOut.Dispose();
+        maxOut.Dispose();
+        totalMassOut.Dispose();
+        totalDurabilityOut.Dispose();
+        outBlocks.Dispose();
+
+        // Log summary
         Debug.Log($"[BlueprintGenerator] Blueprint: " +
                   $"{blueprint.dimensions.x}x{blueprint.dimensions.y}x{blueprint.dimensions.z}, " +
                   $"Mass: {blueprint.totalMass:F1}, " +
@@ -188,5 +229,67 @@ public static class BlueprintGenerator
                   $"Blocks: {blueprint.blocks.Count}");
 
         return blueprint;
+    }
+
+    // ── Burst-Compiled Job ───────────────────────────────────────────────────
+
+    [BurstCompile]
+    private struct GenerateBlueprintJob : IJob
+    {
+        [ReadOnly] public NativeArray<int3> GridPositions;
+        [ReadOnly] public NativeArray<int> BlockTypeIDs;
+        [ReadOnly] public NativeArray<float> MassTable;
+        [ReadOnly] public NativeArray<float> DurabilityTable;
+
+        public float DefaultMass;
+        public float DefaultDurability;
+
+        public NativeArray<int3> MinOut;
+        public NativeArray<int3> MaxOut;
+        public NativeArray<float> TotalMassOut;
+        public NativeArray<float> TotalDurabilityOut;
+        public NativeArray<BlockEntry> OutBlocks;
+
+        public void Execute()
+        {
+            if (GridPositions.Length == 0) return;
+
+            int3 min = GridPositions[0];
+            int3 max = GridPositions[0];
+
+            // 1. Find bounding box min and max using Unity.Mathematics SIMD min/max
+            for (int i = 1; i < GridPositions.Length; i++)
+            {
+                int3 pos = GridPositions[i];
+                min = math.min(min, pos);
+                max = math.max(max, pos);
+            }
+
+            MinOut[0] = min;
+            MaxOut[0] = max;
+
+            float totalMass = 0f;
+            float totalDurability = 0f;
+
+            // 2. Populate entries and lookup values
+            for (int i = 0; i < GridPositions.Length; i++)
+            {
+                int3 worldPos = GridPositions[i];
+                int typeID = BlockTypeIDs[i];
+
+                int3 localPos = worldPos - min;
+                Vector3Int localPosV3 = new Vector3Int(localPos.x, localPos.y, localPos.z);
+                OutBlocks[i] = new BlockEntry(localPosV3, typeID);
+
+                float m = (typeID >= 0 && typeID < 256) ? MassTable[typeID] : DefaultMass;
+                float d = (typeID >= 0 && typeID < 256) ? DurabilityTable[typeID] : DefaultDurability;
+
+                totalMass += m;
+                totalDurability += d;
+            }
+
+            TotalMassOut[0] = totalMass;
+            TotalDurabilityOut[0] = totalDurability;
+        }
     }
 }

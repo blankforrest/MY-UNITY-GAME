@@ -1,5 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Jobs;
+using Unity.Collections;
+using Unity.Burst;
+using Unity.Mathematics;
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer), typeof(MeshCollider))]
 public class Chunk : MonoBehaviour
@@ -10,27 +14,28 @@ public class Chunk : MonoBehaviour
 
     private byte[,,] voxelMap;
     public Vector2 chunkPos { get; private set; }
+    private bool renderersEnabled = true;
 
     int vertexIndex = 0;
-    List<Vector3> vertices = new List<Vector3>();
-    List<int> triangles = new List<int>();
-    List<Vector2> uvs = new List<Vector2>();
+    List<Vector3> vertices = new List<Vector3>(4096);
+    List<int> triangles = new List<int>(6144);
+    List<Vector2> uvs = new List<Vector2>(4096);
 
     // Water rendering lists
-    private List<Vector3> waterVertices = new List<Vector3>();
-    private List<int> waterTriangles = new List<int>();
-    private List<Vector2> waterUvs = new List<Vector2>();
-    private List<Color> waterColors = new List<Color>();
+    private List<Vector3> waterVertices = new List<Vector3>(2048);
+    private List<int> waterTriangles = new List<int>(3072);
+    private List<Vector2> waterUvs = new List<Vector2>(2048);
+    private List<Color> waterColors = new List<Color>(2048);
     private int waterVertexIndex = 0;
 
     private MeshFilter waterMeshFilter;
     private MeshRenderer waterMeshRenderer;
 
     // Foliage (flowers, etc.) rendering lists — separate child mesh, alpha-cutout
-    private List<Vector3> foliageVertices  = new List<Vector3>();
-    private List<int>     foliageTriangles = new List<int>();
-    private List<Vector2> foliageUvs       = new List<Vector2>();
-    private List<Color>   foliageColors    = new List<Color>();
+    private List<Vector3> foliageVertices  = new List<Vector3>(2048);
+    private List<int>     foliageTriangles = new List<int>(3072);
+    private List<Vector2> foliageUvs       = new List<Vector2>(2048);
+    private List<Color>   foliageColors    = new List<Color>(2048);
     private int foliageVertexIndex = 0;
 
     private MeshFilter   foliageMeshFilter;
@@ -38,9 +43,9 @@ public class Chunk : MonoBehaviour
     private MeshCollider foliageMeshCollider;
 
     // Glass rendering lists — separate child mesh, ZWrite On + CullBack to fix back-face bleed
-    private List<Vector3> glassVertices  = new List<Vector3>();
-    private List<int>     glassTriangles = new List<int>();
-    private List<Vector2> glassUvs       = new List<Vector2>();
+    private List<Vector3> glassVertices  = new List<Vector3>(1024);
+    private List<int>     glassTriangles = new List<int>(1536);
+    private List<Vector2> glassUvs       = new List<Vector2>(1024);
     private int glassVertexIndex = 0;
 
     private MeshFilter   glassMeshFilter;
@@ -57,11 +62,34 @@ public class Chunk : MonoBehaviour
         PopulateVoxelMap();
         UpdateChunk();
 
+        if (ChunkCuller.Instance != null)
+        {
+            ChunkCuller.Instance.RegisterChunk(this);
+        }
+
         // Update neighboring chunks if they exist, so they can cull their boundary faces
         UpdateNeighbor(new Vector2(chunkPos.x + 1, chunkPos.y));
         UpdateNeighbor(new Vector2(chunkPos.x - 1, chunkPos.y));
         UpdateNeighbor(new Vector2(chunkPos.x, chunkPos.y + 1));
         UpdateNeighbor(new Vector2(chunkPos.x, chunkPos.y - 1));
+    }
+
+    private void OnDestroy()
+    {
+        if (ChunkCuller.Instance != null)
+        {
+            ChunkCuller.Instance.UnregisterChunk(this);
+        }
+    }
+
+    public void SetRenderersEnabled(bool enabled)
+    {
+        if (renderersEnabled == enabled) return;
+        renderersEnabled = enabled;
+        if (meshRenderer != null) meshRenderer.enabled = enabled;
+        if (waterMeshRenderer != null) waterMeshRenderer.enabled = enabled;
+        if (foliageMeshRenderer != null) foliageMeshRenderer.enabled = enabled;
+        if (glassMeshRenderer != null) glassMeshRenderer.enabled = enabled;
     }
 
     void UpdateNeighbor(Vector2 pos)
@@ -152,461 +180,543 @@ public class Chunk : MonoBehaviour
     {
         voxelMap = new byte[VoxelData.ChunkWidth, VoxelData.ChunkHeight, VoxelData.ChunkWidth];
 
-        for (int y = 0; y < VoxelData.ChunkHeight; y++)
+        int elementCount = VoxelData.ChunkWidth * VoxelData.ChunkHeight * VoxelData.ChunkWidth;
+        NativeArray<byte> flatVoxelMap = new NativeArray<byte>(elementCount, Allocator.TempJob);
+
+        PopulateVoxelMapJob job = new PopulateVoxelMapJob
         {
-            for (int x = 0; x < VoxelData.ChunkWidth; x++)
+            ChunkPos = new float2(chunkPos.x, chunkPos.y),
+            WorldSeedOffsetX = SaveLoadManager.worldSeedOffsetX,
+            WorldSeedOffsetZ = SaveLoadManager.worldSeedOffsetZ,
+            ChunkWidth = VoxelData.ChunkWidth,
+            ChunkHeight = VoxelData.ChunkHeight,
+            VoxelMapOut = flatVoxelMap
+        };
+
+        JobHandle handle = job.Schedule();
+        handle.Complete();
+
+        // Copy back to managed voxelMap array
+        for (int x = 0; x < VoxelData.ChunkWidth; x++)
+        {
+            for (int y = 0; y < VoxelData.ChunkHeight; y++)
             {
                 for (int z = 0; z < VoxelData.ChunkWidth; z++)
                 {
-                    float globalX = x + chunkPos.x * VoxelData.ChunkWidth;
-                    float globalZ = z + chunkPos.y * VoxelData.ChunkWidth;
-
-                    float ox = globalX + SaveLoadManager.worldSeedOffsetX;
-                    float oz = globalZ + SaveLoadManager.worldSeedOffsetZ;
-
-                    // Base rolling noise
-                    float baseNoise = Mathf.PerlinNoise(ox * 0.02f, oz * 0.02f);
-                    // Exponentiate the noise to widen valleys (pushes mid-values lower)
-                    baseNoise = Mathf.Pow(baseNoise, 2.5f);
-                    
-                    // Minor detail noise to prevent it from looking unnaturally smooth
-                    float detailNoise = Mathf.PerlinNoise(ox * 0.08f, oz * 0.08f) * 0.15f;
-
-                    // Combine and lower the overall multiplier to make it less mountainy
-                    float finalNoise = baseNoise + detailNoise;
-                                       // Use float exact height to determine slabs
-                    float exactHeight = finalNoise * VoxelData.ChunkHeight * 0.25f + (VoxelData.ChunkHeight / 5f);
- 
-                    // ── Macro Continent & Oceans ──
-                    // continentNoise:
-                    //   < 0.45f: Dry land (height boosted, no oceans)
-                    //   > 0.55f: Ocean (height lowered, deep water)
-                    //   0.45f - 0.55f: Transition/Coastline
-                    float continentNoise = Mathf.PerlinNoise(ox * 0.00015f + 1234.5f, oz * 0.00015f + 5678.9f);
-
-                    // Smoothly blend the starting area around (0,0) towards dry land to guarantee solid ground on spawn
-                    float startScale = Mathf.Clamp01(Mathf.Max(Mathf.Abs(globalX), Mathf.Abs(globalZ)) / 300f);
-                    continentNoise = Mathf.Lerp(0.35f, continentNoise, startScale);
-
-                    float heightOffset = 0f;
-                    if (continentNoise < 0.45f)
-                    {
-                        // Dry land: boost height above sea level (up to 18 blocks)
-                        float dryT = (0.45f - continentNoise) / 0.45f;
-                        heightOffset = dryT * 18f;
-                    }
-                    else if (continentNoise > 0.55f)
-                    {
-                        // Ocean: pull height below sea level (down to 22 blocks)
-                        float oceanT = (continentNoise - 0.55f) / 0.45f;
-                        heightOffset = -oceanT * 22f;
-                    }
-
-                    // Calculate heights for each biome individually
-                    float oceanFloorNoise = Mathf.PerlinNoise(ox * 0.015f, oz * 0.015f);
-                    float oceanHeight = (oceanFloorNoise * VoxelData.ChunkHeight * 0.08f) + (VoxelData.ChunkHeight * 0.08f) + heightOffset;
-
-                    float duneNoise = Mathf.PerlinNoise(ox * 0.012f, oz * 0.012f);
-                    duneNoise = Mathf.Pow(duneNoise, 2f);
-                    float desertHeight = (duneNoise * VoxelData.ChunkHeight * 0.12f) + (VoxelData.ChunkHeight * 0.22f) + heightOffset;
-
-                    float plainsNoise = Mathf.PerlinNoise(ox * 0.01f, oz * 0.01f);
-                    float plainsHeight = (plainsNoise * VoxelData.ChunkHeight * 0.03f) + (VoxelData.ChunkHeight * 0.22f) + heightOffset;
-
-                    float forestHeight = finalNoise * VoxelData.ChunkHeight * 0.20f + (VoxelData.ChunkHeight * 0.21f) + heightOffset;
-
-                    // Determine discrete biome index for surface block assignment
-                    float biomeNoise = Mathf.PerlinNoise(ox * 0.003f + 4000f, oz * 0.003f + 8000f);
-                    int biome = 2; // Plains default
-                    if (continentNoise > 0.55f) biome = 0; // Ocean
-                    else if (biomeNoise < 0.25f) biome = 1; // Desert
-                    else if (biomeNoise < 0.50f) biome = 2; // Plains
-                    else biome = 3; // Forest
-
-                    // Smoothly blend land biome heights based on biomeNoise
-                    float landHeight = 0f;
-                    if (biomeNoise < 0.20f)
-                    {
-                        landHeight = desertHeight;
-                    }
-                    else if (biomeNoise < 0.30f)
-                    {
-                        float t = (biomeNoise - 0.20f) / 0.10f;
-                        t = t * t * (3f - 2f * t); // Smoothstep
-                        landHeight = Mathf.Lerp(desertHeight, plainsHeight, t);
-                    }
-                    else if (biomeNoise < 0.45f)
-                    {
-                        landHeight = plainsHeight;
-                    }
-                    else if (biomeNoise < 0.55f)
-                    {
-                        float t = (biomeNoise - 0.45f) / 0.10f;
-                        t = t * t * (3f - 2f * t); // Smoothstep
-                        landHeight = Mathf.Lerp(plainsHeight, forestHeight, t);
-                    }
-                    else
-                    {
-                        landHeight = forestHeight;
-                    }
-
-                    // Smoothly blend land heights with ocean heights near coastlines
-                    float oceanWeight = Mathf.Clamp01((continentNoise - 0.45f) / 0.10f);
-                    oceanWeight = oceanWeight * oceanWeight * (3f - 2f * oceanWeight); // Smoothstep
-                    exactHeight = Mathf.Lerp(landHeight, oceanHeight, oceanWeight);
-
-                    exactHeight = Mathf.Max(2f, exactHeight); // clamp to ensure we always have terrain at the bottom
-
-                    // ── River Carving (Realistic Meandering & Dynamic Width) ──
-                    float seaLevel = Mathf.Floor(VoxelData.ChunkHeight * 0.22f);
-                    
-                    // Domain warp using noise to bend/wiggle the river coordinates
-                    float warpX = Mathf.PerlinNoise(ox * 0.015f + 10f, oz * 0.015f + 20f) * 60f;
-                    float warpZ = Mathf.PerlinNoise(ox * 0.015f + 30f, oz * 0.015f + 40f) * 60f;
-
-                    // Lower frequency (0.002f) river noise creates long, continuous meandering rivers
-                    float riverNoise = Mathf.PerlinNoise((ox + warpX) * 0.002f + 400f, (oz + warpZ) * 0.002f + 800f);
-                    float riverCenterDist = Mathf.Abs(riverNoise - 0.5f);
-                    
-                    // Dynamic width variation (scaled for the lower frequency)
-                    float widthNoise = Mathf.PerlinNoise(ox * 0.01f + 150f, oz * 0.01f + 250f);
-                    float riverWidth = 0.01f + widthNoise * 0.008f; // clean, continuous channel width
-                    
-                    // Smoothly fade rivers in/out as they transition to desert/ocean
-                    float riverStrength = 1f;
-                    if (continentNoise < 0.45f)
-                        riverStrength = Mathf.Clamp01((continentNoise - 0.35f) / 0.10f);
-                    else if (continentNoise > 0.55f)
-                        riverStrength = Mathf.Clamp01((0.65f - continentNoise) / 0.10f);
-
-                    bool isRiver = (riverStrength > 0f) && (riverCenterDist < riverWidth);
-                    bool isOcean = (continentNoise > 0.50f);
-
-                    if (isRiver)
-                    {
-                        float riverFactor = Mathf.Clamp01(riverCenterDist / riverWidth);
-                        // S-curve interpolation for flatter riverbed and sloped banks
-                        riverFactor = Mathf.SmoothStep(0f, 1f, riverFactor);
-                        
-                        float riverDepth = 3.5f * riverStrength;
-                        float riverbedHeight = seaLevel - riverDepth;
-                        
-                        float carvedHeight = Mathf.Lerp(riverbedHeight, exactHeight, riverFactor);
-                        exactHeight = Mathf.Min(exactHeight, carvedHeight);
-                    }
-                    else if (!isOcean)
-                    {
-                        // Clean up any stray puddles by ensuring dry land is strictly above sea level
-                        exactHeight = Mathf.Max(exactHeight, seaLevel + 1.5f);
-                    }
-
-                    int floorY = Mathf.FloorToInt(exactHeight);
-
-                    // Determine dirt thickness dynamically using noise (between 3 and 5 blocks)
-                    float dirtNoise = Mathf.PerlinNoise(ox * 0.1f, oz * 0.1f);
-                    int dirtThickness = 3 + Mathf.FloorToInt(dirtNoise * 3f); // 3, 4, or 5 layers of dirt
-
-                    // Determine cactus height at this column
-                    float cactusNoise = Mathf.PerlinNoise(ox * 0.3f + 700f, oz * 0.3f + 900f);
-                    int cactusHeight = 0;
-                    if (biome == 1 && floorY > seaLevel + 1 && !isRiver)
-                    {
-                        if (cactusNoise > 0.94f)
-                        {
-                            float hNoise = Mathf.PerlinNoise(ox * 0.9f, oz * 0.9f);
-                            cactusHeight = 2 + Mathf.FloorToInt(hNoise * 2f); // 2 or 3 block tall cactus
-                        }
-                    }
-
-                    if (y == 0)
-                    {
-                        voxelMap[x, y, z] = 48; // Bedrock (indestructible bottom floor)
-                    }
-                    else if (y > floorY)
-                    {
-                        if (y <= floorY + cactusHeight)
-                        {
-                            voxelMap[x, y, z] = 49; // Cactus block
-                        }
-                        else if (y > seaLevel)
-                        {
-                            voxelMap[x, y, z] = 0; // Air
-                        }
-                        else
-                        {
-                            voxelMap[x, y, z] = 7; // Water
-                        }
-                    }
-                    else if (y == floorY)
-                    {
-                        if (biome == 1) // Desert
-                        {
-                            voxelMap[x, y, z] = 8; // Sand
-                        }
-                        else if (floorY <= seaLevel + 1)
-                        {
-                            voxelMap[x, y, z] = 8; // Sand beach/riverbed
-                        }
-                        else
-                        {
-                            voxelMap[x, y, z] = 4; // Grass
-                        }
-                    }
-                    else if (y >= floorY - dirtThickness)
-                    {
-                        if (biome == 1) // Desert
-                        {
-                            voxelMap[x, y, z] = 8; // Sand deep
-                        }
-                        else if (floorY <= seaLevel + 1)
-                        {
-                            voxelMap[x, y, z] = 8; // Sand deep beach
-                        }
-                        else
-                        {
-                            voxelMap[x, y, z] = 5; // Dirt
-                        }
-                    }
-                    else
-                    {
-                        voxelMap[x, y, z] = 3; // Stone (deep)
-                    }
-
-                    // ── Flower & Grass spawning on full grass blocks ──────────────────────
-                    // Only place flower or grass one block above a *full* grass block (not slab)
-                    // and only above sea level so they don't appear on the sea floor.
-                    if (y == floorY + 1                       // cell directly above surface
-                        && voxelMap[x, floorY, z] == 4        // surface is full grass (not slab/sand)
-                        && floorY > seaLevel + 1)             // strictly above sea level
-                    {
-                        float foliageNoise = Mathf.PerlinNoise(
-                            ox * 0.15f + 120.3f,
-                            oz * 0.15f + 340.1f);
-                        float threshold = (biome == 2) ? 0.32f : 0.45f;
-                        if (foliageNoise > threshold) // Grass/Flower patches
-                        {
-                            float subNoise = Mathf.PerlinNoise(ox * 0.6f + 85f, oz * 0.6f + 15f);
-                            if (subNoise < 0.12f)
-                            {
-                                // Flowers (Rose, Dandelion, Iris)
-                                float typeNoise = Mathf.PerlinNoise(ox * 0.7f + 50f, oz * 0.7f + 90f);
-                                if (typeNoise < 0.33f)
-                                    voxelMap[x, y, z] = 9; // Rose
-                                else if (typeNoise < 0.66f)
-                                    voxelMap[x, y, z] = 10; // Dandelion
-                                else
-                                    voxelMap[x, y, z] = 11; // Iris
-                            }
-                            else
-                            {
-                                // Grass (Short Grass ID 13 or Tall Grass ID 14)
-                                float grassTypeNoise = Mathf.PerlinNoise(ox * 0.8f + 144f, oz * 0.8f + 788f);
-                                if (grassTypeNoise < 0.7f)
-                                    voxelMap[x, y, z] = 13; // Short Grass
-                                else
-                                    voxelMap[x, y, z] = 14; // Tall Grass
-                            }
-                        }
-                    }
+                    int flatIndex = x * (VoxelData.ChunkHeight * VoxelData.ChunkWidth) + y * VoxelData.ChunkWidth + z;
+                    voxelMap[x, y, z] = flatVoxelMap[flatIndex];
                 }
             }
         }
 
-        // ── Tree spawning in grouped clusters ────────────────────────────────────
-        // Layer 1 (forestZone, low freq):  picks large biome-scale forest blobs.
-        // Layer 2 (clusterNoise, mid freq): high density inside the zone — forms groups.
-        // Layer 3 (gapNoise, high freq):   punches natural small clearings between groups.
-        // Spacing check (radius 3):        canopies stay separate, trunks 3+ blocks apart.
-        for (int x = 1; x < VoxelData.ChunkWidth - 1; x++)
-        {
-            for (int z = 1; z < VoxelData.ChunkWidth - 1; z++)
-            {
-                float globalX = x + chunkPos.x * VoxelData.ChunkWidth;
-                float globalZ = z + chunkPos.y * VoxelData.ChunkWidth;
-
-                float myPriority;
-                if (!WouldSpawnTree(globalX, globalZ, out myPriority)) continue;
-
-                // Enforce boundary-proof spacing using local-maxima comparison on high-frequency priority.
-                // Trunks must be at least 4 blocks apart so canopies (radius 2) don't touch.
-                bool isLocalMax = true;
-                for (int dx = -4; dx <= 4 && isLocalMax; dx++)
-                {
-                    for (int dz = -4; dz <= 4 && isLocalMax; dz++)
-                    {
-                        if (dx == 0 && dz == 0) continue;
-                        if (dx * dx + dz * dz > 16) continue; // circular radius 4
-
-                        float nGlobalX = globalX + dx;
-                        float nGlobalZ = globalZ + dz;
-                        float neighborPriority;
-                        if (WouldSpawnTree(nGlobalX, nGlobalZ, out neighborPriority))
-                        {
-                            // Yield to neighbor with higher priority
-                            if (neighborPriority > myPriority)
-                            {
-                                isLocalMax = false;
-                            }
-                            else if (Mathf.Approximately(neighborPriority, myPriority))
-                            {
-                                // Tie breaker
-                                if (nGlobalX < globalX || (Mathf.Approximately(nGlobalX, globalX) && nGlobalZ < globalZ))
-                                {
-                                    isLocalMax = false;
-                                }
-                            }
-                        }
-                    }
-                }
-                if (!isLocalMax) continue;
-
-                // Find the surface y for this (x,z) — walk down from top
-                int surfaceY = -1;
-                for (int sy = VoxelData.ChunkHeight - 1; sy > 0; sy--)
-                {
-                    byte b = voxelMap[x, sy, z];
-                    if (b == 4) { surfaceY = sy; break; } // full grass block only
-                }
-                if (surfaceY < 0) continue; // no grass surface found
-                if (surfaceY + 7 >= VoxelData.ChunkHeight) continue; // not enough vertical space
-
-                // Randomised tree height
-                float hox = globalX + SaveLoadManager.worldSeedOffsetX;
-                float hoz = globalZ + SaveLoadManager.worldSeedOffsetZ;
-                float heightNoise = Mathf.PerlinNoise(hox * 0.9f + 888f, hoz * 0.9f + 333f);
-
-                int logID = 1;
-                int leafID = 12;
-                bool isSpruce = false;
-
-                int currentBiome = GetBiome(globalX, globalZ);
-                float treeTypeNoise = Mathf.PerlinNoise(hox * 0.1f + 111f, hoz * 0.1f + 222f);
-
-                if (currentBiome == 3) // Forest
-                {
-                    if (treeTypeNoise < 0.4f)
-                    {
-                        logID = 53; // Spruce Log
-                        leafID = 54; // Spruce Leaves
-                        isSpruce = true;
-                    }
-                    else if (treeTypeNoise < 0.7f)
-                    {
-                        logID = 51; // Birch Log
-                        leafID = 52; // Birch Leaves
-                    }
-                    else
-                    {
-                        logID = 1; // Oak Log
-                        leafID = 12; // Oak Leaves
-                    }
-                }
-                else // Plains
-                {
-                    if (treeTypeNoise < 0.3f)
-                    {
-                        logID = 51; // Birch
-                        leafID = 52;
-                    }
-                    else
-                    {
-                        logID = 1; // Oak
-                        leafID = 12;
-                    }
-                }
-
-                int trunkHeight = isSpruce ? (5 + Mathf.FloorToInt(heightNoise * 4f)) : (4 + Mathf.FloorToInt(heightNoise * 3f));
-
-                // ── Trunk ──
-                for (int ty = 1; ty <= trunkHeight; ty++)
-                {
-                    int ty_abs = surfaceY + ty;
-                    if (ty_abs >= VoxelData.ChunkHeight) break;
-                    voxelMap[x, ty_abs, z] = (byte)logID;
-                }
-
-                if (isSpruce)
-                {
-                    // Spruce canopy layers (pine tree look)
-                    int topY = surfaceY + trunkHeight;
-                    for (int ly = 2; ly <= trunkHeight + 1; ly++)
-                    {
-                        int cy = surfaceY + ly;
-                        if (cy < 0 || cy >= VoxelData.ChunkHeight) continue;
-
-                        int distFromTop = (trunkHeight + 1) - ly;
-                        int radius = 1;
-                        if (distFromTop == 0) radius = 0;
-                        else if (distFromTop <= 2) radius = 1;
-                        else if (distFromTop <= 4) radius = 2;
-                        else radius = (distFromTop % 2 == 0) ? 2 : 3;
-
-                        for (int lx = -radius; lx <= radius; lx++)
-                        {
-                            for (int lz = -radius; lz <= radius; lz++)
-                            {
-                                int cx = x + lx;
-                                int cz = z + lz;
-                                if (cx < 0 || cx >= VoxelData.ChunkWidth ||
-                                    cz < 0 || cz >= VoxelData.ChunkWidth) continue;
-
-                                if (cx == x && cz == z && cy <= topY) continue;
-                                if (radius > 1 && (lx * lx + lz * lz > radius * radius)) continue;
-
-                                byte currentVal = voxelMap[cx, cy, cz];
-                                if (currentVal == 0 || currentVal == 13 || currentVal == 14 || (currentVal >= 9 && currentVal <= 11))
-                                {
-                                    voxelMap[cx, cy, cz] = (byte)leafID;
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // ── Oak/Birch Canopy ──
-                    int topY = surfaceY + trunkHeight;
-                    for (int lx = -2; lx <= 2; lx++)
-                    {
-                        for (int lz = -2; lz <= 2; lz++)
-                        {
-                            for (int ly = -1; ly <= 2; ly++)
-                            {
-                                int cx = x + lx;
-                                int cy = topY + ly;
-                                int cz = z + lz;
-                                if (cx < 0 || cx >= VoxelData.ChunkWidth ||
-                                    cz < 0 || cz >= VoxelData.ChunkWidth ||
-                                    cy < 0 || cy >= VoxelData.ChunkHeight) continue;
-
-                                if (voxelMap[cx, cy, cz] == logID || voxelMap[cx, cy, cz] == 1 || voxelMap[cx, cy, cz] == 51 || voxelMap[cx, cy, cz] == 53) continue;
-
-                                int dist2 = lx * lx + lz * lz;
-                                bool isTip = (ly == 2);
-                                if (isTip && dist2 > 1) continue;
-                                if (ly < -1 && dist2 > 1) continue;
-                                if (dist2 > 5) continue;
-
-                                float leafNoise = Mathf.PerlinNoise((hox + lx) * 0.4f + 22f, (hoz + lz) * 0.4f + 55f);
-                                if (dist2 == 5 && leafNoise < 0.45f) continue;
-
-                                voxelMap[cx, cy, cz] = (byte)leafID;
-                            }
-                        }
-                    }
-                }
-
-
-                // Remove flower that got buried under trunk
-                byte above = voxelMap[x, surfaceY + 1, z];
-                if ((above >= 9 && above <= 11) || above == 13 || above == 14)
-                    voxelMap[x, surfaceY + 1, z] = (byte)logID;
-            }
-        }
+        flatVoxelMap.Dispose();
 
         if (SaveLoadManager.Instance != null)
         {
             SaveLoadManager.Instance.ApplyChunkModifications(chunkPos, voxelMap);
+        }
+    }
+
+    [BurstCompile]
+    private struct PopulateVoxelMapJob : IJob
+    {
+        public float2 ChunkPos;
+        public float WorldSeedOffsetX;
+        public float WorldSeedOffsetZ;
+        public int ChunkWidth;
+        public int ChunkHeight;
+
+        public NativeArray<byte> VoxelMapOut;
+
+        private float Noise2D(float x, float y)
+        {
+            float val = noise.cnoise(new float2(x, y)) * 0.5f + 0.5f;
+            return math.clamp(val, 0f, 1f);
+        }
+
+        private void GetTreeNoise(float gX, float gZ, out float forestZone, out float clusterNoise, out float gapNoise)
+        {
+            float ox = gX + WorldSeedOffsetX;
+            float oz = gZ + WorldSeedOffsetZ;
+            forestZone   = Noise2D(ox * 0.025f + 500f, oz * 0.025f + 700f);
+            clusterNoise = Noise2D(ox * 0.10f + 900f,  oz * 0.10f + 1100f);
+            gapNoise     = Noise2D(ox * 0.28f + 333f,  oz * 0.28f + 444f);
+        }
+
+        private int GetBiome(float gX, float gZ)
+        {
+            float ox = gX + WorldSeedOffsetX;
+            float oz = gZ + WorldSeedOffsetZ;
+
+            float continentNoise = Noise2D(ox * 0.00015f + 1234.5f, oz * 0.00015f + 5678.9f);
+            float startScale = math.clamp(math.max(math.abs(gX), math.abs(gZ)) / 300f, 0f, 1f);
+            continentNoise = math.lerp(0.35f, continentNoise, startScale);
+
+            if (continentNoise > 0.55f)
+                return 0; // Ocean
+
+            // River check
+            float warpX = Noise2D(ox * 0.015f + 10f, oz * 0.015f + 20f) * 60f;
+            float warpZ = Noise2D(ox * 0.015f + 30f, oz * 0.015f + 40f) * 60f;
+            float riverNoise = Noise2D((ox + warpX) * 0.002f + 400f, (oz + warpZ) * 0.002f + 800f);
+            float riverCenterDist = math.abs(riverNoise - 0.5f);
+            float widthNoise = Noise2D(ox * 0.01f + 150f, oz * 0.01f + 250f);
+            float riverWidth = 0.01f + widthNoise * 0.008f;
+            float riverStrength = 1f;
+            if (continentNoise < 0.45f)
+                riverStrength = math.clamp((continentNoise - 0.35f) / 0.10f, 0f, 1f);
+            else if (continentNoise > 0.55f)
+                riverStrength = math.clamp((0.65f - continentNoise) / 0.10f, 0f, 1f);
+            bool isRiver = (riverStrength > 0f) && (riverCenterDist < riverWidth);
+
+            if (isRiver)
+                return 4; // River
+
+            float biomeNoise = Noise2D(ox * 0.003f + 4000f, oz * 0.003f + 8000f);
+            if (biomeNoise < 0.25f)
+                return 1; // Desert
+            else if (biomeNoise < 0.50f)
+                return 2; // Plains
+            else
+                return 3; // Forest
+        }
+
+        private bool WouldSpawnTree(float gX, float gZ, out float priority)
+        {
+            float ox = gX + WorldSeedOffsetX;
+            float oz = gZ + WorldSeedOffsetZ;
+            
+            int biome = GetBiome(gX, gZ);
+            if (biome == 0 || biome == 1 || biome == 4) // No trees in Ocean, Desert, or River
+            {
+                priority = 0f;
+                return false;
+            }
+
+            GetTreeNoise(gX, gZ, out float f, out float c, out float g);
+            priority = Noise2D(ox * 0.75f + 123.4f, oz * 0.75f + 567.8f);
+
+            if (biome == 2) // Plains: extremely sparse trees
+            {
+                return (f >= 0.72f && c >= 0.72f && g <= 0.45f);
+            }
+            else // Forest: standard high density
+            {
+                return (f >= 0.50f && c >= 0.48f && g <= 0.75f);
+            }
+        }
+
+        private int GetFlatIndex(int x, int y, int z)
+        {
+            return x * (ChunkHeight * ChunkWidth) + y * ChunkWidth + z;
+        }
+
+        public void Execute()
+        {
+            // Main generation loop
+            for (int y = 0; y < ChunkHeight; y++)
+            {
+                for (int x = 0; x < ChunkWidth; x++)
+                {
+                    for (int z = 0; z < ChunkWidth; z++)
+                    {
+                        float globalX = x + ChunkPos.x * ChunkWidth;
+                        float globalZ = z + ChunkPos.y * ChunkWidth;
+
+                        float ox = globalX + WorldSeedOffsetX;
+                        float oz = globalZ + WorldSeedOffsetZ;
+
+                        // Base rolling noise
+                        float baseNoise = Noise2D(ox * 0.02f, oz * 0.02f);
+                        baseNoise = math.pow(baseNoise, 2.5f);
+                        
+                        float detailNoise = Noise2D(ox * 0.08f, oz * 0.08f) * 0.15f;
+                        float finalNoise = baseNoise + detailNoise;
+                        float exactHeight = finalNoise * ChunkHeight * 0.25f + (ChunkHeight / 5f);
+     
+                        float continentNoise = Noise2D(ox * 0.00015f + 1234.5f, oz * 0.00015f + 5678.9f);
+                        float startScale = math.clamp(math.max(math.abs(globalX), math.abs(globalZ)) / 300f, 0f, 1f);
+                        continentNoise = math.lerp(0.35f, continentNoise, startScale);
+
+                        float heightOffset = 0f;
+                        if (continentNoise < 0.45f)
+                        {
+                            float dryT = (0.45f - continentNoise) / 0.45f;
+                            heightOffset = dryT * 18f;
+                        }
+                        else if (continentNoise > 0.55f)
+                        {
+                            float oceanT = (continentNoise - 0.55f) / 0.45f;
+                            heightOffset = -oceanT * 22f;
+                        }
+
+                        float oceanFloorNoise = Noise2D(ox * 0.015f, oz * 0.015f);
+                        float oceanHeight = (oceanFloorNoise * ChunkHeight * 0.08f) + (ChunkHeight * 0.08f) + heightOffset;
+
+                        float duneNoise = Noise2D(ox * 0.012f, oz * 0.012f);
+                        duneNoise = math.pow(duneNoise, 2f);
+                        float desertHeight = (duneNoise * ChunkHeight * 0.12f) + (ChunkHeight * 0.22f) + heightOffset;
+
+                        float plainsNoise = Noise2D(ox * 0.01f, oz * 0.01f);
+                        float plainsHeight = (plainsNoise * ChunkHeight * 0.03f) + (ChunkHeight * 0.22f) + heightOffset;
+
+                        float forestHeight = finalNoise * ChunkHeight * 0.20f + (ChunkHeight * 0.21f) + heightOffset;
+
+                        float biomeNoise = Noise2D(ox * 0.003f + 4000f, oz * 0.003f + 8000f);
+                        int biome = 2; // Plains default
+                        if (continentNoise > 0.55f) biome = 0; // Ocean
+                        else if (biomeNoise < 0.25f) biome = 1; // Desert
+                        else if (biomeNoise < 0.50f) biome = 2; // Plains
+                        else biome = 3; // Forest
+
+                        float landHeight = 0f;
+                        if (biomeNoise < 0.20f)
+                        {
+                            landHeight = desertHeight;
+                        }
+                        else if (biomeNoise < 0.30f)
+                        {
+                            float t = (biomeNoise - 0.20f) / 0.10f;
+                            t = t * t * (3f - 2f * t); // Smoothstep
+                            landHeight = math.lerp(desertHeight, plainsHeight, t);
+                        }
+                        else if (biomeNoise < 0.45f)
+                        {
+                            landHeight = plainsHeight;
+                        }
+                        else if (biomeNoise < 0.55f)
+                        {
+                            float t = (biomeNoise - 0.45f) / 0.10f;
+                            t = t * t * (3f - 2f * t); // Smoothstep
+                            landHeight = math.lerp(plainsHeight, forestHeight, t);
+                        }
+                        else
+                        {
+                            landHeight = forestHeight;
+                        }
+
+                        float oceanWeight = math.clamp((continentNoise - 0.45f) / 0.10f, 0f, 1f);
+                        oceanWeight = oceanWeight * oceanWeight * (3f - 2f * oceanWeight); // Smoothstep
+                        exactHeight = math.lerp(landHeight, oceanHeight, oceanWeight);
+                        exactHeight = math.max(2f, exactHeight);
+
+                        float seaLevel = math.floor(ChunkHeight * 0.22f);
+                        
+                        float warpX = Noise2D(ox * 0.015f + 10f, oz * 0.015f + 20f) * 60f;
+                        float warpZ = Noise2D(ox * 0.015f + 30f, oz * 0.015f + 40f) * 60f;
+
+                        float riverNoise = Noise2D((ox + warpX) * 0.002f + 400f, (oz + warpZ) * 0.002f + 800f);
+                        float riverCenterDist = math.abs(riverNoise - 0.5f);
+                        
+                        float widthNoise = Noise2D(ox * 0.01f + 150f, oz * 0.01f + 250f);
+                        float riverWidth = 0.01f + widthNoise * 0.008f;
+                        
+                        float riverStrength = 1f;
+                        if (continentNoise < 0.45f)
+                            riverStrength = math.clamp((continentNoise - 0.35f) / 0.10f, 0f, 1f);
+                        else if (continentNoise > 0.55f)
+                            riverStrength = math.clamp((0.65f - continentNoise) / 0.10f, 0f, 1f);
+
+                        bool isRiver = (riverStrength > 0f) && (riverCenterDist < riverWidth);
+                        bool isOcean = (continentNoise > 0.50f);
+
+                        if (isRiver)
+                        {
+                            float riverFactor = math.clamp(riverCenterDist / riverWidth, 0f, 1f);
+                            riverFactor = math.smoothstep(0f, 1f, riverFactor);
+                            
+                            float riverDepth = 3.5f * riverStrength;
+                            float riverbedHeight = seaLevel - riverDepth;
+                            
+                            float carvedHeight = math.lerp(riverbedHeight, exactHeight, riverFactor);
+                            exactHeight = math.min(exactHeight, carvedHeight);
+                        }
+                        else if (!isOcean)
+                        {
+                            exactHeight = math.max(exactHeight, seaLevel + 1.5f);
+                        }
+
+                        int floorY = (int)math.floor(exactHeight);
+
+                        float dirtNoise = Noise2D(ox * 0.1f, oz * 0.1f);
+                        int dirtThickness = 3 + (int)math.floor(dirtNoise * 3f);
+
+                        float cactusNoise = Noise2D(ox * 0.3f + 700f, oz * 0.3f + 900f);
+                        int cactusHeight = 0;
+                        if (biome == 1 && floorY > seaLevel + 1 && !isRiver)
+                        {
+                            if (cactusNoise > 0.94f)
+                            {
+                                float hNoise = Noise2D(ox * 0.9f, oz * 0.9f);
+                                cactusHeight = 2 + (int)math.floor(hNoise * 2f);
+                            }
+                        }
+
+                        int flatIndex = GetFlatIndex(x, y, z);
+
+                        if (y == 0)
+                        {
+                            VoxelMapOut[flatIndex] = 48; // Bedrock
+                        }
+                        else if (y > floorY)
+                        {
+                            if (y <= floorY + cactusHeight)
+                            {
+                                VoxelMapOut[flatIndex] = 49; // Cactus
+                            }
+                            else if (y > seaLevel)
+                            {
+                                VoxelMapOut[flatIndex] = 0; // Air
+                            }
+                            else
+                            {
+                                VoxelMapOut[flatIndex] = 7; // Water
+                            }
+                        }
+                        else if (y == floorY)
+                        {
+                            if (biome == 1)
+                            {
+                                VoxelMapOut[flatIndex] = 8; // Sand
+                            }
+                            else if (floorY <= seaLevel + 1)
+                            {
+                                VoxelMapOut[flatIndex] = 8; // Sand beach/riverbed
+                            }
+                            else
+                            {
+                                VoxelMapOut[flatIndex] = 4; // Grass
+                            }
+                        }
+                        else if (y >= floorY - dirtThickness)
+                        {
+                            if (biome == 1)
+                            {
+                                VoxelMapOut[flatIndex] = 8; // Sand deep
+                            }
+                            else if (floorY <= seaLevel + 1)
+                            {
+                                VoxelMapOut[flatIndex] = 8; // Sand deep beach
+                            }
+                            else
+                            {
+                                VoxelMapOut[flatIndex] = 5; // Dirt
+                            }
+                        }
+                        else
+                        {
+                            VoxelMapOut[flatIndex] = 3; // Stone
+                        }
+
+                        // Flower & Grass spawning
+                        if (y == floorY + 1
+                            && VoxelMapOut[GetFlatIndex(x, floorY, z)] == 4
+                            && floorY > seaLevel + 1)
+                        {
+                            float foliageNoise = Noise2D(ox * 0.15f + 120.3f, oz * 0.15f + 340.1f);
+                            float threshold = (biome == 2) ? 0.32f : 0.45f;
+                            if (foliageNoise > threshold)
+                            {
+                                float subNoise = Noise2D(ox * 0.6f + 85f, oz * 0.6f + 15f);
+                                if (subNoise < 0.12f)
+                                {
+                                    float typeNoise = Noise2D(ox * 0.7f + 50f, oz * 0.7f + 90f);
+                                    if (typeNoise < 0.33f)
+                                        VoxelMapOut[flatIndex] = 9; // Rose
+                                    else if (typeNoise < 0.66f)
+                                        VoxelMapOut[flatIndex] = 10; // Dandelion
+                                    else
+                                        VoxelMapOut[flatIndex] = 11; // Iris
+                                }
+                                else
+                                {
+                                    float grassTypeNoise = Noise2D(ox * 0.8f + 144f, oz * 0.8f + 788f);
+                                    if (grassTypeNoise < 0.7f)
+                                        VoxelMapOut[flatIndex] = 13; // Short Grass
+                                    else
+                                        VoxelMapOut[flatIndex] = 14; // Tall Grass
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Tree Spawning loop inside Job
+            for (int x = 1; x < ChunkWidth - 1; x++)
+            {
+                for (int z = 1; z < ChunkWidth - 1; z++)
+                {
+                    float globalX = x + ChunkPos.x * ChunkWidth;
+                    float globalZ = z + ChunkPos.y * ChunkWidth;
+
+                    float myPriority;
+                    if (!WouldSpawnTree(globalX, globalZ, out myPriority)) continue;
+
+                    bool isLocalMax = true;
+                    for (int dx = -4; dx <= 4 && isLocalMax; dx++)
+                    {
+                        for (int dz = -4; dz <= 4 && isLocalMax; dz++)
+                        {
+                            if (dx == 0 && dz == 0) continue;
+                            if (dx * dx + dz * dz > 16) continue;
+
+                            float nGlobalX = globalX + dx;
+                            float nGlobalZ = globalZ + dz;
+                            float neighborPriority;
+                            if (WouldSpawnTree(nGlobalX, nGlobalZ, out neighborPriority))
+                            {
+                                if (neighborPriority > myPriority)
+                                {
+                                    isLocalMax = false;
+                                }
+                                else if (math.abs(neighborPriority - myPriority) < 0.0001f)
+                                {
+                                    if (nGlobalX < globalX || (math.abs(nGlobalX - globalX) < 0.0001f && nGlobalZ < globalZ))
+                                    {
+                                        isLocalMax = false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (!isLocalMax) continue;
+
+                    int surfaceY = -1;
+                    for (int sy = ChunkHeight - 1; sy > 0; sy--)
+                    {
+                        byte b = VoxelMapOut[GetFlatIndex(x, sy, z)];
+                        if (b == 4) { surfaceY = sy; break; }
+                    }
+                    if (surfaceY < 0) continue;
+                    if (surfaceY + 7 >= ChunkHeight) continue;
+
+                    float hox = globalX + WorldSeedOffsetX;
+                    float hoz = globalZ + WorldSeedOffsetZ;
+                    float heightNoise = Noise2D(hox * 0.9f + 888f, hoz * 0.9f + 333f);
+
+                    int logID = 1;
+                    int leafID = 12;
+                    bool isSpruce = false;
+
+                    int currentBiome = GetBiome(globalX, globalZ);
+                    float treeTypeNoise = Noise2D(hox * 0.1f + 111f, hoz * 0.1f + 222f);
+
+                    if (currentBiome == 3)
+                    {
+                        if (treeTypeNoise < 0.4f)
+                        {
+                            logID = 53;
+                            leafID = 54;
+                            isSpruce = true;
+                        }
+                        else if (treeTypeNoise < 0.7f)
+                        {
+                            logID = 51;
+                            leafID = 52;
+                        }
+                        else
+                        {
+                            logID = 1;
+                            leafID = 12;
+                        }
+                    }
+                    else
+                    {
+                        if (treeTypeNoise < 0.3f)
+                        {
+                            logID = 51;
+                            leafID = 52;
+                        }
+                        else
+                        {
+                            logID = 1;
+                            leafID = 12;
+                        }
+                    }
+
+                    int trunkHeight = isSpruce ? (5 + (int)math.floor(heightNoise * 4f)) : (4 + (int)math.floor(heightNoise * 3f));
+
+                    for (int ty = 1; ty <= trunkHeight; ty++)
+                    {
+                        int ty_abs = surfaceY + ty;
+                        if (ty_abs >= ChunkHeight) break;
+                        VoxelMapOut[GetFlatIndex(x, ty_abs, z)] = (byte)logID;
+                    }
+
+                    if (isSpruce)
+                    {
+                        int topY = surfaceY + trunkHeight;
+                        for (int ly = 2; ly <= trunkHeight + 1; ly++)
+                        {
+                            int cy = surfaceY + ly;
+                            if (cy < 0 || cy >= ChunkHeight) continue;
+
+                            int distFromTop = (trunkHeight + 1) - ly;
+                            int radius = 1;
+                            if (distFromTop == 0) radius = 0;
+                            else if (distFromTop <= 2) radius = 1;
+                            else if (distFromTop <= 4) radius = 2;
+                            else radius = (distFromTop % 2 == 0) ? 2 : 3;
+
+                            for (int lx = -radius; lx <= radius; lx++)
+                            {
+                                for (int lz = -radius; lz <= radius; lz++)
+                                {
+                                    int cx = x + lx;
+                                    int cz = z + lz;
+                                    if (cx < 0 || cx >= ChunkWidth || cz < 0 || cz >= ChunkWidth) continue;
+
+                                    if (cx == x && cz == z && cy <= topY) continue;
+                                    if (radius > 1 && (lx * lx + lz * lz > radius * radius)) continue;
+
+                                    byte currentVal = VoxelMapOut[GetFlatIndex(cx, cy, cz)];
+                                    if (currentVal == 0 || currentVal == 13 || currentVal == 14 || (currentVal >= 9 && currentVal <= 11))
+                                    {
+                                        VoxelMapOut[GetFlatIndex(cx, cy, cz)] = (byte)leafID;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        int topY = surfaceY + trunkHeight;
+                        for (int lx = -2; lx <= 2; lx++)
+                        {
+                            for (int lz = -2; lz <= 2; lz++)
+                            {
+                                for (int ly = -1; ly <= 2; ly++)
+                                {
+                                    int cx = x + lx;
+                                    int cy = topY + ly;
+                                    int cz = z + lz;
+                                    if (cx < 0 || cx >= ChunkWidth || cz < 0 || cz >= ChunkWidth || cy < 0 || cy >= ChunkHeight) continue;
+
+                                    byte currentVal = VoxelMapOut[GetFlatIndex(cx, cy, cz)];
+                                    if (currentVal == logID || currentVal == 1 || currentVal == 51 || currentVal == 53) continue;
+
+                                    int dist2 = lx * lx + lz * lz;
+                                    bool isTip = (ly == 2);
+                                    if (isTip && dist2 > 1) continue;
+                                    if (ly < -1 && dist2 > 1) continue;
+                                    if (dist2 > 5) continue;
+
+                                    float leafNoise = Noise2D((hox + lx) * 0.4f + 22f, (hoz + lz) * 0.4f + 55f);
+                                    if (dist2 == 5 && leafNoise < 0.45f) continue;
+
+                                    VoxelMapOut[GetFlatIndex(cx, cy, cz)] = (byte)leafID;
+                                }
+                            }
+                        }
+                    }
+
+                    byte above = VoxelMapOut[GetFlatIndex(x, surfaceY + 1, z)];
+                    if ((above >= 9 && above <= 11) || above == 13 || above == 14)
+                        VoxelMapOut[GetFlatIndex(x, surfaceY + 1, z)] = (byte)logID;
+                }
+            }
         }
     }
 
@@ -696,6 +806,7 @@ public class Chunk : MonoBehaviour
 
         waterMeshRenderer = waterGO.GetComponent<MeshRenderer>();
         if (waterMeshRenderer == null) waterMeshRenderer = waterGO.AddComponent<MeshRenderer>();
+        waterMeshRenderer.enabled = renderersEnabled;
 
         if (VoxelWorld.Instance != null && VoxelWorld.Instance.waterMaterial != null)
         {
@@ -726,6 +837,7 @@ public class Chunk : MonoBehaviour
 
         foliageMeshRenderer = go.GetComponent<MeshRenderer>();
         if (foliageMeshRenderer == null) foliageMeshRenderer = go.AddComponent<MeshRenderer>();
+        foliageMeshRenderer.enabled = renderersEnabled;
 
         if (VoxelWorld.Instance != null && VoxelWorld.Instance.foliageMaterial != null)
             foliageMeshRenderer.material = VoxelWorld.Instance.foliageMaterial;
@@ -1041,6 +1153,23 @@ public class Chunk : MonoBehaviour
             foliageTriangles.Add(foliageVertexIndex + 1);
             foliageTriangles.Add(foliageVertexIndex + 3);
             foliageVertexIndex += 4;
+
+            // Add invisible face to the solid mesh collider for player collision
+            float transU = 9f / (float)GrassTextureGenerator.TILE_COUNT;
+            Vector2 transparentUV = new Vector2(transU, 0f);
+            for (int i = 0; i < 4; i++)
+            {
+                vertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, i]]);
+                uvs.Add(transparentUV);
+            }
+
+            triangles.Add(vertexIndex);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 2);
+            triangles.Add(vertexIndex + 1);
+            triangles.Add(vertexIndex + 3);
+            vertexIndex += 4;
         }
     }
 
@@ -1373,6 +1502,7 @@ public class Chunk : MonoBehaviour
 
         glassMeshRenderer = go.GetComponent<MeshRenderer>();
         if (glassMeshRenderer == null) glassMeshRenderer = go.AddComponent<MeshRenderer>();
+        glassMeshRenderer.enabled = renderersEnabled;
 
         if (VoxelWorld.Instance != null && VoxelWorld.Instance.glassMaterial != null)
             glassMeshRenderer.material = VoxelWorld.Instance.glassMaterial;
@@ -1494,29 +1624,46 @@ public class Chunk : MonoBehaviour
 
     void CreateMesh()
     {
-        Mesh mesh = new Mesh();
-        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        mesh.vertices  = vertices.ToArray();
-        mesh.triangles = triangles.ToArray();
-        mesh.uv        = uvs.ToArray();
+        Mesh mesh = meshFilter.sharedMesh;
+        if (mesh == null)
+        {
+            mesh = new Mesh();
+            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            meshFilter.sharedMesh = mesh;
+        }
+        else
+        {
+            mesh.Clear();
+        }
+        mesh.SetVertices(vertices);
+        mesh.SetTriangles(triangles, 0);
+        mesh.SetUVs(0, uvs);
         mesh.RecalculateNormals();
 
-        meshFilter.mesh        = mesh;
+        meshCollider.sharedMesh = null;
         meshCollider.sharedMesh = mesh;
 
         // ── Water mesh ────────────────────────────────────────────────────────
         if (waterVertices.Count > 0)
         {
             EnsureWaterChild();
-            Mesh waterMesh = new Mesh();
-            waterMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-            waterMesh.vertices  = waterVertices.ToArray();
-            waterMesh.triangles = waterTriangles.ToArray();
-            waterMesh.uv        = waterUvs.ToArray();
-            waterMesh.colors    = waterColors.ToArray();
+            Mesh waterMesh = waterMeshFilter.sharedMesh;
+            if (waterMesh == null)
+            {
+                waterMesh = new Mesh();
+                waterMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                waterMeshFilter.sharedMesh = waterMesh;
+            }
+            else
+            {
+                waterMesh.Clear();
+            }
+            waterMesh.SetVertices(waterVertices);
+            waterMesh.SetTriangles(waterTriangles, 0);
+            waterMesh.SetUVs(0, waterUvs);
+            waterMesh.SetColors(waterColors);
             waterMesh.RecalculateNormals();
 
-            waterMeshFilter.mesh = waterMesh;
             waterMeshRenderer.gameObject.SetActive(true);
         }
         else
@@ -1529,15 +1676,24 @@ public class Chunk : MonoBehaviour
         if (foliageVertices.Count > 0)
         {
             EnsureFoliageChild();
-            Mesh foliageMesh = new Mesh();
-            foliageMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-            foliageMesh.vertices  = foliageVertices.ToArray();
-            foliageMesh.triangles = foliageTriangles.ToArray();
-            foliageMesh.uv        = foliageUvs.ToArray();
-            foliageMesh.colors    = foliageColors.ToArray();
+            Mesh foliageMesh = foliageMeshFilter.sharedMesh;
+            if (foliageMesh == null)
+            {
+                foliageMesh = new Mesh();
+                foliageMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                foliageMeshFilter.sharedMesh = foliageMesh;
+            }
+            else
+            {
+                foliageMesh.Clear();
+            }
+            foliageMesh.SetVertices(foliageVertices);
+            foliageMesh.SetTriangles(foliageTriangles, 0);
+            foliageMesh.SetUVs(0, foliageUvs);
+            foliageMesh.SetColors(foliageColors);
             foliageMesh.RecalculateNormals();
 
-            foliageMeshFilter.mesh   = foliageMesh;
+            foliageMeshCollider.sharedMesh = null;
             foliageMeshCollider.sharedMesh = foliageMesh; // allows raycast hits on flowers
             IgnorePlayerCollision(); // Ignore player physics collision so player walks through them
             foliageMeshRenderer.gameObject.SetActive(true);
@@ -1552,14 +1708,22 @@ public class Chunk : MonoBehaviour
         if (glassVertices.Count > 0)
         {
             EnsureGlassChild();
-            Mesh glassMesh = new Mesh();
-            glassMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-            glassMesh.vertices  = glassVertices.ToArray();
-            glassMesh.triangles = glassTriangles.ToArray();
-            glassMesh.uv        = glassUvs.ToArray();
+            Mesh glassMesh = glassMeshFilter.sharedMesh;
+            if (glassMesh == null)
+            {
+                glassMesh = new Mesh();
+                glassMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                glassMeshFilter.sharedMesh = glassMesh;
+            }
+            else
+            {
+                glassMesh.Clear();
+            }
+            glassMesh.SetVertices(glassVertices);
+            glassMesh.SetTriangles(glassTriangles, 0);
+            glassMesh.SetUVs(0, glassUvs);
             glassMesh.RecalculateNormals();
 
-            glassMeshFilter.mesh = glassMesh;
             glassMeshRenderer.gameObject.SetActive(true);
         }
         else
@@ -1594,15 +1758,23 @@ public class Chunk : MonoBehaviour
         EnsureWaterChild();
         if (waterVertices.Count > 0)
         {
-            Mesh waterMesh = waterMeshFilter.mesh != null ? waterMeshFilter.mesh : new Mesh();
-            waterMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-            waterMesh.Clear();
-            waterMesh.vertices  = waterVertices.ToArray();
-            waterMesh.triangles = waterTriangles.ToArray();
-            waterMesh.uv        = waterUvs.ToArray();
-            waterMesh.colors    = waterColors.ToArray();
+            Mesh waterMesh = waterMeshFilter.sharedMesh;
+            if (waterMesh == null)
+            {
+                waterMesh = new Mesh();
+                waterMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                waterMeshFilter.sharedMesh = waterMesh;
+            }
+            else
+            {
+                waterMesh.Clear();
+            }
+            waterMesh.SetVertices(waterVertices);
+            waterMesh.SetTriangles(waterTriangles, 0);
+            waterMesh.SetUVs(0, waterUvs);
+            waterMesh.SetColors(waterColors);
             waterMesh.RecalculateNormals();
-            waterMeshFilter.mesh = waterMesh;
+            waterMeshFilter.sharedMesh = waterMesh;
             waterMeshRenderer.gameObject.SetActive(true);
         }
         else
