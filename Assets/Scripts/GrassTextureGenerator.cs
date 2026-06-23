@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 32; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side, furnace front unlit, furnace front lit, short grass, tall grass, propeller face, propeller side, propeller blade brass
+    public const int TILE_COUNT = 40; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side, furnace front unlit, furnace front lit, short grass, tall grass, propeller face, propeller side, propeller blade brass, bedrock, cactus, birch log side, birch log top, birch leaves, spruce log side, spruce log top, spruce leaves
 
     public static Texture2D Create()
     {
@@ -58,7 +58,15 @@ public static class GrassTextureGenerator
                               : tile == 28 ? TallGrass(lx, y)
                               : tile == 29 ? PropellerFace(lx, y)
                               : tile == 30 ? PropellerSide(lx, y)
-                                           : PropellerBladeColor(lx, y);
+                              : tile == 31 ? PropellerBladeColor(lx, y)
+                              : tile == 32 ? Bedrock(lx, y)
+                              : tile == 33 ? Cactus(lx, y)
+                              : tile == 34 ? BirchLogSide(lx, y)
+                              : tile == 35 ? BirchLogTop(lx, y)
+                              : tile == 36 ? BirchLeaves(lx, y)
+                              : tile == 37 ? SpruceLogSide(lx, y)
+                              : tile == 38 ? SpruceLogTop(lx, y)
+                                           : SpruceLeaves(lx, y);
             }
         }
 
@@ -550,6 +558,18 @@ public static class GrassTextureGenerator
             tile = 6;                                                // Plank texture
         else if (blockType == 47) // Stone Slab
             tile = 3;                                                // Stone texture
+        else if (blockType == 48) // Bedrock
+            tile = 32;                                               // Bedrock texture
+        else if (blockType == 49) // Cactus
+            tile = 33;
+        else if (blockType == 51) // Birch Log
+            tile = (face == 2 || face == 3) ? 35 : 34;
+        else if (blockType == 52) // Birch Leaves
+            tile = 36;
+        else if (blockType == 53) // Spruce Log
+            tile = (face == 2 || face == 3) ? 38 : 37;
+        else if (blockType == 54) // Spruce Leaves
+            tile = 39;
         else                     // Grass (blockType == 4 or 6)
             tile = (face == 2) ? 0   // top    → grass top
                  : (face == 3) ? 2   // bottom → dirt
@@ -949,5 +969,151 @@ public static class GrassTextureGenerator
         Color shadowBrass = new Color(0.55f, 0.38f, 0.08f);
         float n = Mathf.PerlinNoise(x * 0.8f, y * 0.8f);
         return Color.Lerp(shadowBrass, brassColor, n * 0.7f + 0.3f);
+    }
+
+    static Color Bedrock(int x, int y)
+    {
+        float n = Mathf.PerlinNoise(x * 0.5f + 25f, y * 0.5f + 40f);
+        float n2 = Mathf.PerlinNoise(x * 1.2f + 10f, y * 1.2f + 15f);
+        
+        float t = n * 0.15f + n2 * 0.08f;
+        bool isDarkSpot = n2 > 0.65f && (x + y) % 2 == 0;
+        
+        if (isDarkSpot)
+        {
+            return new Color(0.05f + t, 0.05f + t, 0.06f + t);
+        }
+        else if (n > 0.5f)
+        {
+            return new Color(0.12f + t, 0.12f + t, 0.14f + t);
+        }
+        else
+        {
+            return new Color(0.25f + t, 0.25f + t, 0.28f + t);
+        }
+    }
+
+    static Color Cactus(int x, int y)
+    {
+        Color green = new Color(0.12f, 0.52f, 0.12f);
+        Color lightGreen = new Color(0.18f, 0.65f, 0.18f);
+        Color spineColor = new Color(0.9f, 0.9f, 0.8f);
+        Color shadowGreen = new Color(0.08f, 0.4f, 0.08f);
+
+        // Vertical ridges (lines at x=0, x=5, x=10, x=15)
+        if (x % 5 == 0)
+            return shadowGreen;
+
+        // Spines at regular patterns
+        bool isSpine = (x % 5 == 2 || x % 5 == 3) && (y % 4 == 1);
+        if (isSpine)
+            return spineColor;
+
+        float n = Mathf.PerlinNoise(x * 0.4f, y * 0.4f) * 0.1f;
+        return new Color(green.r + n, green.g + n, green.b + n);
+    }
+
+    static Color BirchLogSide(int x, int y)
+    {
+        Color whiteBark = new Color(0.88f, 0.88f, 0.86f);
+        Color darkSpot = new Color(0.2f, 0.2f, 0.2f);
+        Color lightGrey = new Color(0.72f, 0.72f, 0.72f);
+
+        // Birch lines: horizontal dark spots
+        float spotNoise = Mathf.PerlinNoise(x * 0.15f + 1f, y * 0.35f + 2f);
+        if (spotNoise > 0.68f)
+            return darkSpot;
+
+        float n = Mathf.PerlinNoise(x * 0.5f, y * 0.5f) * 0.05f;
+        if (n > 0.02f)
+            return lightGrey;
+
+        return whiteBark;
+    }
+
+    static Color BirchLogTop(int x, int y)
+    {
+        // Concentric rings
+        float cx = x - 7.5f;
+        float cy = y - 7.5f;
+        float r = Mathf.Sqrt(cx * cx + cy * cy);
+        
+        Color innerWood = new Color(0.78f, 0.72f, 0.62f);
+        Color darkRing = new Color(0.6f, 0.52f, 0.42f);
+        Color whiteBark = new Color(0.88f, 0.88f, 0.86f);
+
+        if (r > 6.8f)
+            return whiteBark;
+
+        int ringIndex = Mathf.FloorToInt(r);
+        if (ringIndex % 2 == 0)
+            return darkRing;
+
+        return innerWood;
+    }
+
+    static Color BirchLeaves(int x, int y)
+    {
+        float n = Mathf.PerlinNoise(x * 0.6f + 30f, y * 0.6f + 70f);
+        float n2 = Mathf.PerlinNoise(x * 1.3f + 10f, y * 1.3f + 40f);
+        
+        // Transparent cutout pixels
+        if (n > 0.78f && (x + y) % 3 == 0)
+            return Color.clear;
+
+        Color lightGreen = new Color(0.38f, 0.68f, 0.28f);
+        Color darkGreen = new Color(0.24f, 0.48f, 0.18f);
+
+        float t = n * 0.7f + n2 * 0.3f;
+        return Color.Lerp(darkGreen, lightGreen, t);
+    }
+
+    static Color SpruceLogSide(int x, int y)
+    {
+        Color darkBrown = new Color(0.24f, 0.16f, 0.08f);
+        Color lightBrown = new Color(0.35f, 0.25f, 0.15f);
+
+        // Vertical ridges
+        if (x % 3 == 0)
+            return darkBrown;
+
+        float n = Mathf.PerlinNoise(x * 0.3f, y * 0.3f);
+        return Color.Lerp(darkBrown, lightBrown, n);
+    }
+
+    static Color SpruceLogTop(int x, int y)
+    {
+        float cx = x - 7.5f;
+        float cy = y - 7.5f;
+        float r = Mathf.Sqrt(cx * cx + cy * cy);
+        
+        Color innerWood = new Color(0.4f, 0.3f, 0.18f);
+        Color darkRing = new Color(0.25f, 0.18f, 0.08f);
+        Color bark = new Color(0.2f, 0.12f, 0.05f);
+
+        if (r > 6.8f)
+            return bark;
+
+        int ringIndex = Mathf.FloorToInt(r);
+        if (ringIndex % 2 == 0)
+            return darkRing;
+
+        return innerWood;
+    }
+
+    static Color SpruceLeaves(int x, int y)
+    {
+        float n = Mathf.PerlinNoise(x * 0.7f + 9f, y * 0.7f + 88f);
+        float n2 = Mathf.PerlinNoise(x * 1.5f + 2f, y * 1.5f + 11f);
+
+        // Many cutouts for needle look
+        if (n > 0.65f && (x * y) % 2 == 0)
+            return Color.clear;
+
+        Color darkPine = new Color(0.12f, 0.32f, 0.18f);
+        Color lightPine = new Color(0.22f, 0.45f, 0.28f);
+
+        float t = n * 0.6f + n2 * 0.4f;
+        return Color.Lerp(darkPine, lightPine, t);
     }
 }

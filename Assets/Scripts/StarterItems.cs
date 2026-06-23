@@ -33,6 +33,12 @@ public class StarterItems : MonoBehaviour
         { "Wooden Slab", "Sprites/wooden_slab" },
         { "Stone Slab", "Sprites/stone_slab" },
         { "Leaves",     "Sprites/leaves_block" },
+        { "Bedrock",    "Sprites/bedrock" },
+        { "Cactus",     "Sprites/cactus" },
+        { "Birch Log",  "Sprites/birch_log" },
+        { "Birch Leaves", "Sprites/birch_leaves" },
+        { "Spruce Log", "Sprites/spruce_log" },
+        { "Spruce Leaves", "Sprites/spruce_leaves" },
     };
 
     private IEnumerator Start()
@@ -103,8 +109,8 @@ public class StarterItems : MonoBehaviour
         ApplyTransparencyKey(System.IO.Path.Combine(dir, "iron_ore_block.png"));
         ApplyTransparencyKey(System.IO.Path.Combine(dir, "leaves_block.png"));
 
-        string[] names = { "gold_block", "iron_block", "sand_block", "glass_block", "crafting_table", "furnace", "wooden_slab", "stone_slab" };
-        int[] ids = { 32, 33, 34, 35, 36, 37, 46, 47 };
+        string[] names = { "gold_block", "iron_block", "sand_block", "glass_block", "crafting_table", "furnace", "wooden_slab", "stone_slab", "bedrock", "cactus", "birch_log", "birch_leaves", "spruce_log", "spruce_leaves" };
+        int[] ids = { 32, 33, 34, 35, 36, 37, 46, 47, 48, 49, 51, 52, 53, 54 };
 
         bool createdAny = false;
         // Keep forceGenerate as false so we do not overwrite the permanent, hand-crafted sprites
@@ -194,6 +200,12 @@ public class StarterItems : MonoBehaviour
             case 37: return new Color(0.50f, 0.50f, 0.50f); // Furnace
             case 46: return new Color(0.72f, 0.58f, 0.37f); // Wooden Slab
             case 47: return new Color(0.52f, 0.52f, 0.54f); // Stone Slab
+            case 48: return new Color(0.18f, 0.18f, 0.20f); // Bedrock
+            case 49: return new Color(0.15f, 0.62f, 0.15f); // Cactus
+            case 51: return new Color(0.90f, 0.90f, 0.88f); // Birch Log
+            case 52: return new Color(0.38f, 0.68f, 0.28f); // Birch Leaves
+            case 53: return new Color(0.31f, 0.22f, 0.12f); // Spruce Log
+            case 54: return new Color(0.13f, 0.38f, 0.22f); // Spruce Leaves
             case 26: return new Color(0.82f, 0.58f, 0.16f); // Large Propeller (brass)
             default: return Color.white;
         }
@@ -279,6 +291,10 @@ public class StarterItems : MonoBehaviour
         else if (itemName.Equals("Iris", System.StringComparison.OrdinalIgnoreCase))
         {
             item.icon = VoxelWorld.MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.40f, 0.20f, 0.90f), new Color(1.00f, 0.80f, 0.10f));
+        }
+        else if (itemName.Equals("Apple", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.icon = VoxelWorld.MakeAppleIcon();
         }
         else if (itemName.Equals("Grass Block", System.StringComparison.OrdinalIgnoreCase) || blockTypeID == 4)
         {
@@ -658,6 +674,12 @@ public class StarterItems : MonoBehaviour
                 else if (blockTypeID == 5) tileIndex = 2; // Dirt
                 else if (blockTypeID == 2 || blockTypeID == 46) tileIndex = 6; // Plank / Wooden Slab
                 else if (blockTypeID == 3 || blockTypeID == 47) tileIndex = 3; // Stone / Stone Slab
+                else if (blockTypeID == 48) tileIndex = 32; // Bedrock
+                else if (blockTypeID == 49) tileIndex = 33; // Cactus
+                else if (blockTypeID == 51) tileIndex = (face == 1) ? 35 : 34; // Birch Log
+                else if (blockTypeID == 52) tileIndex = 36; // Birch Leaves
+                else if (blockTypeID == 53) tileIndex = (face == 1) ? 38 : 37; // Spruce Log
+                else if (blockTypeID == 54) tileIndex = 39; // Spruce Leaves
 
                 Color col = GrassTextureGenerator.GetPixel(tileIndex, tu, tv);
 

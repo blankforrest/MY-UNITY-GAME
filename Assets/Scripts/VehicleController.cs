@@ -535,7 +535,7 @@ public class VehicleController : MonoBehaviour
                     continue;
 
                 // Skip foliage (flower) mesh colliders — they are not solid walls
-                if (h.collider.gameObject.name == "Foliage")
+                if (h.collider != null && h.collider.gameObject.name.Contains("Foliage"))
                     continue;
 
                 if (!foundValid || h.distance < closestValidHit.distance)
@@ -576,7 +576,7 @@ public class VehicleController : MonoBehaviour
         {
             // Skip own colliders (root box + any child blocks)
             if (th.transform == transform || th.transform.IsChildOf(transform)) continue;
-            if (th.collider.gameObject.name == "Foliage") continue;
+            if (th.collider != null && th.collider.gameObject.name.Contains("Foliage")) continue;
             // We fire downward — take the highest Y surface (first thing hit from above)
             if (!foundTop || th.point.y > topHit.point.y) { topHit = th; foundTop = true; }
         }
@@ -685,7 +685,7 @@ public class VehicleController : MonoBehaviour
             foreach (var col in overlaps)
             {
                 if (col.transform == transform || col.transform.IsChildOf(transform)) continue;
-                if (col.gameObject.name == "Foliage") continue;
+                if (col != null && col.gameObject.name.Contains("Foliage")) continue;
                 blocked = true;
                 break;
             }

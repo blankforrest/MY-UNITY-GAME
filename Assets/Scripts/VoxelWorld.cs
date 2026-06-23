@@ -74,6 +74,12 @@ public class VoxelWorld : MonoBehaviour
             chunkMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
         }
 
+        // Disable highlights/specular reflections so blocks are not shiny
+        if (chunkMaterial.HasProperty("_Smoothness")) chunkMaterial.SetFloat("_Smoothness", 0f);
+        if (chunkMaterial.HasProperty("_Glossiness")) chunkMaterial.SetFloat("_Glossiness", 0f);
+        if (chunkMaterial.HasProperty("_Metallic")) chunkMaterial.SetFloat("_Metallic", 0f);
+        if (chunkMaterial.HasProperty("_SpecularHighlights")) chunkMaterial.SetFloat("_SpecularHighlights", 0f);
+
         // Initialize water material if not assigned
         if (waterMaterial == null)
         {
@@ -191,6 +197,12 @@ public class VoxelWorld : MonoBehaviour
         foliageMaterial.SetColor("_BaseColor", Color.white);
         foliageMaterial.SetInt("_Cull", 0);                 // Ensure culling is off (double-sided rendering) on all shaders
 
+        // Disable highlights/specular reflections on foliage
+        if (foliageMaterial.HasProperty("_Smoothness")) foliageMaterial.SetFloat("_Smoothness", 0f);
+        if (foliageMaterial.HasProperty("_Glossiness")) foliageMaterial.SetFloat("_Glossiness", 0f);
+        if (foliageMaterial.HasProperty("_Metallic")) foliageMaterial.SetFloat("_Metallic", 0f);
+        if (foliageMaterial.HasProperty("_SpecularHighlights")) foliageMaterial.SetFloat("_SpecularHighlights", 0f);
+
         // ── Glass material (ZWrite On + Cull Back) ────────────────────────────
         // ZWrite On: front faces write depth → back faces are Z-rejected and never show through.
         // Cull Back: only front-facing fragments are rasterized. This is the key fix for the
@@ -230,6 +242,12 @@ public class VoxelWorld : MonoBehaviour
             glassMaterial.SetTexture("_BaseMap", rgbaAtlas);
             glassMaterial.color = Color.white;
             glassMaterial.SetColor("_BaseColor", Color.white);
+
+            // Disable highlights/specular reflections on glass blocks
+            if (glassMaterial.HasProperty("_Smoothness")) glassMaterial.SetFloat("_Smoothness", 0f);
+            if (glassMaterial.HasProperty("_Glossiness")) glassMaterial.SetFloat("_Glossiness", 0f);
+            if (glassMaterial.HasProperty("_Metallic")) glassMaterial.SetFloat("_Metallic", 0f);
+            if (glassMaterial.HasProperty("_SpecularHighlights")) glassMaterial.SetFloat("_SpecularHighlights", 0f);
         }
     }
 
@@ -639,10 +657,22 @@ public class VoxelWorld : MonoBehaviour
                     }
                     else if (existing == 12)
                     {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Leaves";
-                        drop.blockTypeID = 12;
-                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.20f, 0.50f, 0.10f));
+                        var pc = FindFirstObjectByType<PlayerController>();
+                        bool isCreative = (pc != null && pc.isCreativeMode);
+                        if (!isCreative && UnityEngine.Random.value < 0.20f)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Apple";
+                            drop.blockTypeID = 0;
+                            drop.icon = MakeAppleIcon();
+                        }
+                        else
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Leaves";
+                            drop.blockTypeID = 12;
+                            drop.icon = StarterItems.MakeBlockIcon(new Color(0.20f, 0.50f, 0.10f));
+                        }
                     }
                     else if (existing == 20)
                     {
@@ -707,6 +737,80 @@ public class VoxelWorld : MonoBehaviour
     private static Sprite _cachedRoseIcon;
     private static Sprite _cachedDandelionIcon;
     private static Sprite _cachedIrisIcon;
+    private static Sprite _cachedAppleIcon;
+
+    public static Sprite MakeAppleIcon()
+    {
+        if (_cachedAppleIcon != null) return _cachedAppleIcon;
+
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        void Set(int x, int y, Color c)
+        { if (x >= 0 && x < SZ && y >= 0 && y < SZ) px[y * SZ + x] = c; }
+
+        Color red = new Color(0.85f, 0.15f, 0.15f, 1f);
+        Color darkRed = new Color(0.6f, 0.08f, 0.08f, 1f);
+        Color brown = new Color(0.45f, 0.3f, 0.15f, 1f);
+        Color green = new Color(0.2f, 0.7f, 0.2f, 1f);
+
+        // Stem (brown)
+        for (int y = 40; y < 52; y++)
+        {
+            int x = 32 + (y - 40) / 3;
+            Set(x, y, brown);
+            Set(x + 1, y, brown);
+        }
+
+        // Leaf (green)
+        for (int dx = 1; dx < 8; dx++)
+        {
+            for (int dy = 0; dy < 4; dy++)
+            {
+                if (dy <= dx && dx + dy < 10)
+                {
+                    Set(34 + dx, 46 + dy, green);
+                }
+            }
+        }
+
+        // Apple body (red with dark red shading/outlines)
+        for (int dx = -16; dx <= 16; dx++)
+        {
+            for (int dy = -16; dy <= 16; dy++)
+            {
+                float d = dx * dx + dy * dy;
+                float adjustedDist = d;
+                if (dy > 4)
+                {
+                    float topDip = Mathf.Abs(dx) * 0.4f;
+                    adjustedDist = dx * dx + (dy + topDip) * (dy + topDip);
+                }
+                else if (dy < -10)
+                {
+                    float bottomDip = Mathf.Abs(dx) * 0.3f;
+                    adjustedDist = dx * dx + (dy - bottomDip) * (dy - bottomDip);
+                }
+
+                if (adjustedDist <= 220f)
+                {
+                    Set(32 + dx, 28 + dy, red);
+                }
+                else if (adjustedDist <= 256f)
+                {
+                    Set(32 + dx, 28 + dy, darkRed);
+                }
+            }
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        _cachedAppleIcon = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+        return _cachedAppleIcon;
+    }
 
     /// <summary>Procedurally generates a small sprite icon representing a flower.</summary>
     public static Sprite MakeFlowerIcon()

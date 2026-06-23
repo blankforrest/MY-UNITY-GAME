@@ -642,6 +642,10 @@ public class Inventory : MonoBehaviour
                 sprite = VehicleSpawner.CreatePropellerIcon();
             else if (itemName == "Large Propeller")
                 sprite = VehicleSpawner.CreateLargePropellerIcon();
+            else if (itemName.Equals("Apple", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = VoxelWorld.MakeAppleIcon();
+            }
             else if (itemName.Equals("Flower", System.StringComparison.OrdinalIgnoreCase))
             {
                 sprite = VoxelWorld.MakeFlowerIcon();
@@ -722,6 +726,12 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Glass", 35, 64));
             items.Add(new CreativeItemData("Gold Block", 32, 64));
             items.Add(new CreativeItemData("Iron Block", 33, 64));
+            items.Add(new CreativeItemData("Bedrock", 48, 64));
+            items.Add(new CreativeItemData("Cactus", 49, 64));
+            items.Add(new CreativeItemData("Birch Log", 51, 64));
+            items.Add(new CreativeItemData("Birch Leaves", 52, 64));
+            items.Add(new CreativeItemData("Spruce Log", 53, 64));
+            items.Add(new CreativeItemData("Spruce Leaves", 54, 64));
             items.Add(new CreativeItemData("Coal Ore", 30, 64));
             items.Add(new CreativeItemData("Iron Ore", 31, 64));
             items.Add(new CreativeItemData("Crafting Table", 36, 64));
@@ -771,6 +781,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Flower", 9, 64));
             items.Add(new CreativeItemData("Dandelion", 10, 64));
             items.Add(new CreativeItemData("Iris", 11, 64));
+            items.Add(new CreativeItemData("Apple", 0, 64));
         }
         else if (category == "BLOCKS")
         {
@@ -783,6 +794,12 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Glass", 35, 64));
             items.Add(new CreativeItemData("Gold Block", 32, 64));
             items.Add(new CreativeItemData("Iron Block", 33, 64));
+            items.Add(new CreativeItemData("Bedrock", 48, 64));
+            items.Add(new CreativeItemData("Cactus", 49, 64));
+            items.Add(new CreativeItemData("Birch Log", 51, 64));
+            items.Add(new CreativeItemData("Birch Leaves", 52, 64));
+            items.Add(new CreativeItemData("Spruce Log", 53, 64));
+            items.Add(new CreativeItemData("Spruce Leaves", 54, 64));
             items.Add(new CreativeItemData("Coal Ore", 30, 64));
             items.Add(new CreativeItemData("Iron Ore", 31, 64));
             items.Add(new CreativeItemData("Crafting Table", 36, 64));
@@ -840,6 +857,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Flower", 9, 64));
             items.Add(new CreativeItemData("Dandelion", 10, 64));
             items.Add(new CreativeItemData("Iris", 11, 64));
+            items.Add(new CreativeItemData("Apple", 0, 64));
         }
 
         // Dynamically size the slots array to match the populated items list size (indefinite slots)

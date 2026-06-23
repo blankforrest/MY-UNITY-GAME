@@ -78,8 +78,6 @@ public class PlayerInteraction : MonoBehaviour
             if (Physics.Raycast(playerCam.transform.position, playerCam.transform.forward,
                                 out hit, reach, ~(1 << 2), QueryTriggerInteraction.Collide))
             {
-                // Tiny nudge to land just inside the hit block, then floor to voxel coords,
-                // then pass the CENTER of that voxel so FloorToInt is never ambiguous.
                 Vector3 p = hit.point - hit.normal * 0.001f;
                 Vector3Int targetGridPos = new Vector3Int(
                     Mathf.FloorToInt(p.x),
@@ -90,12 +88,25 @@ public class PlayerInteraction : MonoBehaviour
                 if (VoxelWorld.Instance != null)
                 {
                     byte blockID = VoxelWorld.Instance.GetBlock(voxelCenter);
-                    
-                    // Don't mine water (7) or empty blocks (0)
-                    if (blockID != 0 && blockID != 7)
+
+                    // Fallback for foliage clicks if the normal nudge pushed the query into air/water
+                    if ((blockID == 0 || blockID == 7) && hit.collider != null && hit.collider.name.Contains("Foliage"))
                     {
-                        var pc = GetComponent<PlayerController>() ?? GetComponentInParent<PlayerController>() ?? FindFirstObjectByType<PlayerController>();
-                        bool isCreative = (pc != null && pc.isCreativeMode);
+                        p = hit.point;
+                        targetGridPos = new Vector3Int(
+                            Mathf.FloorToInt(p.x),
+                            Mathf.FloorToInt(p.y),
+                            Mathf.FloorToInt(p.z));
+                        voxelCenter = new Vector3(targetGridPos.x + 0.5f, targetGridPos.y + 0.5f, targetGridPos.z + 0.5f);
+                        blockID = VoxelWorld.Instance.GetBlock(voxelCenter);
+                    }
+                    
+                    var pc = GetComponent<PlayerController>() ?? GetComponentInParent<PlayerController>() ?? FindFirstObjectByType<PlayerController>();
+                    bool isCreative = (pc != null && pc.isCreativeMode);
+                    
+                    // Don't mine water (7), empty blocks (0), or bedrock (48) in survival mode
+                    if (blockID != 0 && blockID != 7 && (blockID != 48 || isCreative))
+                    {
                         Debug.Log($"[PlayerInteraction] Mining click. blockID={blockID}, isCreative={isCreative}, pcFound={pc != null}, pc.isCreativeMode={(pc != null ? pc.isCreativeMode.ToString() : "N/A")}");
                         float hardness = GetBlockHardness(blockID);
 
@@ -186,7 +197,7 @@ public class PlayerInteraction : MonoBehaviour
 
             foreach (var h in hits)
             {
-                if (h.collider.name != "Foliage")
+                if (h.collider != null && !h.collider.name.Contains("Foliage"))
                 {
                     hit = h;
                     foundSolid = true;
@@ -514,6 +525,7 @@ public class PlayerInteraction : MonoBehaviour
         switch (blockType)
         {
             case 7:
+            case 48: // Bedrock
                 return 0.0f;
 
             case 9:
@@ -521,10 +533,15 @@ public class PlayerInteraction : MonoBehaviour
             case 11:
             case 13:
             case 14:
-                return 0.05f;
+                return 0.0f;
 
             case 12:
+            case 52: // Birch Leaves
+            case 54: // Spruce Leaves
                 return 0.2f;
+
+            case 49: // Cactus
+                return 0.4f;
 
             case 35:
                 return 0.3f;
@@ -539,6 +556,8 @@ public class PlayerInteraction : MonoBehaviour
             case 2:
             case 36:
             case 46:
+            case 51: // Birch Log
+            case 53: // Spruce Log
             case 38: case 40: case 41: case 42:
                 return 1.5f;
 
@@ -574,6 +593,8 @@ public class PlayerInteraction : MonoBehaviour
             case 2:
             case 36:
             case 46:
+            case 51: // Birch Log
+            case 53: // Spruce Log
             case 38: case 40: case 41: case 42:
                 preferredTool = ToolType.Axe;
                 break;

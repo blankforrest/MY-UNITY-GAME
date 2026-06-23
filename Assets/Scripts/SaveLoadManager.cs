@@ -236,6 +236,10 @@ public class SaveLoadManager : MonoBehaviour
         data.playerRotY = pRot.y;
         data.playerRotZ = pRot.z;
 
+        data.currentHealth = player.currentHealth;
+        data.currentHunger = player.currentHunger;
+        data.currentAir = player.currentAir;
+
         data.isCreativeMode = player.isCreativeMode;
         data.seed = activeWorldSeed;
 
@@ -552,6 +556,11 @@ public class SaveLoadManager : MonoBehaviour
                 string savedMode = PlayerPrefs.GetString("GameMode_" + activeWorldSlot, "Survival");
                 player.isCreativeMode = (savedMode == "Creative") || data.isCreativeMode;
 
+                // Load survival stats, handling legacy saves that don't have them
+                player.currentHealth = data.currentHealth > 0f ? data.currentHealth : player.maxHealth;
+                player.currentHunger = data.currentHunger > 0f ? data.currentHunger : player.maxHunger;
+                player.currentAir = data.currentAir > 0f ? data.currentAir : player.maxAir;
+
                 if (cc != null) cc.enabled = true;
             }
 
@@ -673,6 +682,10 @@ public class SaveData
     public float playerRotX;
     public float playerRotY;
     public float playerRotZ;
+
+    public float currentHealth;
+    public float currentHunger;
+    public float currentAir;
 
     public List<SavedBlock> modifications;
     public List<SavedItem> hotbar;

@@ -42,6 +42,31 @@ public class PlayerController : MonoBehaviour
     private float  suffocationTickTimer = 0f;
     private UnityEngine.UI.Image suffocationOverlay;
 
+    [Header("Survival Mechanics")]
+    public float maxHealth = 20f;
+    public float currentHealth = 20f;
+    public float maxHunger = 20f;
+    public float currentHunger = 20f;
+    private float hungerDecayAccumulator = 0f;
+    private float healthRegenTimer = 0f;
+    private float starvationDamageTimer = 0f;
+    private float fallStartY;
+
+    // Air/Drowning
+    public float maxAir = 10f;
+    public float currentAir = 10f;
+    private float drowningTimer = 0f;
+
+    // Eating
+    private float eatingTimer = 0f;
+    private const float EATING_DURATION = 1.2f;
+    private bool isEating = false;
+    private string eatingItemName = "";
+
+    private GameObject eatingProgressPanel;
+    private UnityEngine.UI.Image eatingProgressBar;
+    private TMPro.TextMeshProUGUI eatingProgressText;
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
@@ -130,6 +155,66 @@ public class PlayerController : MonoBehaviour
             sufGO.SetActive(false);
 
             CreateDeathScreen(canvas);
+
+            // Setup Eating Progress Panel
+            eatingProgressPanel = new GameObject("EatingProgressPanel", typeof(RectTransform));
+            eatingProgressPanel.transform.SetParent(canvas.transform, false);
+            RectTransform epRT = eatingProgressPanel.GetComponent<RectTransform>();
+            epRT.anchorMin = new Vector2(0.5f, 0f);
+            epRT.anchorMax = new Vector2(0.5f, 0f);
+            epRT.pivot = new Vector2(0.5f, 0f);
+            epRT.anchoredPosition = new Vector2(0f, 110f); // above hotbar and stats
+            epRT.sizeDelta = new Vector2(120f, 25f);
+
+            GameObject bgGO = new GameObject("Bg", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            bgGO.transform.SetParent(eatingProgressPanel.transform, false);
+            RectTransform bgRT = bgGO.GetComponent<RectTransform>();
+            bgRT.anchorMin = Vector2.zero;
+            bgRT.anchorMax = Vector2.one;
+            bgRT.sizeDelta = Vector2.zero;
+            bgGO.GetComponent<UnityEngine.UI.Image>().color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
+
+            GameObject barGO = new GameObject("Bar", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            barGO.transform.SetParent(eatingProgressPanel.transform, false);
+            RectTransform barRT = barGO.GetComponent<RectTransform>();
+            barRT.anchorMin = new Vector2(0f, 0f);
+            barRT.anchorMax = new Vector2(0f, 1f);
+            barRT.pivot = new Vector2(0f, 0.5f);
+            barRT.anchoredPosition = new Vector2(2f, 0f);
+            barRT.sizeDelta = new Vector2(0f, -4f);
+            eatingProgressBar = barGO.GetComponent<UnityEngine.UI.Image>();
+            eatingProgressBar.color = new Color(0.2f, 0.8f, 0.2f, 1f);
+
+            GameObject textGO = new GameObject("Text", typeof(RectTransform), typeof(TMPro.TextMeshProUGUI));
+            textGO.transform.SetParent(eatingProgressPanel.transform, false);
+            RectTransform tRT = textGO.GetComponent<RectTransform>();
+            tRT.anchorMin = new Vector2(0f, 1f);
+            tRT.anchorMax = new Vector2(1f, 1f);
+            tRT.pivot = new Vector2(0.5f, 0f);
+            tRT.anchoredPosition = new Vector2(0f, 2f);
+            tRT.sizeDelta = new Vector2(0f, 15f);
+            eatingProgressText = textGO.GetComponent<TMPro.TextMeshProUGUI>();
+            eatingProgressText.fontSize = 10f;
+            eatingProgressText.alignment = TMPro.TextAlignmentOptions.Center;
+            eatingProgressText.color = Color.white;
+            eatingProgressText.text = "Eating Apple...";
+            eatingProgressPanel.SetActive(false);
+
+            // Dynamically add SurvivalHUD if not present
+            if (canvas.GetComponentInChildren<SurvivalHUD>() == null)
+            {
+                GameObject hudGO = new GameObject("SurvivalHUDContainer");
+                hudGO.transform.SetParent(canvas.transform, false);
+                hudGO.AddComponent<SurvivalHUD>();
+            }
+
+            // Dynamically add FPSDisplay if not present
+            if (canvas.GetComponentInChildren<FPSDisplay>() == null)
+            {
+                GameObject fpsGO = new GameObject("FPSDisplayContainer");
+                fpsGO.transform.SetParent(canvas.transform, false);
+                fpsGO.AddComponent<FPSDisplay>();
+            }
         }
     }
 
@@ -471,6 +556,10 @@ public class PlayerController : MonoBehaviour
             else if (Keyboard.current.spaceKey.wasPressedThisFrame && isGrounded)
             {
                 velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+                if (!isCreativeMode)
+                {
+                    currentHunger = Mathf.Max(0f, currentHunger - 0.05f); // jump hunger depletion
+                }
             }
         }
 
@@ -522,26 +611,125 @@ public class PlayerController : MonoBehaviour
 
             // Accumulate total time stuck
             suffocationTimer += Time.deltaTime;
-            suffocationTickTimer += Time.deltaTime;
 
-            // Flash red overlay on each tick
-            if (suffocationTickTimer >= SuffocationTickTime)
+            // Deal damage on each tick (every 1 second)
+            if (suffocationTimer >= 1.0f)
             {
-                suffocationTickTimer = 0f;
+                suffocationTimer = 0f;
                 if (suffocationOverlay != null)
                     StartCoroutine(FlashSuffocation());
-            }
-
-            // Die after SuffocationDeathTime seconds
-            if (suffocationTimer >= SuffocationDeathTime)
-            {
-                isStuck = false;
-                suffocationTimer = 0f;
-                controller.enabled = true;
-                if (suffocationOverlay != null) suffocationOverlay.gameObject.SetActive(false);
-                Die();
+                TakeDamage(2.0f); // 1 heart of damage
             }
             return;
+        }
+
+        // ── Survival Mechanics (Health, Hunger, Drowning, Eating, Fall Damage) ──
+        if (isCreativeMode)
+        {
+            currentHealth = maxHealth;
+            currentHunger = maxHunger;
+            currentAir = maxAir;
+            isEating = false;
+            if (eatingProgressPanel != null) eatingProgressPanel.SetActive(false);
+            fallStartY = transform.position.y;
+        }
+        else if (!isDead)
+        {
+            // 1. Hunger decay based on movement
+            float moveMagnitude = move.magnitude;
+            float currentDecayRate = 0.002f; // base rate
+            if (inWater)
+            {
+                if (moveMagnitude > 0.1f) currentDecayRate = 0.02f; // swimming
+            }
+            else if (moveMagnitude > 0.1f)
+            {
+                if (isRunning) currentDecayRate = 0.035f; // sprinting
+                else if (isSneaking) currentDecayRate = 0.005f; // sneaking
+                else currentDecayRate = 0.01f; // walking
+            }
+            currentHunger = Mathf.Max(0f, currentHunger - currentDecayRate * Time.deltaTime);
+
+            // 2. Health regeneration & Starvation
+            if (currentHunger >= 18f && currentHealth < maxHealth)
+            {
+                healthRegenTimer += Time.deltaTime;
+                if (healthRegenTimer >= 4.0f)
+                {
+                    currentHealth = Mathf.Min(maxHealth, currentHealth + 1.0f);
+                    healthRegenTimer = 0f;
+                }
+            }
+            else
+            {
+                healthRegenTimer = 0f;
+            }
+
+            if (currentHunger <= 0f)
+            {
+                starvationDamageTimer += Time.deltaTime;
+                if (starvationDamageTimer >= 2.0f)
+                {
+                    TakeDamage(1.0f); // 0.5 heart of damage
+                    starvationDamageTimer = 0f;
+                }
+            }
+            else
+            {
+                starvationDamageTimer = 0f;
+            }
+
+            // 3. Fall damage
+            if (isCreativeMode && isFlying || inWater)
+            {
+                fallStartY = transform.position.y;
+            }
+            else
+            {
+                if (isGrounded)
+                {
+                    float fallDistance = fallStartY - transform.position.y;
+                    if (fallDistance > 3.0f)
+                    {
+                        float damage = Mathf.Floor(fallDistance - 3.0f);
+                        if (damage > 0)
+                        {
+                            TakeDamage(damage);
+                        }
+                    }
+                    fallStartY = transform.position.y;
+                }
+                else
+                {
+                    if (transform.position.y > fallStartY)
+                    {
+                        fallStartY = transform.position.y;
+                    }
+                }
+            }
+
+            // 4. Drowning
+            if (headInWater)
+            {
+                currentAir = Mathf.Max(0f, currentAir - Time.deltaTime);
+                if (currentAir <= 0f)
+                {
+                    drowningTimer += Time.deltaTime;
+                    if (drowningTimer >= 1.0f)
+                    {
+                        TakeDamage(2.0f); // 1 heart of damage
+                        drowningTimer = 0f;
+                    }
+                }
+            }
+            else
+            {
+                currentAir = maxAir;
+                drowningTimer = 0f;
+            }
+
+            // 5. Eating Mechanic
+            HandleEating();
         }
 
         // Void rescue safety check (only when not already stuck)
@@ -549,6 +737,110 @@ public class PlayerController : MonoBehaviour
         {
             RescuePlayerFromVoid();
         }
+    }
+
+    public void TakeDamage(float amount)
+    {
+        if (isCreativeMode || isDead) return;
+
+        currentHealth = Mathf.Max(0f, currentHealth - amount);
+        
+        // General damage feedback - red flash
+        if (suffocationOverlay != null && !isStuck)
+        {
+            StartCoroutine(FlashSuffocation());
+        }
+
+        if (currentHealth <= 0f)
+        {
+            Die();
+        }
+    }
+
+    private void HandleEating()
+    {
+        if (isDead)
+        {
+            isEating = false;
+            if (eatingProgressPanel != null) eatingProgressPanel.SetActive(false);
+            return;
+        }
+
+        InventorySlot selectedSlot = Hotbar.Instance != null ? Hotbar.Instance.GetSelectedSlot() : null;
+        Item heldItem = selectedSlot?.item;
+        bool isEdible = heldItem != null && heldItem.itemName == "Apple";
+
+        bool canEat = isEdible && (currentHunger < maxHunger || currentHealth < maxHealth);
+        bool isRightClickHeld = Mouse.current != null && Mouse.current.rightButton.isPressed;
+
+        if (isRightClickHeld && canEat)
+        {
+            if (!isEating || eatingItemName != heldItem.itemName)
+            {
+                isEating = true;
+                eatingTimer = 0f;
+                eatingItemName = heldItem.itemName;
+            }
+            else
+            {
+                eatingTimer += Time.deltaTime;
+                if (eatingProgressPanel != null)
+                {
+                    eatingProgressPanel.SetActive(true);
+                    float pct = eatingTimer / EATING_DURATION;
+                    eatingProgressBar.rectTransform.sizeDelta = new Vector2(116f * pct, -4f);
+                    eatingProgressText.text = $"Eating {eatingItemName}...";
+                }
+
+                if (eatingTimer >= EATING_DURATION)
+                {
+                    currentHunger = Mathf.Min(maxHunger, currentHunger + 4.0f);
+                    currentHealth = Mathf.Min(maxHealth, currentHealth + 2.0f);
+
+                    if (selectedSlot != null && !isCreativeMode)
+                    {
+                        selectedSlot.amount--;
+                        if (selectedSlot.amount <= 0)
+                        {
+                            Hotbar.Instance.SetSlot(Hotbar.Instance.SelectedIndex, null, 0);
+                        }
+                        else
+                        {
+                            Hotbar.Instance.SetSlot(Hotbar.Instance.SelectedIndex, selectedSlot.item, selectedSlot.amount);
+                        }
+                    }
+
+                    isEating = false;
+                    eatingTimer = 0f;
+                    if (eatingProgressPanel != null) eatingProgressPanel.SetActive(false);
+
+                    if (suffocationOverlay != null)
+                    {
+                        StartCoroutine(FlashEatingGreen());
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (isEating)
+            {
+                isEating = false;
+                eatingTimer = 0f;
+                if (eatingProgressPanel != null) eatingProgressPanel.SetActive(false);
+            }
+        }
+    }
+
+    private System.Collections.IEnumerator FlashEatingGreen()
+    {
+        if (suffocationOverlay == null) yield break;
+        Color oldColor = suffocationOverlay.color;
+        suffocationOverlay.color = new Color(0.1f, 0.6f, 0.1f, 0.4f);
+        suffocationOverlay.gameObject.SetActive(true);
+        yield return new WaitForSeconds(0.15f);
+        suffocationOverlay.gameObject.SetActive(false);
+        suffocationOverlay.color = oldColor;
     }
 
     private System.Collections.IEnumerator FlashSuffocation()
@@ -626,6 +918,16 @@ public class PlayerController : MonoBehaviour
     private void Respawn()
     {
         isDead = false;
+
+        // Reset survival states
+        currentHealth = maxHealth;
+        currentHunger = maxHunger;
+        currentAir = maxAir;
+        drowningTimer = 0f;
+        healthRegenTimer = 0f;
+        starvationDamageTimer = 0f;
+        isEating = false;
+        if (eatingProgressPanel != null) eatingProgressPanel.SetActive(false);
 
         // Clear any stuck/suffocation state so movement works after respawn
         isStuck = false;
