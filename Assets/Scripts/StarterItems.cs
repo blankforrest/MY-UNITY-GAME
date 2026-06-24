@@ -44,6 +44,7 @@ public class StarterItems : MonoBehaviour
     private IEnumerator Start()
     {
         GenerateBlockSpritesIfMissing();
+        GenerateCustomBlockSprites();
 
         // Wait one frame so Hotbar and Inventory have finished their Awake/Start
         yield return null;
@@ -236,6 +237,25 @@ public class StarterItems : MonoBehaviour
 
         item.blockTypeID = blockTypeID;
 
+        // Try to load custom sprite from registry if the block definition has custom textures
+        if (blockTypeID != 0)
+        {
+            BlockDefinition def = BlockRegistry.GetDefinition((byte)blockTypeID);
+            if (def != null)
+            {
+                bool hasCustomTextures = (def.textureTop != null || def.textureSide != null || def.textureBottom != null);
+                if (hasCustomTextures)
+                {
+                    if (def.inventoryIcon == null)
+                    {
+                        def.inventoryIcon = MakeIsometricBlock(blockTypeID, Color.white);
+                    }
+                    item.icon = def.inventoryIcon;
+                    return item;
+                }
+            }
+        }
+
         Color actualColor = fallbackColor;
         if (actualColor == Color.white && blockTypeID != 0)
         {
@@ -374,7 +394,21 @@ public class StarterItems : MonoBehaviour
 
     public static Sprite MakeGrassBlockIcon()
     {
-        // Load the generated Minecraft-style grass block PNG from Resources
+        BlockDefinition def = BlockRegistry.GetDefinition(4);
+        if (def != null)
+        {
+            bool hasCustomTextures = (def.textureTop != null || def.textureSide != null || def.textureBottom != null);
+            if (hasCustomTextures)
+            {
+                if (def.inventoryIcon == null)
+                {
+                    def.inventoryIcon = MakeIsometricBlock(4, Color.white);
+                }
+                return def.inventoryIcon;
+            }
+        }
+
+        // Load the default Minecraft-style grass block PNG from Resources if no custom textures
         Sprite loaded = Resources.Load<Sprite>("Sprites/grass_block");
         if (loaded != null) return loaded;
 
@@ -590,6 +624,9 @@ public class StarterItems : MonoBehaviour
 
     public static Sprite MakeIsometricBlock(int blockTypeID, Color baseColor)
     {
+        BlockDefinition def = BlockRegistry.GetDefinition((byte)blockTypeID);
+        Debug.Log($"[StarterItems.MakeIsometricBlock] Generating 3D icon for ID {blockTypeID}. Registry entry found: {(def != null ? def.blockName : "null")}, topTexture: {(def?.textureTop != null ? def.textureTop.name : "null")}");
+
         const int SZ = 64;
         Color[] px = new Color[SZ * SZ];
         for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
@@ -659,30 +696,56 @@ public class StarterItems : MonoBehaviour
                 int tu = Mathf.Clamp(Mathf.RoundToInt(u), 0, 15);
                 int tv = Mathf.Clamp(Mathf.RoundToInt(v), 0, 15);
 
-                // Find tile index
-                int tileIndex = 3; // default stone
-                if (blockTypeID == 30) tileIndex = 18;      // Coal Ore
-                else if (blockTypeID == 31) tileIndex = 19; // Iron Ore
-                else if (blockTypeID == 32) tileIndex = 20; // Gold Block
-                else if (blockTypeID == 33) tileIndex = 21; // Iron Block
-                else if (blockTypeID == 8 || blockTypeID == 34) tileIndex = 8; // Sand
-                else if (blockTypeID == 12) tileIndex = 12; // Leaves
-                else if (blockTypeID == 35) tileIndex = 22; // Glass
-                else if (blockTypeID == 36) tileIndex = (face == 1) ? 23 : 24; // Crafting Table
-                else if (blockTypeID == 37) tileIndex = (face == 3) ? 25 : 3;  // Furnace front is 25, others are stone (3)
-                else if (blockTypeID == 1) tileIndex = (face == 1) ? 4 : 5; // Wood
-                else if (blockTypeID == 4 || blockTypeID == 6) tileIndex = (face == 1) ? 0 : 1; // Grass
-                else if (blockTypeID == 5) tileIndex = 2; // Dirt
-                else if (blockTypeID == 2 || blockTypeID == 46) tileIndex = 6; // Plank / Wooden Slab
-                else if (blockTypeID == 3 || blockTypeID == 47) tileIndex = 3; // Stone / Stone Slab
-                else if (blockTypeID == 48) tileIndex = 32; // Bedrock
-                else if (blockTypeID == 49) tileIndex = 33; // Cactus
-                else if (blockTypeID == 51) tileIndex = (face == 1) ? 35 : 34; // Birch Log
-                else if (blockTypeID == 52) tileIndex = 36; // Birch Leaves
-                else if (blockTypeID == 53) tileIndex = (face == 1) ? 38 : 37; // Spruce Log
-                else if (blockTypeID == 54) tileIndex = 39; // Spruce Leaves
+                // Find tile index or custom texture
+                Texture2D customTex = null;
+                if (def != null)
+                {
+                    if (face == 1) customTex = def.textureTop;
+                    else if (face == 2 || face == 3) customTex = def.textureSide;
+                }
 
-                Color col = GrassTextureGenerator.GetPixel(tileIndex, tu, tv);
+                Color col = Color.clear;
+                if (customTex != null)
+                {
+                    try
+                    {
+                        int srcX = Mathf.Clamp(Mathf.RoundToInt((tu / 15f) * (customTex.width - 1)), 0, customTex.width - 1);
+                        int srcY = Mathf.Clamp(Mathf.RoundToInt((tv / 15f) * (customTex.height - 1)), 0, customTex.height - 1);
+                        col = customTex.GetPixel(srcX, srcY);
+                    }
+                    catch (System.Exception)
+                    {
+                        customTex = null;
+                        col = Color.clear; // will be overwritten in else branch
+                    }
+                }
+
+                if (customTex == null)
+                {
+                    int tileIndex = 3; // default stone
+                    if (blockTypeID == 30) tileIndex = 18;      // Coal Ore
+                    else if (blockTypeID == 31) tileIndex = 19; // Iron Ore
+                    else if (blockTypeID == 32) tileIndex = 20; // Gold Block
+                    else if (blockTypeID == 33) tileIndex = 21; // Iron Block
+                    else if (blockTypeID == 8 || blockTypeID == 34) tileIndex = 8; // Sand
+                    else if (blockTypeID == 12) tileIndex = 12; // Leaves
+                    else if (blockTypeID == 35) tileIndex = 22; // Glass
+                    else if (blockTypeID == 36) tileIndex = (face == 1) ? 23 : 24; // Crafting Table
+                    else if (blockTypeID == 37) tileIndex = (face == 3) ? 25 : 3;  // Furnace front is 25, others are stone (3)
+                    else if (blockTypeID == 1) tileIndex = (face == 1) ? 4 : 5; // Wood
+                    else if (blockTypeID == 4 || blockTypeID == 6) tileIndex = (face == 1) ? 0 : 1; // Grass
+                    else if (blockTypeID == 5) tileIndex = 2; // Dirt
+                    else if (blockTypeID == 2 || blockTypeID == 46) tileIndex = 6; // Plank / Wooden Slab
+                    else if (blockTypeID == 3 || blockTypeID == 47) tileIndex = 3; // Stone / Stone Slab
+                    else if (blockTypeID == 48) tileIndex = 32; // Bedrock
+                    else if (blockTypeID == 49) tileIndex = 33; // Cactus
+                    else if (blockTypeID == 51) tileIndex = (face == 1) ? 35 : 34; // Birch Log
+                    else if (blockTypeID == 52) tileIndex = 36; // Birch Leaves
+                    else if (blockTypeID == 53) tileIndex = (face == 1) ? 38 : 37; // Spruce Log
+                    else if (blockTypeID == 54) tileIndex = 39; // Spruce Leaves
+
+                    col = GrassTextureGenerator.GetPixel(tileIndex, tu, tv);
+                }
 
                 // Apply lighting based on face
                 if (face == 1) // Top
@@ -742,4 +805,53 @@ public class StarterItems : MonoBehaviour
 
     private static Color Darken(Color c, float amt) =>
         new Color(Mathf.Clamp01(c.r-amt), Mathf.Clamp01(c.g-amt), Mathf.Clamp01(c.b-amt), c.a);
+
+    private void GenerateCustomBlockSprites()
+    {
+        string dir = System.IO.Path.Combine(Application.dataPath, "Blocks");
+        if (!System.IO.Directory.Exists(dir))
+        {
+            System.IO.Directory.CreateDirectory(dir);
+        }
+
+        bool createdAny = false;
+        
+        foreach (var def in BlockRegistry.RegisteredBlocks)
+        {
+            if (def == null) continue;
+
+            // Check if this block has custom textures assigned in the database
+            bool hasCustomTextures = (def.textureTop != null || def.textureSide != null || def.textureBottom != null);
+            if (hasCustomTextures)
+            {
+                // Generate a 3D isometric sprite from its custom textures
+                Sprite sprite = MakeIsometricBlock(def.blockID, Color.white);
+                if (sprite != null)
+                {
+                    // Assign the generated sprite to the registry definition in memory
+                    def.inventoryIcon = sprite;
+                    if (def.dropItem != null)
+                    {
+                        def.dropItem.icon = sprite;
+                    }
+
+                    // Save the PNG file to Assets/Blocks/
+                    string fileName = def.blockName.Replace(" ", "_").ToLower() + "_block.png";
+                    string path = System.IO.Path.Combine(dir, fileName);
+                    
+                    byte[] bytes = sprite.texture.EncodeToPNG();
+                    System.IO.File.WriteAllBytes(path, bytes);
+                    Debug.Log($"[StarterItems] Generated and saved custom block 3D sprite: {path}");
+                    createdAny = true;
+                }
+            }
+        }
+
+#if UNITY_EDITOR
+        if (createdAny)
+        {
+            UnityEditor.AssetDatabase.Refresh();
+        }
+#endif
+    }
 }

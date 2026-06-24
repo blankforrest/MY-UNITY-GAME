@@ -630,16 +630,36 @@ public class Inventory : MonoBehaviour
         }
 
         Sprite sprite = null;
-        if (itemName.Equals("Grass Block", System.StringComparison.OrdinalIgnoreCase))
+        if (blockTypeID != 0)
         {
-            sprite = StarterItems.MakeGrassBlockIcon();
+            BlockDefinition def = BlockRegistry.GetDefinition((byte)blockTypeID);
+            if (def != null)
+            {
+                bool hasCustomTextures = (def.textureTop != null || def.textureSide != null || def.textureBottom != null);
+                if (hasCustomTextures)
+                {
+                    if (def.inventoryIcon == null)
+                    {
+                        def.inventoryIcon = StarterItems.MakeIsometricBlock(blockTypeID, Color.white);
+                    }
+                    sprite = def.inventoryIcon;
+                }
+            }
         }
-        else
+
+        if (sprite == null)
         {
-            string cleanName = itemName.ToLower().Replace(" ", "_");
-            sprite = Resources.Load<Sprite>("Sprites/" + cleanName + "_block");
-            if (sprite == null)
-                sprite = Resources.Load<Sprite>("Sprites/" + cleanName);
+            if (itemName.Equals("Grass Block", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = StarterItems.MakeGrassBlockIcon();
+            }
+            else
+            {
+                string cleanName = itemName.ToLower().Replace(" ", "_");
+                sprite = Resources.Load<Sprite>("Sprites/" + cleanName + "_block");
+                if (sprite == null)
+                    sprite = Resources.Load<Sprite>("Sprites/" + cleanName);
+            }
         }
 
         if (sprite == null)

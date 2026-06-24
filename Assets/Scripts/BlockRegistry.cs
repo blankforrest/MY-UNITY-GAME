@@ -49,15 +49,16 @@ public static class BlockRegistry
                 // Auto-configure the associated Item SO if present (DropsCustomItem) or generate one dynamically (DropsSelf)
                 if (def.dropRule == DropRule.DropsSelf)
                 {
-                    Item selfItem = ScriptableObject.CreateInstance<Item>();
-                    selfItem.itemName = def.blockName;
-                    selfItem.blockTypeID = def.blockID;
-                    selfItem.icon = def.inventoryIcon;
+                    Item selfItem = StarterItems.CreateItemInstance(def.blockName, def.blockID, Color.white);
                     def.dropItem = selfItem;
                 }
                 else if (def.dropRule == DropRule.DropsCustomItem && def.dropItem != null)
                 {
                     def.dropItem.blockTypeID = def.blockID;
+                    if (def.inventoryIcon == null && (def.textureTop != null || def.textureSide != null || def.textureBottom != null))
+                    {
+                        def.inventoryIcon = StarterItems.MakeIsometricBlock(def.blockID, Color.white);
+                    }
                     if (def.inventoryIcon != null)
                     {
                         def.dropItem.icon = def.inventoryIcon;
