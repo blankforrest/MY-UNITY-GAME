@@ -47,10 +47,19 @@ public class VoxelWorld : MonoBehaviour
         // 1. Initialize the custom block definitions registry
         if (blockDatabase != null && blockDatabase.blocks != null)
         {
+            Debug.Log($"[VoxelWorld] Loading Block Database with {blockDatabase.blocks.Count} blocks.");
+            foreach (var b in blockDatabase.blocks)
+            {
+                if (b != null && (b.textureTop != null || b.textureSide != null || b.textureBottom != null))
+                {
+                    Debug.Log($"[VoxelWorld] Custom textures detected on block: {b.blockName} (ID: {b.blockID}). Top: {b.textureTop?.name}, Side: {b.textureSide?.name}, Bottom: {b.textureBottom?.name}");
+                }
+            }
             BlockRegistry.Initialize(blockDatabase.blocks);
         }
         else
         {
+            Debug.LogError("[VoxelWorld] blockDatabase is null! Please assign a BlockDatabase asset in the Inspector.");
             BlockRegistry.Initialize(new List<BlockDefinition>());
         }
 
@@ -878,6 +887,9 @@ public class VoxelWorld : MonoBehaviour
         int tileSize = GrassTextureGenerator.TILE_SIZE;
         int baseTilesCount = baseWidth / tileSize;
 
+        // Initialize TotalTilesCount to base atlas count first
+        BlockRegistry.TotalTilesCount = baseTilesCount;
+
         // Find how many custom textures we actually need to append
         List<Texture2D> texturesToAppend = new List<Texture2D>();
         
@@ -891,6 +903,13 @@ public class VoxelWorld : MonoBehaviour
         for (int i = 0; i < customCount; i++)
         {
             BlockDefinition def = BlockRegistry.RegisteredBlocks[i];
+
+#if UNITY_EDITOR
+            MakeTextureReadable(def.textureTop);
+            MakeTextureReadable(def.textureSide);
+            MakeTextureReadable(def.textureBottom);
+#endif
+
             if (def.textureTop != null && !textureTileIndices.ContainsKey(def.textureTop))
             {
                 textureTileIndices[def.textureTop] = -1;
@@ -928,6 +947,7 @@ public class VoxelWorld : MonoBehaviour
         }
 
         int newWidth = baseWidth + extraTiles * tileSize;
+        BlockRegistry.TotalTilesCount = baseTilesCount + extraTiles;
 
         Texture2D expandedAtlas = new Texture2D(newWidth, baseHeight, TextureFormat.RGBA32, false);
         expandedAtlas.filterMode = FilterMode.Point;
@@ -1314,6 +1334,23 @@ public class VoxelWorld : MonoBehaviour
         if (z == 0                       && chunks.TryGetValue(cp + Vector2.down,  out Chunk cd)) cd.UpdateChunk();
         if (z == VoxelData.ChunkWidth-1  && chunks.TryGetValue(cp + Vector2.up,    out Chunk cu)) cu.UpdateChunk();
     }
+
+#if UNITY_EDITOR
+    private void MakeTextureReadable(Texture2D tex)
+    {
+        if (tex == null) return;
+        string assetPath = UnityEditor.AssetDatabase.GetAssetPath(tex);
+        if (string.IsNullOrEmpty(assetPath)) return;
+
+        UnityEditor.TextureImporter importer = UnityEditor.AssetImporter.GetAtPath(assetPath) as UnityEditor.TextureImporter;
+        if (importer != null && !importer.isReadable)
+        {
+            importer.isReadable = true;
+            importer.SaveAndReimport();
+            Debug.Log($"[VoxelWorld] Automatically set Read/Write Enabled on texture: {tex.name}");
+        }
+    }
+#endif
 
     public void RebuildAllChunks()
     {

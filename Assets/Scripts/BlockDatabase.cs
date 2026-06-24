@@ -63,7 +63,7 @@ public class BlockDatabase : ScriptableObject
         Debug.Log($"[BlockDatabase] Successfully populated default settings for {blocks.Count} base game blocks.");
     }
 
-    private BlockDefinition CreateDef(byte id, string name, float hardness, ToolType tool, bool isSolid, bool isTrans, bool isVehicle = false, string partType = "None")
+    private BlockDefinition CreateDef(byte id, string name, float hardness, ToolType tool, bool isSolid, bool isTrans, bool isVehicle = false, string partType = "None", DropRule dropRule = DropRule.DropsSelf, Item dropItem = null)
     {
         return new BlockDefinition
         {
@@ -75,6 +75,8 @@ public class BlockDatabase : ScriptableObject
             isTransparent = isTrans,
             isVehicleBlock = isVehicle,
             vehiclePartType = partType,
+            dropRule = dropRule,
+            dropItem = dropItem,
             dropAmount = 1
         };
     }

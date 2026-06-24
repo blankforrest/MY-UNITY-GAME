@@ -1,5 +1,11 @@
 using UnityEngine;
 
+public enum DropRule
+{
+    DropsSelf,
+    DropsCustomItem
+}
+
 [System.Serializable]
 public class BlockDefinition
 {
@@ -18,6 +24,9 @@ public class BlockDefinition
     public Texture2D textureBottom;
 
     [Header("Drops")]
+    [Tooltip("Should this block drop itself or a custom item asset?")]
+    public DropRule dropRule = DropRule.DropsSelf;
+    [Tooltip("Item ScriptableObject to drop when mined (only used if Drop Rule is DropsCustomItem).")]
     public Item dropItem;
     public int dropAmount = 1;
 

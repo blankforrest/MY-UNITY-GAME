@@ -7,6 +7,8 @@ public static class BlockRegistry
     private static Dictionary<byte, BlockDefinition> byID = new Dictionary<byte, BlockDefinition>();
     private static Dictionary<string, BlockDefinition> byName = new Dictionary<string, BlockDefinition>();
 
+    public static int TotalTilesCount { get; set; } = 41;
+
     // Mapping of custom block ID to the tile indices in the atlas:
     // Key: Block ID. Value: Face indices (0=back, 1=front, 2=top, 3=bottom, 4=left, 5=right)
     private static Dictionary<byte, int[]> faceTiles = new Dictionary<byte, int[]>();
@@ -44,8 +46,16 @@ public static class BlockRegistry
                 byName[def.blockName] = def;
                 RegisteredBlocks.Add(def);
 
-                // Auto-configure the associated Item SO if present
-                if (def.dropItem != null)
+                // Auto-configure the associated Item SO if present (DropsCustomItem) or generate one dynamically (DropsSelf)
+                if (def.dropRule == DropRule.DropsSelf)
+                {
+                    Item selfItem = ScriptableObject.CreateInstance<Item>();
+                    selfItem.itemName = def.blockName;
+                    selfItem.blockTypeID = def.blockID;
+                    selfItem.icon = def.inventoryIcon;
+                    def.dropItem = selfItem;
+                }
+                else if (def.dropRule == DropRule.DropsCustomItem && def.dropItem != null)
                 {
                     def.dropItem.blockTypeID = def.blockID;
                     if (def.inventoryIcon != null)

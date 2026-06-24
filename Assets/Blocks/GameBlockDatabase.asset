@@ -12,4 +12,844 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6a291b655252d74ba151ead2583440c, type: 3}
   m_Name: GameBlockDatabase
   m_EditorClassIdentifier: Assembly-CSharp::BlockDatabase
-  blocks: []
+  blocks:
+  - blockName: Wood
+    blockID: 1
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1.5
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Plank
+    blockID: 2
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1.5
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Stone
+    blockID: 3
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 3
+    preferredTool: 1
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Grass Block
+    blockID: 4
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 2800000, guid: 4acbaba6f7ad17a4abd2973885a0f252, type: 3}
+    textureSide: {fileID: 2800000, guid: 19b115e61ab7e6c4f85715c38bfe518c, type: 3}
+    textureBottom: {fileID: 2800000, guid: f185bb6a95628434e8c977944daafede, type: 3}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0.8
+    preferredTool: 3
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Dirt
+    blockID: 5
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0.8
+    preferredTool: 3
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Grass Slab
+    blockID: 6
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1.5
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Water
+    blockID: 7
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0
+    preferredTool: 0
+    isSolid: 0
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Sand
+    blockID: 8
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0.8
+    preferredTool: 3
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Rose
+    blockID: 9
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0
+    preferredTool: 0
+    isSolid: 0
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Dandelion
+    blockID: 10
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0
+    preferredTool: 0
+    isSolid: 0
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Iris
+    blockID: 11
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0
+    preferredTool: 0
+    isSolid: 0
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Leaves
+    blockID: 12
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0.2
+    preferredTool: 5
+    isSolid: 1
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Short Grass
+    blockID: 13
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0
+    preferredTool: 0
+    isSolid: 0
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Tall Grass
+    blockID: 14
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0
+    preferredTool: 0
+    isSolid: 0
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Small Wheel
+    blockID: 20
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 1
+    vehiclePartType: Wheel
+  - blockName: Large Wheel Anchor
+    blockID: 21
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 1
+    vehiclePartType: Wheel
+  - blockName: Propeller
+    blockID: 22
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 1
+    vehiclePartType: Propeller
+  - blockName: Large Wheel Helper
+    blockID: 23
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 1
+    vehiclePartType: Wheel
+  - blockName: Propeller Casing
+    blockID: 24
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 1
+    vehiclePartType: None
+  - blockName: Propeller Blade
+    blockID: 25
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 1
+    vehiclePartType: None
+  - blockName: Large Propeller Anchor
+    blockID: 26
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 1
+    vehiclePartType: Propeller
+  - blockName: Large Propeller Helper
+    blockID: 27
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 1
+    vehiclePartType: Propeller
+  - blockName: Coal Ore
+    blockID: 30
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 3
+    preferredTool: 1
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Iron Ore
+    blockID: 31
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 3
+    preferredTool: 1
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Gold Block
+    blockID: 32
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 3
+    preferredTool: 1
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Iron Block
+    blockID: 33
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 3
+    preferredTool: 1
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Sand (Unused ID)
+    blockID: 34
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0.8
+    preferredTool: 3
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Glass
+    blockID: 35
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0.3
+    preferredTool: 0
+    isSolid: 1
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Crafting Table
+    blockID: 36
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1.5
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Furnace
+    blockID: 37
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 3
+    preferredTool: 1
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Wooden Stairs
+    blockID: 38
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1.5
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Stone Stairs
+    blockID: 39
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 3
+    preferredTool: 1
+    isSolid: 1
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Wooden Slab
+    blockID: 46
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1.5
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Stone Slab
+    blockID: 47
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 3
+    preferredTool: 1
+    isSolid: 1
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Bedrock
+    blockID: 48
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0
+    preferredTool: 0
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Cactus
+    blockID: 49
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0.4
+    preferredTool: 0
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Control Block
+    blockID: 50
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 1
+    vehiclePartType: ControlBlock
+  - blockName: Birch Log
+    blockID: 51
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1.5
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Birch Leaves
+    blockID: 52
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0.2
+    preferredTool: 5
+    isSolid: 1
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Spruce Log
+    blockID: 53
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 1.5
+    preferredTool: 2
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Spruce Leaves
+    blockID: 54
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 0.2
+    preferredTool: 5
+    isSolid: 1
+    isTransparent: 1
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+  - blockName: Diamond Ore
+    blockID: 55
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 3
+    preferredTool: 1
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None

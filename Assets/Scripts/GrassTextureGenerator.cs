@@ -590,11 +590,7 @@ public static class GrassTextureGenerator
         }
 
         // Dynamically compute atlas divisions based on registered custom blocks
-        int totalCount = TILE_COUNT;
-        if (BlockRegistry.RegisteredBlocks != null)
-        {
-            totalCount += BlockRegistry.RegisteredBlocks.Count * 3;
-        }
+        int totalCount = BlockRegistry.TotalTilesCount;
 
         float u0 = tile        / (float)totalCount;
         float u1 = (tile + 1f) / (float)totalCount;

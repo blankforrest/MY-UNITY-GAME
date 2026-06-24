@@ -133,9 +133,9 @@ public class SheepAI : MonoBehaviour
         // Snout
         CreateBox("Snout", new Vector3(0.22f, 0.14f, 0.18f), new Vector3(0f, -0.1f, 0.24f), skinColor * 0.92f, standardMat, head);
 
-        // Eyes
-        CreateBox("LeftEye", new Vector3(0.04f, 0.04f, 0.02f), new Vector3(-0.15f, 0.02f, 0.21f), eyeColor, standardMat, head);
-        CreateBox("RightEye", new Vector3(0.04f, 0.04f, 0.02f), new Vector3(0.15f, 0.02f, 0.21f), eyeColor, standardMat, head);
+        // Eyes (outset by 0.005f on front/sides to prevent Z-fighting and jittering)
+        CreateBox("LeftEye", new Vector3(0.04f, 0.04f, 0.04f), new Vector3(-0.155f, 0.02f, 0.215f), eyeColor, standardMat, head);
+        CreateBox("RightEye", new Vector3(0.04f, 0.04f, 0.04f), new Vector3(0.155f, 0.02f, 0.215f), eyeColor, standardMat, head);
 
         // Drooping side ears
         CreateBox("LeftEar", new Vector3(0.18f, 0.08f, 0.08f), new Vector3(-0.22f, 0.05f, -0.02f), skinColor, standardMat, head);
