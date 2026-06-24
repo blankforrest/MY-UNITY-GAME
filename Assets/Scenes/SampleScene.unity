@@ -246,10 +246,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   walkSpeed: 5
   runSpeed: 8
+  sneakSpeed: 2
   jumpHeight: 1.5
   gravity: -20
   mouseSensitivity: 0.5
   lookSmoothTime: 0.05
+  isCreativeMode: 0
+  maxHealth: 20
+  currentHealth: 20
+  maxHunger: 20
+  currentHunger: 20
+  maxAir: 10
+  currentAir: 10
 --- !u!143 &315018364
 CharacterController:
   m_ObjectHideFlags: 0
@@ -342,7 +350,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 40, z: 0}
-  m_LocalScale: {x: 1, y: 0.85, z: 1}
+  m_LocalScale: {x: 1, y: 0.8, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 330585546}
@@ -394,6 +402,41 @@ MonoBehaviour:
     amount: 0
   - item: {fileID: 0}
     amount: 0
+  craftingSlots:
+  - item: {fileID: 0}
+    amount: 0
+  - item: {fileID: 0}
+    amount: 0
+  - item: {fileID: 0}
+    amount: 0
+  - item: {fileID: 0}
+    amount: 0
+  craftingResultSlot:
+    item: {fileID: 0}
+    amount: 0
+  tableCraftingSlots:
+  - item: {fileID: 0}
+    amount: 0
+  - item: {fileID: 0}
+    amount: 0
+  - item: {fileID: 0}
+    amount: 0
+  - item: {fileID: 0}
+    amount: 0
+  - item: {fileID: 0}
+    amount: 0
+  - item: {fileID: 0}
+    amount: 0
+  - item: {fileID: 0}
+    amount: 0
+  - item: {fileID: 0}
+    amount: 0
+  - item: {fileID: 0}
+    amount: 0
+  tableCraftingResultSlot:
+    item: {fileID: 0}
+    amount: 0
+  is3x3Active: 0
 --- !u!114 &315018369
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -868,6 +911,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cdccc1247dfc4fd42bd6d7ce7ac1007d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::InventoryUI
+  isFurnaceActive: 0
 --- !u!114 &548714705
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1142,6 +1186,7 @@ MonoBehaviour:
   chunkMaterial: {fileID: 0}
   waterMaterial: {fileID: 0}
   foliageMaterial: {fileID: 0}
+  glassMaterial: {fileID: 0}
   renderDistance: 6
   playerTransform: {fileID: 0}
   blockDrops:

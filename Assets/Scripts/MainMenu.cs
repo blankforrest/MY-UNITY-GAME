@@ -26,9 +26,11 @@ public class MainMenu : MonoBehaviour
     private TextMeshProUGUI survivalBtnText;
     private TextMeshProUGUI creativeBtnText;
     private TMP_InputField seedInputField;
+    private TMP_InputField worldNameInputField;
 
     void Start()
     {
+        AudioListener.volume = PlayerPrefs.GetFloat("MasterVolume", 1.0f);
         CreateMainMenuUI();
     }
 
@@ -143,6 +145,11 @@ public class MainMenu : MonoBehaviour
         GameObject btnGO = new GameObject(label + "_Button", typeof(RectTransform), typeof(Image), typeof(Button), typeof(MenuButtonEffects));
         btnGO.transform.SetParent(parent, false);
 
+        RectTransform btnRT = btnGO.GetComponent<RectTransform>();
+        btnRT.anchorMin = Vector2.zero;
+        btnRT.anchorMax = Vector2.one;
+        btnRT.sizeDelta = Vector2.zero;
+
         Button btn = btnGO.GetComponent<Button>();
         btn.onClick.AddListener(onClickAction);
 
@@ -198,21 +205,55 @@ public class MainMenu : MonoBehaviour
         titleText.alignment = TextAlignmentOptions.Center;
         titleText.color = Color.white;
 
-        // Info Text placeholder
-        GameObject infoGO = new GameObject("SettingsInfo", typeof(RectTransform), typeof(TextMeshProUGUI));
-        infoGO.transform.SetParent(settingsPanel.transform, false);
-        RectTransform infoRT = infoGO.GetComponent<RectTransform>();
-        infoRT.anchorMin = new Vector2(0.5f, 0.5f);
-        infoRT.anchorMax = new Vector2(0.5f, 0.5f);
-        infoRT.pivot = new Vector2(0.5f, 0.5f);
-        infoRT.sizeDelta = new Vector2(450, 350);
-        infoRT.anchoredPosition = new Vector2(0, 10);
+        // Sliders Container
+        GameObject sliderContainer = new GameObject("SettingsSliderContainer", typeof(RectTransform), typeof(VerticalLayoutGroup));
+        sliderContainer.transform.SetParent(settingsPanel.transform, false);
+        RectTransform scRT = sliderContainer.GetComponent<RectTransform>();
+        scRT.anchorMin = new Vector2(0.5f, 0.52f);
+        scRT.anchorMax = new Vector2(0.5f, 0.52f);
+        scRT.pivot = new Vector2(0.5f, 0.5f);
+        scRT.sizeDelta = new Vector2(400, 320);
+        scRT.anchoredPosition = new Vector2(0, 20);
 
-        TextMeshProUGUI infoText = infoGO.GetComponent<TextMeshProUGUI>();
-        infoText.text = "<b>SETTINGS</b>\n\nSettings controls (graphics, audio, and gameplay options) will be configurable here.";
-        infoText.fontSize = 18;
-        infoText.alignment = TextAlignmentOptions.Center;
-        infoText.color = new Color(0.85f, 0.85f, 0.85f, 1f);
+        VerticalLayoutGroup vlg = sliderContainer.GetComponent<VerticalLayoutGroup>();
+        vlg.spacing = 15;
+        vlg.childAlignment = TextAnchor.MiddleCenter;
+        vlg.childControlWidth = true;
+        vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true;
+        vlg.childForceExpandHeight = true;
+
+        // Load values
+        float sensitivity = PlayerPrefs.GetFloat("MouseSensitivity", 0.1f);
+        float fov = PlayerPrefs.GetFloat("FOV", 70f);
+        float volume = PlayerPrefs.GetFloat("MasterVolume", 1.0f);
+        float renderDist = PlayerPrefs.GetInt("RenderDistance", 6);
+
+        CreateSlider(sliderContainer.transform, "Mouse Sensitivity", 0.01f, 0.5f, sensitivity, (val, label) => {
+            label.text = $"Mouse Sensitivity: {val:F2}";
+            PlayerPrefs.SetFloat("MouseSensitivity", val);
+            PlayerPrefs.Save();
+        });
+
+        CreateSlider(sliderContainer.transform, "Field of View (FOV)", 50f, 110f, fov, (val, label) => {
+            label.text = $"Field of View (FOV): {val:F0}";
+            PlayerPrefs.SetFloat("FOV", val);
+            PlayerPrefs.Save();
+        });
+
+        CreateSlider(sliderContainer.transform, "Master Volume", 0.0f, 1.0f, volume, (val, label) => {
+            label.text = $"Master Volume: {val * 100:F0}%";
+            PlayerPrefs.SetFloat("MasterVolume", val);
+            AudioListener.volume = val;
+            PlayerPrefs.Save();
+        });
+
+        CreateSlider(sliderContainer.transform, "Render Distance (Chunks)", 3f, 16f, renderDist, (val, label) => {
+            int intVal = Mathf.RoundToInt(val);
+            label.text = $"Render Distance: {intVal} Chunks";
+            PlayerPrefs.SetInt("RenderDistance", intVal);
+            PlayerPrefs.Save();
+        });
 
         // Back Button
         GameObject backGO = new GameObject("BackButtonContainer", typeof(RectTransform));
@@ -363,23 +404,91 @@ public class MainMenu : MonoBehaviour
         titleText.alignment = TextAlignmentOptions.Center;
         titleText.color = Color.white;
 
-        // World List Container
-        GameObject listContainer = new GameObject("WorldListContainer", typeof(RectTransform), typeof(VerticalLayoutGroup));
-        listContainer.transform.SetParent(worldSelectionPanel.transform, false);
+        // 1. Create ScrollRect GameObject
+        GameObject scrollRectGO = new GameObject("WorldScrollRect", typeof(RectTransform), typeof(ScrollRect));
+        scrollRectGO.transform.SetParent(worldSelectionPanel.transform, false);
+        RectTransform scrollRectRT = scrollRectGO.GetComponent<RectTransform>();
+        scrollRectRT.anchorMin = new Vector2(0.5f, 0.58f);
+        scrollRectRT.anchorMax = new Vector2(0.5f, 0.58f);
+        scrollRectRT.pivot = new Vector2(0.5f, 0.5f);
+        scrollRectRT.sizeDelta = new Vector2(420, 260);
+        scrollRectRT.anchoredPosition = Vector2.zero;
+
+        ScrollRect scrollRect = scrollRectGO.GetComponent<ScrollRect>();
+        scrollRect.horizontal = false; // vertical scrolling only
+        scrollRect.vertical = true;
+        scrollRect.scrollSensitivity = 25f;
+
+        // 2. Create Viewport GameObject (clips the child items)
+        GameObject viewportGO = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D));
+        viewportGO.transform.SetParent(scrollRectGO.transform, false);
+        RectTransform viewportRT = viewportGO.GetComponent<RectTransform>();
+        viewportRT.anchorMin = Vector2.zero;
+        viewportRT.anchorMax = Vector2.one;
+        viewportRT.sizeDelta = new Vector2(-20, 0); // Leave room on the right for scrollbar
+
+        // 3. Create Content GameObject (holds the items and expands/contracts)
+        GameObject listContainer = new GameObject("WorldListContainer", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        listContainer.transform.SetParent(viewportGO.transform, false);
         RectTransform listRT = listContainer.GetComponent<RectTransform>();
-        listRT.anchorMin = new Vector2(0.5f, 0.6f);
-        listRT.anchorMax = new Vector2(0.5f, 0.6f);
-        listRT.pivot = new Vector2(0.5f, 0.5f);
-        listRT.sizeDelta = new Vector2(400, 200);
-        listRT.anchoredPosition = Vector2.zero;
+        listRT.anchorMin = new Vector2(0f, 1f); // Anchor top
+        listRT.anchorMax = new Vector2(1f, 1f);
+        listRT.pivot = new Vector2(0.5f, 1f);   // Pivot top-middle
+        listRT.sizeDelta = new Vector2(0, 0);   // Height driven by ContentSizeFitter
 
         VerticalLayoutGroup vlg = listContainer.GetComponent<VerticalLayoutGroup>();
         vlg.spacing = 10;
+        vlg.padding = new RectOffset(5, 5, 5, 5);
         vlg.childAlignment = TextAnchor.UpperCenter;
         vlg.childControlWidth = true;
         vlg.childControlHeight = false;
         vlg.childForceExpandWidth = true;
         vlg.childForceExpandHeight = false;
+
+        ContentSizeFitter csf = listContainer.GetComponent<ContentSizeFitter>();
+        csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+        // 4. Create Vertical Scrollbar GameObject
+        GameObject scrollbarGO = new GameObject("VerticalScrollbar", typeof(RectTransform), typeof(Image), typeof(Scrollbar));
+        scrollbarGO.transform.SetParent(scrollRectGO.transform, false);
+        RectTransform scrollbarRT = scrollbarGO.GetComponent<RectTransform>();
+        scrollbarRT.anchorMin = new Vector2(1f, 0f); // Anchor to the right edge of ScrollRect
+        scrollbarRT.anchorMax = new Vector2(1f, 1f);
+        scrollbarRT.pivot = new Vector2(1f, 0.5f);
+        scrollbarRT.sizeDelta = new Vector2(12, 0); // 12 units wide
+        scrollbarRT.anchoredPosition = Vector2.zero;
+
+        Image scrollbarImg = scrollbarGO.GetComponent<Image>();
+        scrollbarImg.color = new Color(0.12f, 0.14f, 0.18f, 0.5f); // track color
+
+        Scrollbar scrollbar = scrollbarGO.GetComponent<Scrollbar>();
+        scrollbar.direction = Scrollbar.Direction.BottomToTop;
+
+        // Sliding Area
+        GameObject slideAreaGO = new GameObject("SlidingArea", typeof(RectTransform));
+        slideAreaGO.transform.SetParent(scrollbarGO.transform, false);
+        RectTransform slideAreaRT = slideAreaGO.GetComponent<RectTransform>();
+        slideAreaRT.anchorMin = Vector2.zero;
+        slideAreaRT.anchorMax = Vector2.one;
+        slideAreaRT.sizeDelta = Vector2.zero;
+
+        // Handle
+        GameObject handleGO = new GameObject("Handle", typeof(RectTransform), typeof(Image));
+        handleGO.transform.SetParent(slideAreaGO.transform, false);
+        RectTransform handleRT = handleGO.GetComponent<RectTransform>();
+        handleRT.sizeDelta = Vector2.zero;
+
+        Image handleImg = handleGO.GetComponent<Image>();
+        handleImg.color = new Color(0.3f, 0.35f, 0.45f, 0.9f); // Handle grabber color
+
+        scrollbar.handleRect = handleRT;
+        scrollbar.targetGraphic = handleImg;
+
+        // Connect scrollRect
+        scrollRect.viewport = viewportRT;
+        scrollRect.content = listRT;
+        scrollRect.verticalScrollbar = scrollbar;
 
         // Populate list
         List<int> slots = new List<int>();
@@ -394,6 +503,7 @@ public class MainMenu : MonoBehaviour
             {
                 int currentSlot = slot;
                 string mode = SaveLoadManager.Instance.GetSavedGameMode(currentSlot);
+                string worldName = PlayerPrefs.GetString("WorldName_" + currentSlot, "World " + currentSlot);
 
                 GameObject worldItem = new GameObject("WorldItem_" + currentSlot, typeof(RectTransform), typeof(HorizontalLayoutGroup));
                 worldItem.transform.SetParent(listContainer.transform, false);
@@ -428,7 +538,7 @@ public class MainMenu : MonoBehaviour
                 playTxtRT.anchorMax = Vector2.one;
                 playTxtRT.sizeDelta = Vector2.zero;
                 var playTmp = playTxtGO.GetComponent<TextMeshProUGUI>();
-                playTmp.text = $"🌍 World {currentSlot} ({mode})";
+                playTmp.text = $"🌍 {worldName} ({mode})";
                 playTmp.fontSize = 16;
                 playTmp.fontStyle = FontStyles.Bold;
                 playTmp.alignment = TextAlignmentOptions.Center;
@@ -448,6 +558,9 @@ public class MainMenu : MonoBehaviour
                         if (SaveLoadManager.Instance != null)
                         {
                             SaveLoadManager.Instance.DeleteSave(currentSlot);
+                            PlayerPrefs.DeleteKey("WorldName_" + currentSlot);
+                            PlayerPrefs.DeleteKey("GameMode_" + currentSlot);
+                            PlayerPrefs.Save();
                             SwitchToPanel("WorldSelection");
                         }
                     });
@@ -598,12 +711,48 @@ public class MainMenu : MonoBehaviour
         creativeBtnText.alignment = TextAlignmentOptions.Center;
         creativeBtnText.color = Color.white;
 
+        // World Name Container (Horizontal)
+        GameObject nameContainer = new GameObject("NameContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+        nameContainer.transform.SetParent(createWorldPanel.transform, false);
+        RectTransform nameRT = nameContainer.GetComponent<RectTransform>();
+        nameRT.anchorMin = new Vector2(0.5f, 0.58f);
+        nameRT.anchorMax = new Vector2(0.5f, 0.58f);
+        nameRT.pivot = new Vector2(0.5f, 0.5f);
+        nameRT.sizeDelta = new Vector2(400, 45);
+        nameRT.anchoredPosition = Vector2.zero;
+
+        HorizontalLayoutGroup nameHlg = nameContainer.GetComponent<HorizontalLayoutGroup>();
+        nameHlg.spacing = 15;
+        nameHlg.childAlignment = TextAnchor.MiddleCenter;
+        nameHlg.childControlWidth = false;
+        nameHlg.childControlHeight = true;
+        nameHlg.childForceExpandWidth = false;
+        nameHlg.childForceExpandHeight = true;
+
+        // Label
+        GameObject nameLabelGO = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        nameLabelGO.transform.SetParent(nameContainer.transform, false);
+        var nameLabelRT = nameLabelGO.GetComponent<RectTransform>();
+        nameLabelRT.sizeDelta = new Vector2(100, 45);
+        var nameLabelTxt = nameLabelGO.GetComponent<TextMeshProUGUI>();
+        nameLabelTxt.text = "World Name:";
+        nameLabelTxt.fontSize = 16;
+        nameLabelTxt.fontStyle = FontStyles.Bold;
+        nameLabelTxt.alignment = TextAlignmentOptions.Left;
+        nameLabelTxt.color = Color.white;
+
+        // Input Field
+        GameObject nameInputGO;
+        worldNameInputField = CreateInputField(nameContainer.transform, "My Awesome World", out nameInputGO);
+        var nameInputRT = nameInputGO.GetComponent<RectTransform>();
+        nameInputRT.sizeDelta = new Vector2(285, 45);
+
         // Seed Container (Horizontal)
         GameObject seedContainer = new GameObject("SeedContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         seedContainer.transform.SetParent(createWorldPanel.transform, false);
         RectTransform seedRT = seedContainer.GetComponent<RectTransform>();
-        seedRT.anchorMin = new Vector2(0.5f, 0.53f);
-        seedRT.anchorMax = new Vector2(0.5f, 0.53f);
+        seedRT.anchorMin = new Vector2(0.5f, 0.48f);
+        seedRT.anchorMax = new Vector2(0.5f, 0.48f);
         seedRT.pivot = new Vector2(0.5f, 0.5f);
         seedRT.sizeDelta = new Vector2(400, 45);
         seedRT.anchoredPosition = Vector2.zero;
@@ -638,10 +787,10 @@ public class MainMenu : MonoBehaviour
         GameObject descGO = new GameObject("Description", typeof(RectTransform), typeof(TextMeshProUGUI));
         descGO.transform.SetParent(createWorldPanel.transform, false);
         RectTransform descRT = descGO.GetComponent<RectTransform>();
-        descRT.anchorMin = new Vector2(0.5f, 0.33f);
-        descRT.anchorMax = new Vector2(0.5f, 0.33f);
+        descRT.anchorMin = new Vector2(0.5f, 0.30f);
+        descRT.anchorMax = new Vector2(0.5f, 0.30f);
         descRT.pivot = new Vector2(0.5f, 0.5f);
-        descRT.sizeDelta = new Vector2(400, 140);
+        descRT.sizeDelta = new Vector2(400, 100);
         descRT.anchoredPosition = Vector2.zero;
 
         modeDescriptionText = descGO.GetComponent<TextMeshProUGUI>();
@@ -716,6 +865,13 @@ public class MainMenu : MonoBehaviour
 
             SaveLoadManager.activeWorldSlot = newSlot;
             PlayerPrefs.SetString("GameMode_" + newSlot, chosenMode);
+            
+            string worldName = $"World {newSlot}";
+            if (worldNameInputField != null && !string.IsNullOrEmpty(worldNameInputField.text))
+            {
+                worldName = worldNameInputField.text;
+            }
+            PlayerPrefs.SetString("WorldName_" + newSlot, worldName);
             PlayerPrefs.Save();
 
             // Parse Seed Input
@@ -944,6 +1100,93 @@ public class MainMenu : MonoBehaviour
         inputField.placeholder = placeholderTmp;
 
         return inputField;
+    }
+
+    private Slider CreateSlider(Transform parent, string labelText, float min, float max, float current, System.Action<float, TextMeshProUGUI> onValueChanged)
+    {
+        GameObject container = new GameObject(labelText + "_SliderContainer", typeof(RectTransform));
+        container.transform.SetParent(parent, false);
+        RectTransform containerRT = container.GetComponent<RectTransform>();
+        containerRT.sizeDelta = new Vector2(400, 60);
+
+        GameObject labelGO = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        labelGO.transform.SetParent(container.transform, false);
+        RectTransform labelRT = labelGO.GetComponent<RectTransform>();
+        labelRT.anchorMin = new Vector2(0f, 0.5f);
+        labelRT.anchorMax = new Vector2(1f, 0.5f);
+        labelRT.pivot = new Vector2(0f, 0.5f);
+        labelRT.anchoredPosition = new Vector2(0, 15);
+        labelRT.sizeDelta = new Vector2(0, 30);
+        
+        TextMeshProUGUI label = labelGO.GetComponent<TextMeshProUGUI>();
+        label.fontSize = 16;
+        label.color = Color.white;
+        label.text = labelText;
+
+        GameObject sliderGO = new GameObject("Slider", typeof(RectTransform), typeof(Slider));
+        sliderGO.transform.SetParent(container.transform, false);
+        RectTransform sliderRT = sliderGO.GetComponent<RectTransform>();
+        sliderRT.anchorMin = new Vector2(0f, 0f);
+        sliderRT.anchorMax = new Vector2(1f, 0f);
+        sliderRT.pivot = new Vector2(0.5f, 0f);
+        sliderRT.anchoredPosition = new Vector2(0, 5);
+        sliderRT.sizeDelta = new Vector2(0, 20);
+
+        Slider slider = sliderGO.GetComponent<Slider>();
+
+        GameObject bgGO = new GameObject("Background", typeof(RectTransform), typeof(Image));
+        bgGO.transform.SetParent(sliderGO.transform, false);
+        RectTransform bgRT = bgGO.GetComponent<RectTransform>();
+        bgRT.anchorMin = new Vector2(0f, 0.25f);
+        bgRT.anchorMax = new Vector2(1f, 0.75f);
+        bgRT.sizeDelta = Vector2.zero;
+        Image bgImg = bgGO.GetComponent<Image>();
+        bgImg.color = new Color(0.18f, 0.20f, 0.25f, 0.9f);
+
+        GameObject fillAreaGO = new GameObject("Fill Area", typeof(RectTransform));
+        fillAreaGO.transform.SetParent(sliderGO.transform, false);
+        RectTransform fillAreaRT = fillAreaGO.GetComponent<RectTransform>();
+        fillAreaRT.anchorMin = new Vector2(0f, 0.25f);
+        fillAreaRT.anchorMax = new Vector2(1f, 0.75f);
+        fillAreaRT.sizeDelta = Vector2.zero;
+
+        GameObject fillGO = new GameObject("Fill", typeof(RectTransform), typeof(Image));
+        fillGO.transform.SetParent(fillAreaGO.transform, false);
+        RectTransform fillRT = fillGO.GetComponent<RectTransform>();
+        fillRT.anchorMin = new Vector2(0f, 0f);
+        fillRT.anchorMax = new Vector2(0f, 1f);
+        fillRT.sizeDelta = Vector2.zero;
+        Image fillImg = fillGO.GetComponent<Image>();
+        fillImg.color = new Color(0.1f, 0.7f, 1.0f, 1f);
+
+        GameObject handleAreaGO = new GameObject("Handle Slide Area", typeof(RectTransform));
+        handleAreaGO.transform.SetParent(sliderGO.transform, false);
+        RectTransform handleAreaRT = handleAreaGO.GetComponent<RectTransform>();
+        handleAreaRT.anchorMin = Vector2.zero;
+        handleAreaRT.anchorMax = Vector2.one;
+        handleAreaRT.sizeDelta = Vector2.zero;
+
+        GameObject handleGO = new GameObject("Handle", typeof(RectTransform), typeof(Image));
+        handleGO.transform.SetParent(handleAreaGO.transform, false);
+        RectTransform handleRT = handleGO.GetComponent<RectTransform>();
+        handleRT.sizeDelta = new Vector2(15, 20);
+        Image handleImg = handleGO.GetComponent<Image>();
+        handleImg.color = Color.white;
+
+        slider.fillRect = fillRT;
+        slider.handleRect = handleRT;
+        slider.targetGraphic = handleImg;
+        slider.minValue = min;
+        slider.maxValue = max;
+        slider.value = current;
+
+        slider.onValueChanged.AddListener((val) => {
+            onValueChanged(val, label);
+        });
+
+        onValueChanged(current, label);
+
+        return slider;
     }
 
     private void QuitGame()

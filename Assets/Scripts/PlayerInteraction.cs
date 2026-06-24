@@ -14,6 +14,7 @@ public class PlayerInteraction : MonoBehaviour
     private float breakProgress = 0f;
     private bool isBreakingBlock = false;
     private float creativeBreakCooldown = 0f;
+    private float creativeHoldTime = 0f;
 
     private GameObject crackOverlay;
     private MeshRenderer crackRenderer;
@@ -70,6 +71,31 @@ public class PlayerInteraction : MonoBehaviour
         // Check if we are currently holding down left click
         bool isLeftClickHeld = Mouse.current != null && Mouse.current.leftButton.isPressed;
 
+        if (!isLeftClickHeld)
+        {
+            creativeHoldTime = 0f;
+        }
+        else
+        {
+            creativeHoldTime += Time.deltaTime;
+        }
+
+        // Attack mob logic
+        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+        {
+            RaycastHit hit;
+            if (Physics.Raycast(playerCam.transform.position, playerCam.transform.forward, out hit, reach))
+            {
+                WolfAI wolf = hit.collider.GetComponentInParent<WolfAI>();
+                if (wolf != null)
+                {
+                    wolf.TakeDamage(4f); // Deal 4 damage
+                    ResetBreakingState();
+                    return; // Intercept click
+                }
+            }
+        }
+
         // Block break logic
         if (!WrenchItem.IsHoldingWrench && isLeftClickHeld)
         {
@@ -78,7 +104,8 @@ public class PlayerInteraction : MonoBehaviour
             if (Physics.Raycast(playerCam.transform.position, playerCam.transform.forward,
                                 out hit, reach, ~(1 << 2), QueryTriggerInteraction.Collide))
             {
-                Vector3 p = hit.point - hit.normal * 0.001f;
+                bool isFoliage = hit.collider != null && hit.collider.name.Contains("Foliage");
+                Vector3 p = isFoliage ? (hit.point + playerCam.transform.forward * 0.005f) : (hit.point - hit.normal * 0.001f);
                 Vector3Int targetGridPos = new Vector3Int(
                     Mathf.FloorToInt(p.x),
                     Mathf.FloorToInt(p.y),
@@ -92,7 +119,7 @@ public class PlayerInteraction : MonoBehaviour
                     // Fallback for foliage clicks if the normal nudge pushed the query into air/water
                     if ((blockID == 0 || blockID == 7) && hit.collider != null && hit.collider.name.Contains("Foliage"))
                     {
-                        p = hit.point;
+                        p = hit.point + playerCam.transform.forward * 0.01f;
                         targetGridPos = new Vector3Int(
                             Mathf.FloorToInt(p.x),
                             Mathf.FloorToInt(p.y),
@@ -112,16 +139,23 @@ public class PlayerInteraction : MonoBehaviour
 
                         if (isCreative)
                         {
-                            if (creativeBreakCooldown <= 0f)
+                            if (creativeHoldTime >= 0.2f)
                             {
-                                // Instant break in creative mode with 0.15s delay
-                                BreakBlockInstantly(targetGridPos, voxelCenter, blockID);
-                                ResetBreakingState();
-                                creativeBreakCooldown = 0.15f;
+                                if (creativeBreakCooldown <= 0f)
+                                {
+                                    // Instant break in creative mode with 0.15s delay
+                                    BreakBlockInstantly(targetGridPos, voxelCenter, blockID);
+                                    ResetBreakingState();
+                                    creativeBreakCooldown = 0.15f;
+                                }
+                                else
+                                {
+                                    // Keep resetting to hide crack overlay during cooldown
+                                    ResetBreakingState();
+                                }
                             }
                             else
                             {
-                                // Keep resetting to hide crack overlay during cooldown
                                 ResetBreakingState();
                             }
                         }
@@ -184,7 +218,44 @@ public class PlayerInteraction : MonoBehaviour
             // Read block type from the currently selected hotbar item.
             // blockTypeID == 0 means the item is not a placeable block (e.g. wrench) — skip.
             InventorySlot placeSlot = Hotbar.Instance?.GetSelectedSlot();
-            if (placeSlot?.item == null || placeSlot.item.blockTypeID == 0)
+            if (placeSlot?.item == null)
+                return;
+
+            // Spawn egg logic
+            if (placeSlot.item.itemName.Equals("Wolf Spawn Egg", System.StringComparison.OrdinalIgnoreCase) ||
+                placeSlot.item.itemName.Equals("Sheep Spawn Egg", System.StringComparison.OrdinalIgnoreCase))
+            {
+                RaycastHit eggHit;
+                if (Physics.Raycast(playerCam.transform.position, playerCam.transform.forward, out eggHit, reach))
+                {
+                    bool isSheep = placeSlot.item.itemName.Equals("Sheep Spawn Egg", System.StringComparison.OrdinalIgnoreCase);
+                    GameObject spawnedGO = new GameObject(isSheep ? "Sheep_Spawned" : "Wolf_Spawned");
+                    spawnedGO.transform.position = eggHit.point + eggHit.normal * 0.1f;
+                    if (isSheep)
+                        spawnedGO.AddComponent<SheepAI>();
+                    else
+                        spawnedGO.AddComponent<WolfAI>();
+
+                    PlayerController pc = FindFirstObjectByType<PlayerController>();
+                    bool isCreative = (pc != null && pc.isCreativeMode);
+                    if (!isCreative)
+                    {
+                        placeSlot.amount--;
+                        if (placeSlot.amount <= 0)
+                        {
+                            placeSlot.item = null;
+                            Hotbar.Instance?.SetSlot(Hotbar.Instance.SelectedIndex, null, 0);
+                        }
+                        else
+                        {
+                            Hotbar.Instance?.SetSlot(Hotbar.Instance.SelectedIndex, placeSlot.item, placeSlot.amount);
+                        }
+                    }
+                }
+                return;
+            }
+
+            if (placeSlot.item.blockTypeID == 0)
                 return;
 
             byte blockType = (byte)placeSlot.item.blockTypeID;
@@ -465,6 +536,12 @@ public class PlayerInteraction : MonoBehaviour
     {
         if (VoxelWorld.Instance == null) return;
 
+        var def = BlockRegistry.GetDefinition(existing);
+        if (def != null && def.breakSound != null)
+        {
+            AudioSource.PlayClipAtPoint(def.breakSound, voxelCenter);
+        }
+
         if (existing == 21 || existing == 23)
         {
             List<Vector3Int> parts = FindConnectedWheelBlocks(gridPos);
@@ -522,6 +599,12 @@ public class PlayerInteraction : MonoBehaviour
 
     private float GetBlockHardness(byte blockType)
     {
+        var def = BlockRegistry.GetDefinition(blockType);
+        if (def != null)
+        {
+            return def.hardness;
+        }
+
         switch (blockType)
         {
             case 7:
@@ -579,40 +662,47 @@ public class PlayerInteraction : MonoBehaviour
     private float GetBreakingSpeedMultiplier(byte blockType, Item heldItem)
     {
         ToolType preferredTool = ToolType.None;
-        
-        switch (blockType)
+        var def = BlockRegistry.GetDefinition(blockType);
+        if (def != null)
         {
-            case 4:
-            case 5:
-            case 8:
-            case 34:
-                preferredTool = ToolType.Shovel;
-                break;
+            preferredTool = def.preferredTool;
+        }
+        else
+        {
+            switch (blockType)
+            {
+                case 4:
+                case 5:
+                case 8:
+                case 34:
+                    preferredTool = ToolType.Shovel;
+                    break;
 
-            case 1:
-            case 2:
-            case 36:
-            case 46:
-            case 51: // Birch Log
-            case 53: // Spruce Log
-            case 38: case 40: case 41: case 42:
-                preferredTool = ToolType.Axe;
-                break;
+                case 1:
+                case 2:
+                case 36:
+                case 46:
+                case 51: // Birch Log
+                case 53: // Spruce Log
+                case 38: case 40: case 41: case 42:
+                    preferredTool = ToolType.Axe;
+                    break;
 
-            case 3:
-            case 30:
-            case 31:
-            case 32:
-            case 33:
-            case 37:
-            case 47:
-            case 39: case 43: case 44: case 45:
-                preferredTool = ToolType.Pickaxe;
-                break;
-                
-            case 12:
-                preferredTool = ToolType.Sword;
-                break;
+                case 3:
+                case 30:
+                case 31:
+                case 32:
+                case 33:
+                case 37:
+                case 47:
+                case 39: case 43: case 44: case 45:
+                    preferredTool = ToolType.Pickaxe;
+                    break;
+                    
+                case 12:
+                    preferredTool = ToolType.Sword;
+                    break;
+            }
         }
 
         ToolType toolType = heldItem != null ? heldItem.toolType : ToolType.None;

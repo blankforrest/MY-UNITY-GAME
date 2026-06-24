@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 40; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side, furnace front unlit, furnace front lit, short grass, tall grass, propeller face, propeller side, propeller blade brass, bedrock, cactus, birch log side, birch log top, birch leaves, spruce log side, spruce log top, spruce leaves
+    public const int TILE_COUNT = 41; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side, furnace front unlit, furnace front lit, short grass, tall grass, propeller face, propeller side, propeller blade brass, bedrock, cactus, birch log side, birch log top, birch leaves, spruce log side, spruce log top, spruce leaves, diamond ore
 
     public static Texture2D Create()
     {
@@ -66,7 +66,8 @@ public static class GrassTextureGenerator
                               : tile == 36 ? BirchLeaves(lx, y)
                               : tile == 37 ? SpruceLogSide(lx, y)
                               : tile == 38 ? SpruceLogTop(lx, y)
-                                           : SpruceLeaves(lx, y);
+                              : tile == 39 ? SpruceLeaves(lx, y)
+                                           : DiamondOre(lx, y);
             }
         }
 
@@ -496,87 +497,107 @@ public static class GrassTextureGenerator
     /// <param name="blockType">1=Wood, 2=Plank, 3=Stone, 4=Grass, 5=Dirt, 6=Grass Slab, 7=Water, 8=Sand, 9=Flower</param>
     public static Vector2[] GetBlockUVs(int face, byte blockType, bool isLit = false)
     {
-        int tile;
-        if (blockType == 1)      // Wood: top/bottom uses WoodTop, sides use WoodSide
-            tile = (face == 2 || face == 3) ? 4 : 5;
-        else if (blockType == 2) // Plank: all faces planks
-            tile = 6;
-        else if (blockType == 3) // Stone: all faces stone
-            tile = 3;
-        else if (blockType == 5) // Dirt: all faces dirt
-            tile = 2;
-        else if (blockType == 7) // Water: all faces water
-            tile = 7;
-        else if (blockType == 8 || blockType == 34) // Sand: all faces sand
-            tile = 8;
-        else if (blockType == 9) // Flower: all quads use flower tile
-            tile = 9;
-        else if (blockType == 10) // Dandelion: all quads use dandelion tile
-            tile = 10;
-        else if (blockType == 11) // Iris: all quads use iris tile
-            tile = 11;
-        else if (blockType == 12) // Leaves: all faces leaves
-            tile = 12;
-        else if (blockType == 13) // Short Grass: all faces short grass
-            tile = 27;
-        else if (blockType == 14) // Tall Grass: all faces tall grass
-            tile = 28;
-        else if (blockType == 20) // Small Wheel: sides are wheel side, others are tire tread
-            tile = (face == 4 || face == 5) ? 16 : 15;
-        else if (blockType == 21 || blockType == 23) // Large Wheel & Helper: sides are wheel side, others are tire tread
-            tile = (face == 4 || face == 5) ? 17 : 15;
-        else if (blockType == 22 || blockType == 26) // Propeller / Large Propeller Block: show propeller face on front/back, propeller side on sides
-            tile = (face == 0 || face == 1) ? 29 : 30;
-        else if (blockType == 24) // Virtual Propeller Side / Hub
-            tile = 30;
-        else if (blockType == 25) // Virtual Propeller Blade
-            tile = 31;
-        else if (blockType == 50) // Control Block: front is screen, others are striped sides
-            tile = (face == 1) ? 14 : 13;
-        else if (blockType == 30) // Coal Ore
-            tile = 18;
-        else if (blockType == 31) // Iron Ore
-            tile = 19;
-        else if (blockType == 32) // Gold Block
-            tile = 20;
-        else if (blockType == 33) // Iron Block
-            tile = 21;
-        else if (blockType == 35) // Glass
-            tile = 22;
-        else if (blockType == 36) // Crafting Table
-            tile = (face == 2) ? 23   // Top
-                 : (face == 3) ? 6    // Bottom (Plank)
-                 :               24;  // Sides
-        else if (blockType == 37) // Furnace
-            tile = (face == 2 || face == 3) ? 3                      // Top / Bottom (Stone)
-                 : (isLit ? 26 : 25);                                // Sides (Furnace Front)
-        else if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42) // Wooden Stairs
-            tile = 6;                                                // Plank texture
-        else if (blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45) // Stone Stairs
-            tile = 3;                                                // Stone texture
-        else if (blockType == 46) // Wooden Slab
-            tile = 6;                                                // Plank texture
-        else if (blockType == 47) // Stone Slab
-            tile = 3;                                                // Stone texture
-        else if (blockType == 48) // Bedrock
-            tile = 32;                                               // Bedrock texture
-        else if (blockType == 49) // Cactus
-            tile = 33;
-        else if (blockType == 51) // Birch Log
-            tile = (face == 2 || face == 3) ? 35 : 34;
-        else if (blockType == 52) // Birch Leaves
-            tile = 36;
-        else if (blockType == 53) // Spruce Log
-            tile = (face == 2 || face == 3) ? 38 : 37;
-        else if (blockType == 54) // Spruce Leaves
-            tile = 39;
-        else                     // Grass (blockType == 4 or 6)
-            tile = (face == 2) ? 0   // top    → grass top
-                 : (face == 3) ? 2   // bottom → dirt
-                 :               1;  // sides  → grass side
+        int tile = -1;
 
-        float u0 = tile        / (float)TILE_COUNT;
-        float u1 = (tile + 1f) / (float)TILE_COUNT;
+        // Query the custom block registry first
+        if (BlockRegistry.GetDefinition(blockType) != null)
+        {
+            tile = BlockRegistry.GetTileIndex(blockType, face);
+        }
+
+        // If not a custom block (or not registered yet), use the hardcoded base game logic
+        if (tile == -1)
+        {
+            if (blockType == 1)      // Wood: top/bottom uses WoodTop, sides use WoodSide
+                tile = (face == 2 || face == 3) ? 4 : 5;
+            else if (blockType == 2) // Plank: all faces planks
+                tile = 6;
+            else if (blockType == 3) // Stone: all faces stone
+                tile = 3;
+            else if (blockType == 5) // Dirt: all faces dirt
+                tile = 2;
+            else if (blockType == 7) // Water: all faces water
+                tile = 7;
+            else if (blockType == 8 || blockType == 34) // Sand: all faces sand
+                tile = 8;
+            else if (blockType == 9) // Flower: all quads use flower tile
+                tile = 9;
+            else if (blockType == 10) // Dandelion: all quads use dandelion tile
+                tile = 10;
+            else if (blockType == 11) // Iris: all quads use iris tile
+                tile = 11;
+            else if (blockType == 12) // Leaves: all faces leaves
+                tile = 12;
+            else if (blockType == 13) // Short Grass: all faces short grass
+                tile = 27;
+            else if (blockType == 14) // Tall Grass: all faces tall grass
+                tile = 28;
+            else if (blockType == 20) // Small Wheel: sides are wheel side, others are tire tread
+                tile = (face == 4 || face == 5) ? 16 : 15;
+            else if (blockType == 21 || blockType == 23) // Large Wheel & Helper: sides are wheel side, others are tire tread
+                tile = (face == 4 || face == 5) ? 17 : 15;
+            else if (blockType == 22 || blockType == 26) // Propeller / Large Propeller Block: show propeller face on front/back, propeller side on sides
+                tile = (face == 0 || face == 1) ? 29 : 30;
+            else if (blockType == 24) // Virtual Propeller Side / Hub
+                tile = 30;
+            else if (blockType == 25) // Virtual Propeller Blade
+                tile = 31;
+            else if (blockType == 50) // Control Block: front is screen, others are striped sides
+                tile = (face == 1) ? 14 : 13;
+            else if (blockType == 30) // Coal Ore
+                tile = 18;
+            else if (blockType == 31) // Iron Ore
+                tile = 19;
+            else if (blockType == 32) // Gold Block
+                tile = 20;
+            else if (blockType == 33) // Iron Block
+                tile = 21;
+            else if (blockType == 35) // Glass
+                tile = 22;
+            else if (blockType == 36) // Crafting Table
+                tile = (face == 2) ? 23   // Top
+                     : (face == 3) ? 6    // Bottom (Plank)
+                     :               24;  // Sides
+            else if (blockType == 37) // Furnace
+                tile = (face == 2 || face == 3) ? 3                      // Top / Bottom (Stone)
+                     : (isLit ? 26 : 25);                                // Sides (Furnace Front)
+            else if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42) // Wooden Stairs
+                tile = 6;                                                // Plank texture
+            else if (blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45) // Stone Stairs
+                tile = 3;                                                // Stone texture
+            else if (blockType == 46) // Wooden Slab
+                tile = 6;                                                // Plank texture
+            else if (blockType == 47) // Stone Slab
+                tile = 3;                                                // Stone texture
+            else if (blockType == 48) // Bedrock
+                tile = 32;                                               // Bedrock texture
+            else if (blockType == 49) // Cactus
+                tile = 33;
+            else if (blockType == 51) // Birch Log
+                tile = (face == 2 || face == 3) ? 35 : 34;
+            else if (blockType == 52) // Birch Leaves
+                tile = 36;
+            else if (blockType == 53) // Spruce Log
+                tile = (face == 2 || face == 3) ? 38 : 37;
+            else if (blockType == 54) // Spruce Leaves
+                tile = 39;
+            else if (blockType == 55) // Diamond Ore
+                tile = 40;
+            else                     // Grass (blockType == 4 or 6)
+                tile = (face == 2) ? 0   // top    → grass top
+                     : (face == 3) ? 2   // bottom → dirt
+                     :               1;  // sides  → grass side
+        }
+
+        // Dynamically compute atlas divisions based on registered custom blocks
+        int totalCount = TILE_COUNT;
+        if (BlockRegistry.RegisteredBlocks != null)
+        {
+            totalCount += BlockRegistry.RegisteredBlocks.Count * 3;
+        }
+
+        float u0 = tile        / (float)totalCount;
+        float u1 = (tile + 1f) / (float)totalCount;
 
         return new Vector2[]
         {
@@ -835,8 +856,16 @@ public static class GrassTextureGenerator
             case 26: return FurnaceFront(lx, ly, true);
             case 27: return ShortGrass(lx, ly);
             case 28: return TallGrass(lx, ly);
-            case 29: return PropellerFace(lx, ly);
-            case 30: return PropellerSide(lx, ly);
+            case 31: return PropellerBladeColor(lx, ly);
+            case 32: return Bedrock(lx, ly);
+            case 33: return Cactus(lx, ly);
+            case 34: return BirchLogSide(lx, ly);
+            case 35: return BirchLogTop(lx, ly);
+            case 36: return BirchLeaves(lx, ly);
+            case 37: return SpruceLogSide(lx, ly);
+            case 38: return SpruceLogTop(lx, ly);
+            case 39: return SpruceLeaves(lx, ly);
+            case 40: return DiamondOre(lx, ly);
             default: return Color.clear;
         }
     }
@@ -1115,5 +1144,17 @@ public static class GrassTextureGenerator
 
         float t = n * 0.6f + n2 * 0.4f;
         return Color.Lerp(darkPine, lightPine, t);
+    }
+
+    static Color DiamondOre(int x, int y)
+    {
+        Color baseCol = Stone(x, y);
+        float n = Mathf.PerlinNoise(x * 1.5f + 130f, y * 1.5f + 140f);
+        bool isDiamond = n > 0.65f && (x + y) % 3 != 0;
+        if (isDiamond)
+        {
+            return new Color(0.20f, 0.85f, 0.88f); // diamond cyan
+        }
+        return baseCol;
     }
 }

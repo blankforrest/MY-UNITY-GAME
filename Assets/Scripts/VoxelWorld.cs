@@ -21,9 +21,16 @@ public class VoxelWorld : MonoBehaviour
     private Vector2                    lastChunk  = new Vector2(int.MinValue, 0);
     private ChunkCuller                culler;
 
+    private Queue<Chunk> rebuildQueue = new Queue<Chunk>();
+    private HashSet<Chunk> rebuildQueueSet = new HashSet<Chunk>();
+
     [Header("Block Drops")]
     [Tooltip("Index = block ID. Assign Item asset for each droppable block.")]
     public Item[] blockDrops;
+
+    [Header("Block Database")]
+    [Tooltip("Centralized database asset for configuring all blocks (default and custom).")]
+    public BlockDatabase blockDatabase;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -37,10 +44,24 @@ public class VoxelWorld : MonoBehaviour
 
     void InitializeMaterials()
     {
-        // Apply procedurally generated grass texture atlas
+        // 1. Initialize the custom block definitions registry
+        if (blockDatabase != null && blockDatabase.blocks != null)
+        {
+            BlockRegistry.Initialize(blockDatabase.blocks);
+        }
+        else
+        {
+            BlockRegistry.Initialize(new List<BlockDefinition>());
+        }
+
+        // 2. Apply procedurally generated grass texture atlas
         Texture2D grassAtlas = GrassTextureGenerator.Create();
-        // Re-bake atlas as RGBA32 so magenta key pixels become alpha=0
-        Texture2D rgbaAtlas = ConvertFlowerAtlasToRGBA(grassAtlas);
+
+        // 3. Append custom block textures dynamically
+        Texture2D expandedAtlas = AppendCustomTextures(grassAtlas);
+
+        // 4. Re-bake atlas as RGBA32 so magenta key pixels become alpha=0
+        Texture2D rgbaAtlas = ConvertFlowerAtlasToRGBA(expandedAtlas);
 
         // Auto-find material
         if (chunkMaterial == null)
@@ -273,20 +294,76 @@ public class VoxelWorld : MonoBehaviour
             for (int z = -3; z <= 3; z++)
                 CreateChunk(start + new Vector2(x, z));
 
+        ProcessAllDirtyChunksImmediately();
+
         lastChunk = start;
         StartCoroutine(ChunkStreamLoop());
+
+        // Enable mob spawning
+        gameObject.AddComponent<WolfSpawner>();
+        gameObject.AddComponent<SheepSpawner>();
     }
 
     void Update()
     {
-        if (playerTransform == null) return;
+        if (playerTransform == null)
+        {
+            ProcessRebuildQueue(2);
+            return;
+        }
 
         Vector2 current = PlayerChunkCoord();
-        if (current == lastChunk) return;
+        if (current != lastChunk)
+        {
+            lastChunk = current;
+            EnqueueChunksAround(current);
+            UnloadDistant(current);
+        }
 
-        lastChunk = current;
-        EnqueueChunksAround(current);
-        UnloadDistant(current);
+        ProcessRebuildQueue(2);
+    }
+
+    public void RegisterDirtyChunk(Chunk chunk)
+    {
+        if (chunk == null) return;
+        if (rebuildQueueSet.Add(chunk))
+        {
+            rebuildQueue.Enqueue(chunk);
+        }
+    }
+
+    private void ProcessRebuildQueue(int maxCount)
+    {
+        int processed = 0;
+        while (rebuildQueue.Count > 0 && processed < maxCount)
+        {
+            Chunk chunk = rebuildQueue.Dequeue();
+            if (chunk != null)
+            {
+                rebuildQueueSet.Remove(chunk);
+                if (chunk.isDirty)
+                {
+                    chunk.UpdateChunk();
+                    processed++;
+                }
+            }
+        }
+    }
+
+    public void ProcessAllDirtyChunksImmediately()
+    {
+        while (rebuildQueue.Count > 0)
+        {
+            Chunk chunk = rebuildQueue.Dequeue();
+            if (chunk != null)
+            {
+                rebuildQueueSet.Remove(chunk);
+                if (chunk.isDirty)
+                {
+                    chunk.UpdateChunk();
+                }
+            }
+        }
     }
 
     public void RefreshRenderDistance(int newDistance)
@@ -424,9 +501,36 @@ public class VoxelWorld : MonoBehaviour
         if (blockID == 0 && !suppressDrop)
         {
             byte existing = chunk.GetVoxel(lx, ly, lz);
-            if (existing != 0 && (existing <= 14 || existing == 20 || existing == 21 || existing == 22 || existing == 23 || existing == 26 || existing == 27 || existing == 50 || existing == 36 || (existing >= 30 && existing <= 47)))
+            bool isCustomBlock = (BlockRegistry.GetDefinition(existing) != null);
+            if (existing != 0 && (existing <= 14 || existing == 20 || existing == 21 || existing == 22 || existing == 23 || existing == 26 || existing == 27 || existing == 50 || existing == 36 || (existing >= 30 && existing <= 47) || isCustomBlock))
             {
                 Item drop = null;
+
+                if (isCustomBlock)
+                {
+                    var def = BlockRegistry.GetDefinition(existing);
+                    bool requiresPickaxe = (def.preferredTool == ToolType.Pickaxe);
+                    InventorySlot customSlot = Hotbar.Instance != null ? Hotbar.Instance.GetSelectedSlot() : null;
+                    Item customHeld = customSlot?.item;
+                    bool hasPick = (customHeld != null && customHeld.toolType == ToolType.Pickaxe);
+
+                    if (requiresPickaxe && !hasPick)
+                    {
+                        drop = null;
+                    }
+                    else
+                    {
+                        drop = def.dropItem;
+                        // Fallback: if dropItem is null but it's a solid custom block, we can create a temporary block item so it doesn't drop nothing by accident
+                        if (drop == null)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = def.blockName;
+                            drop.blockTypeID = def.blockID;
+                            drop.icon = def.inventoryIcon;
+                        }
+                    }
+                }
 
                 // Force custom item generation for vehicle components to avoid inspector misconfigurations
                 if (existing == 20)
@@ -471,7 +575,7 @@ public class VoxelWorld : MonoBehaviour
                 }
 
                 // Pickaxe requirement check
-                bool isPickaxeRequired = (existing == 3 || existing == 30 || existing == 31 || existing == 32 || existing == 33 || existing == 37 || existing == 47 || existing == 39 || existing == 43 || existing == 44 || existing == 45);
+                bool isPickaxeRequired = (existing == 3 || existing == 30 || existing == 31 || existing == 32 || existing == 33 || existing == 37 || existing == 47 || existing == 39 || existing == 43 || existing == 44 || existing == 45 || existing == 55);
                 InventorySlot selectedSlot = Hotbar.Instance != null ? Hotbar.Instance.GetSelectedSlot() : null;
                 Item heldItem = selectedSlot?.item;
                 bool hasPickaxe = (heldItem != null && heldItem.toolType == ToolType.Pickaxe);
@@ -555,10 +659,13 @@ public class VoxelWorld : MonoBehaviour
                         }
                         else
                         {
-                            drop = ScriptableObject.CreateInstance<Item>();
-                            drop.itemName = "Coal Ore";
-                            drop.blockTypeID = 30;
-                            drop.icon = StarterItems.MakeBlockIcon(new Color(0.2f, 0.2f, 0.2f), 30);
+                            drop = Inventory.Instance != null ? Inventory.Instance.CreateItem("Coal Chunk", 0) : null;
+                            if (drop == null)
+                            {
+                                drop = ScriptableObject.CreateInstance<Item>();
+                                drop.itemName = "Coal Chunk";
+                                drop.blockTypeID = 0;
+                            }
                         }
                     }
                     else if (existing == 31)
@@ -567,6 +674,16 @@ public class VoxelWorld : MonoBehaviour
                         drop.itemName = "Iron Ore";
                         drop.blockTypeID = 31;
                         drop.icon = StarterItems.MakeBlockIcon(new Color(0.85f, 0.65f, 0.52f), 31);
+                    }
+                    else if (existing == 55) // Diamond Ore
+                    {
+                        drop = Inventory.Instance != null ? Inventory.Instance.CreateItem("Diamond", 0) : null;
+                        if (drop == null)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Diamond";
+                            drop.blockTypeID = 0;
+                        }
                     }
                     else if (existing == 32)
                     {
@@ -714,6 +831,26 @@ public class VoxelWorld : MonoBehaviour
                 if (drop != null) DroppedItem.Spawn(drop, 1, pos, existing);
             }
         }
+        if (blockID != 0)
+        {
+            var def = BlockRegistry.GetDefinition(blockID);
+            if (def != null)
+            {
+                if (def.placeSound != null)
+                {
+                    AudioSource.PlayClipAtPoint(def.placeSound, pos + new Vector3(0.5f, 0.5f, 0.5f));
+                }
+                if (def.emitsLight && def.lightLevel > 0)
+                {
+                    BlockRegistry.AddLight(pos, def.lightLevel);
+                }
+            }
+        }
+        else
+        {
+            BlockRegistry.RemoveLight(pos);
+        }
+
         chunk.EditVoxel(local, blockID);
         UpdateNeighbors(local, chunk.chunkPos);
 
@@ -732,6 +869,210 @@ public class VoxelWorld : MonoBehaviour
                 ModifyBlock(abovePos, 0);
             }
         }
+    }
+
+    private Texture2D AppendCustomTextures(Texture2D baseAtlas)
+    {
+        int baseWidth = baseAtlas.width;
+        int baseHeight = baseAtlas.height;
+        int tileSize = GrassTextureGenerator.TILE_SIZE;
+        int baseTilesCount = baseWidth / tileSize;
+
+        // Find how many custom textures we actually need to append
+        List<Texture2D> texturesToAppend = new List<Texture2D>();
+        
+        // Dictionary to store the assigned tile index for each texture asset
+        Dictionary<Texture2D, int> textureTileIndices = new Dictionary<Texture2D, int>();
+
+        int customCount = BlockRegistry.RegisteredBlocks.Count;
+        if (customCount == 0) return baseAtlas;
+        
+        // First pass: collect all unique non-null textures to append
+        for (int i = 0; i < customCount; i++)
+        {
+            BlockDefinition def = BlockRegistry.RegisteredBlocks[i];
+            if (def.textureTop != null && !textureTileIndices.ContainsKey(def.textureTop))
+            {
+                textureTileIndices[def.textureTop] = -1;
+                texturesToAppend.Add(def.textureTop);
+            }
+            if (def.textureSide != null && !textureTileIndices.ContainsKey(def.textureSide))
+            {
+                textureTileIndices[def.textureSide] = -1;
+                texturesToAppend.Add(def.textureSide);
+            }
+            if (def.textureBottom != null && !textureTileIndices.ContainsKey(def.textureBottom))
+            {
+                textureTileIndices[def.textureBottom] = -1;
+                texturesToAppend.Add(def.textureBottom);
+            }
+        }
+
+        int extraTiles = texturesToAppend.Count;
+        if (extraTiles == 0)
+        {
+            // Even if no new textures are appended, we still need to register faces for custom blocks (ID >= 60)
+            // using default tiles so they don't render black/pink
+            for (int i = 0; i < customCount; i++)
+            {
+                BlockDefinition def = BlockRegistry.RegisteredBlocks[i];
+                if (def.blockID >= 60)
+                {
+                    int topTile = GetDefaultTileIndex(def.blockID, 2);
+                    int sideTile = GetDefaultTileIndex(def.blockID, 1);
+                    int bottomTile = GetDefaultTileIndex(def.blockID, 3);
+                    BlockRegistry.RegisterFaceTiles(def.blockID, topTile, sideTile, bottomTile);
+                }
+            }
+            return baseAtlas;
+        }
+
+        int newWidth = baseWidth + extraTiles * tileSize;
+
+        Texture2D expandedAtlas = new Texture2D(newWidth, baseHeight, TextureFormat.RGBA32, false);
+        expandedAtlas.filterMode = FilterMode.Point;
+        expandedAtlas.wrapMode = TextureWrapMode.Clamp;
+
+        // Copy the base atlas pixels first
+        Color[] basePixels = baseAtlas.GetPixels();
+        expandedAtlas.SetPixels(0, 0, baseWidth, baseHeight, basePixels);
+
+        // Copy and assign tile indices
+        for (int i = 0; i < texturesToAppend.Count; i++)
+        {
+            Texture2D tex = texturesToAppend[i];
+            int tileIndex = baseTilesCount + i;
+            textureTileIndices[tex] = tileIndex;
+
+            Color[] px = GetResizedPixels(tex);
+            expandedAtlas.SetPixels(tileIndex * tileSize, 0, tileSize, tileSize, px);
+        }
+
+        // Second pass: register face tiles for blocks
+        for (int i = 0; i < customCount; i++)
+        {
+            BlockDefinition def = BlockRegistry.RegisteredBlocks[i];
+            
+            // Check if this block overrides any textures or is a custom block
+            bool hasCustom = (def.textureTop != null || def.textureSide != null || def.textureBottom != null);
+            if (hasCustom || def.blockID >= 60)
+            {
+                int topTile = def.textureTop != null ? textureTileIndices[def.textureTop] : GetDefaultTileIndex(def.blockID, 2);
+                int sideTile = def.textureSide != null ? textureTileIndices[def.textureSide] : GetDefaultTileIndex(def.blockID, 1);
+                int bottomTile = def.textureBottom != null ? textureTileIndices[def.textureBottom] : GetDefaultTileIndex(def.blockID, 3);
+
+                BlockRegistry.RegisterFaceTiles(def.blockID, topTile, sideTile, bottomTile);
+            }
+        }
+
+        expandedAtlas.Apply();
+        return expandedAtlas;
+    }
+
+    private int GetDefaultTileIndex(byte blockID, int face)
+    {
+        // Maps block face to default hardcoded atlas tile index
+        if (blockID == 1)      // Wood
+            return (face == 2 || face == 3) ? 4 : 5;
+        if (blockID == 2)      // Plank
+            return 6;
+        if (blockID == 3)      // Stone
+            return 3;
+        if (blockID == 5)      // Dirt
+            return 2;
+        if (blockID == 7)      // Water
+            return 7;
+        if (blockID == 8 || blockID == 34) // Sand
+            return 8;
+        if (blockID == 9)      // Flower
+            return 9;
+        if (blockID == 10)     // Dandelion
+            return 10;
+        if (blockID == 11)     // Iris
+            return 11;
+        if (blockID == 12)     // Leaves
+            return 12;
+        if (blockID == 13)     // Short Grass
+            return 27;
+        if (blockID == 14)     // Tall Grass
+            return 28;
+        if (blockID == 20)     // Small Wheel
+            return (face == 4 || face == 5) ? 16 : 15;
+        if (blockID == 21 || blockID == 23) // Large Wheel
+            return (face == 4 || face == 5) ? 17 : 15;
+        if (blockID == 22 || blockID == 26) // Propeller
+            return (face == 0 || face == 1) ? 29 : 30;
+        if (blockID == 24)     // Propeller Casing
+            return 30;
+        if (blockID == 25)     // Propeller Blade
+            return 31;
+        if (blockID == 50)     // Control Block
+            return (face == 1) ? 14 : 13;
+        if (blockID == 30)     // Coal Ore
+            return 18;
+        if (blockID == 31)     // Iron Ore
+            return 19;
+        if (blockID == 32)     // Gold Block
+            return 20;
+        if (blockID == 33)     // Iron Block
+            return 21;
+        if (blockID == 35)     // Glass
+            return 22;
+        if (blockID == 36)     // Crafting Table
+            return (face == 2) ? 23 : (face == 3) ? 6 : 24;
+        if (blockID == 37)     // Furnace
+            return (face == 2 || face == 3) ? 3 : 25; // default unlit front
+        if (blockID == 38 || blockID == 40 || blockID == 41 || blockID == 42) // Wooden Stairs
+            return 6;
+        if (blockID == 39 || blockID == 43 || blockID == 44 || blockID == 45) // Stone Stairs
+            return 3;
+        if (blockID == 46)     // Wooden Slab
+            return 6;
+        if (blockID == 47)     // Stone Slab
+            return 3;
+        if (blockID == 48)     // Bedrock
+            return 32;
+        if (blockID == 49)     // Cactus
+            return 33;
+        if (blockID == 51)     // Birch Log
+            return (face == 2 || face == 3) ? 35 : 34;
+        if (blockID == 52)     // Birch Leaves
+            return 36;
+        if (blockID == 53)     // Spruce Log
+            return (face == 2 || face == 3) ? 38 : 37;
+        if (blockID == 54)     // Spruce Leaves
+            return 39;
+        if (blockID == 55)     // Diamond Ore
+            return 40;
+        
+        // Grass (ID 4 or 6)
+        return (face == 2) ? 0 : (face == 3) ? 2 : 1;
+    }
+
+    private Color[] GetResizedPixels(Texture2D tex)
+    {
+        int tileSize = GrassTextureGenerator.TILE_SIZE;
+        Color[] colors = new Color[tileSize * tileSize];
+        if (tex == null)
+        {
+            // Fallback to magenta if texture is missing
+            for (int i = 0; i < colors.Length; i++) colors[i] = Color.magenta;
+            return colors;
+        }
+
+        // Nearest-neighbor scaling for pixel art crispness
+        for (int y = 0; y < tileSize; y++)
+        {
+            float v = (float)y / (tileSize - 1);
+            int srcY = Mathf.Clamp(Mathf.RoundToInt(v * (tex.height - 1)), 0, tex.height - 1);
+            for (int x = 0; x < tileSize; x++)
+            {
+                float u = (float)x / (tileSize - 1);
+                int srcX = Mathf.Clamp(Mathf.RoundToInt(u * (tex.width - 1)), 0, tex.width - 1);
+                colors[y * tileSize + x] = tex.GetPixel(srcX, srcY);
+            }
+        }
+        return colors;
     }
 
     private static Sprite _cachedRoseIcon;
@@ -983,5 +1324,6 @@ public class VoxelWorld : MonoBehaviour
                 kvp.Value.Initialize(kvp.Key, chunkMaterial);
             }
         }
+        ProcessAllDirtyChunksImmediately();
     }
 }

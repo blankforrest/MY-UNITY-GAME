@@ -16,6 +16,31 @@ public class Chunk : MonoBehaviour
     public Vector2 chunkPos { get; private set; }
     private bool renderersEnabled = true;
 
+    private int maxVoxelHeight = 0;
+
+    private bool _isDirty = false;
+    public bool isDirty
+    {
+        get => _isDirty;
+        set
+        {
+            if (_isDirty != value)
+            {
+                _isDirty = value;
+                if (_isDirty && VoxelWorld.Instance != null)
+                {
+                    VoxelWorld.Instance.RegisterDirtyChunk(this);
+                }
+            }
+        }
+    }
+
+    // Cached neighbor references to avoid dictionary lookups on boundaries
+    private Chunk neighborNorth;
+    private Chunk neighborSouth;
+    private Chunk neighborEast;
+    private Chunk neighborWest;
+
     int vertexIndex = 0;
     List<Vector3> vertices = new List<Vector3>(4096);
     List<int> triangles = new List<int>(6144);
@@ -60,7 +85,11 @@ public class Chunk : MonoBehaviour
         meshRenderer.material = mat;
 
         PopulateVoxelMap();
-        UpdateChunk();
+
+        // Resolve neighboring chunks references
+        ResolveNeighbors();
+
+        isDirty = true;
 
         if (ChunkCuller.Instance != null)
         {
@@ -80,6 +109,87 @@ public class Chunk : MonoBehaviour
         {
             ChunkCuller.Instance.UnregisterChunk(this);
         }
+
+        ClearNeighborReferences();
+    }
+
+    private void ResolveNeighbors()
+    {
+        if (VoxelWorld.Instance == null) return;
+
+        neighborEast  = VoxelWorld.Instance.GetChunkFromChunkPos(new Vector2(chunkPos.x + 1, chunkPos.y));
+        neighborWest  = VoxelWorld.Instance.GetChunkFromChunkPos(new Vector2(chunkPos.x - 1, chunkPos.y));
+        neighborNorth = VoxelWorld.Instance.GetChunkFromChunkPos(new Vector2(chunkPos.x, chunkPos.y + 1));
+        neighborSouth = VoxelWorld.Instance.GetChunkFromChunkPos(new Vector2(chunkPos.x, chunkPos.y - 1));
+
+        if (neighborEast != null) neighborEast.neighborWest = this;
+        if (neighborWest != null) neighborWest.neighborEast = this;
+        if (neighborNorth != null) neighborNorth.neighborSouth = this;
+        if (neighborSouth != null) neighborSouth.neighborNorth = this;
+    }
+
+    private void ClearNeighborReferences()
+    {
+        if (neighborEast != null) neighborEast.neighborWest = null;
+        if (neighborWest != null) neighborWest.neighborEast = null;
+        if (neighborNorth != null) neighborNorth.neighborSouth = null;
+        if (neighborSouth != null) neighborSouth.neighborNorth = null;
+    }
+
+    private void RecalculateMaxVoxelHeight()
+    {
+        maxVoxelHeight = 0;
+        for (int y = VoxelData.ChunkHeight - 1; y >= 0; y--)
+        {
+            for (int x = 0; x < VoxelData.ChunkWidth; x++)
+            {
+                for (int z = 0; z < VoxelData.ChunkWidth; z++)
+                {
+                    if (voxelMap[x, y, z] != 0)
+                    {
+                        maxVoxelHeight = y;
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    private byte GetVoxelFromNeighborOrWorld(int x, int y, int z, Vector3 worldPosFallback)
+    {
+        if (x >= 0 && x < VoxelData.ChunkWidth && y >= 0 && y < VoxelData.ChunkHeight && z >= 0 && z < VoxelData.ChunkWidth)
+        {
+            return voxelMap[x, y, z];
+        }
+
+        if (y < 0 || y >= VoxelData.ChunkHeight)
+        {
+            return 0;
+        }
+
+        if (x < 0)
+        {
+            if (neighborWest != null) return neighborWest.voxelMap[x + VoxelData.ChunkWidth, y, z];
+        }
+        else if (x >= VoxelData.ChunkWidth)
+        {
+            if (neighborEast != null) return neighborEast.voxelMap[x - VoxelData.ChunkWidth, y, z];
+        }
+        else if (z < 0)
+        {
+            if (neighborSouth != null) return neighborSouth.voxelMap[x, y, z + VoxelData.ChunkWidth];
+        }
+        else if (z >= VoxelData.ChunkWidth)
+        {
+            if (neighborNorth != null) return neighborNorth.voxelMap[x, y, z - VoxelData.ChunkWidth];
+        }
+
+        if (VoxelWorld.Instance != null)
+        {
+            return VoxelWorld.Instance.GetBlock(worldPosFallback);
+        }
+
+        return 0;
     }
 
     public void SetRenderersEnabled(bool enabled)
@@ -99,7 +209,7 @@ public class Chunk : MonoBehaviour
             Chunk neighbor = VoxelWorld.Instance.GetChunkFromChunkPos(pos);
             if (neighbor != null)
             {
-                neighbor.UpdateChunk();
+                neighbor.isDirty = true;
             }
         }
     }
@@ -215,6 +325,8 @@ public class Chunk : MonoBehaviour
         {
             SaveLoadManager.Instance.ApplyChunkModifications(chunkPos, voxelMap);
         }
+
+        RecalculateMaxVoxelHeight();
     }
 
     [BurstCompile]
@@ -729,6 +841,7 @@ public class Chunk : MonoBehaviour
         if (IsVoxelInChunk(x, y, z))
         {
             voxelMap[x, y, z] = newID;
+            RecalculateMaxVoxelHeight();
             UpdateChunk();
         }
     }
@@ -753,13 +866,15 @@ public class Chunk : MonoBehaviour
     {
         ClearMeshData();
 
-        for (int y = 0; y < VoxelData.ChunkHeight; y++)
+        int scanHeight = Mathf.Min(VoxelData.ChunkHeight, maxVoxelHeight + 1);
+        for (int y = 0; y < scanHeight; y++)
             for (int x = 0; x < VoxelData.ChunkWidth; x++)
                 for (int z = 0; z < VoxelData.ChunkWidth; z++)
                     if (voxelMap[x, y, z] != 0)
                         UpdateVoxelMeshData(new Vector3(x, y, z), voxelMap[x, y, z]);
 
         CreateMesh();
+        _isDirty = false;
     }
 
     void ClearMeshData()
@@ -1120,16 +1235,7 @@ public class Chunk : MonoBehaviour
             int ny = Mathf.FloorToInt(neighborPos.y);
             int nz = Mathf.FloorToInt(neighborPos.z);
 
-            byte neighbor = 0;
-            if (!IsVoxelInChunk(nx, ny, nz))
-            {
-                if (VoxelWorld.Instance != null)
-                    neighbor = VoxelWorld.Instance.GetBlock(neighborPos + transform.position);
-            }
-            else
-            {
-                neighbor = voxelMap[nx, ny, nz];
-            }
+            byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz, neighborPos + transform.position);
 
             // Skip face if neighbour is another leaves block (cull) or any solid block
             if (neighbor == 12) continue;  // adjacent leaves cull each other
@@ -1250,16 +1356,7 @@ public class Chunk : MonoBehaviour
         int ny = Mathf.FloorToInt(neighborPos.y);
         int nz = Mathf.FloorToInt(neighborPos.z);
 
-        byte neighbor = 0;
-        if (!IsVoxelInChunk(nx, ny, nz))
-        {
-            if (VoxelWorld.Instance != null)
-                neighbor = VoxelWorld.Instance.GetBlock(neighborPos + transform.position);
-        }
-        else
-        {
-            neighbor = voxelMap[nx, ny, nz];
-        }
+        byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz, neighborPos + transform.position);
 
         return neighbor != 0 && neighbor != 7 && neighbor != 9 && neighbor != 10 && neighbor != 11 && neighbor != 13 && neighbor != 14 && neighbor != 23 && neighbor != 27;
     }
@@ -1527,16 +1624,7 @@ public class Chunk : MonoBehaviour
             int ny = Mathf.FloorToInt(neighborPos.y);
             int nz = Mathf.FloorToInt(neighborPos.z);
 
-            byte neighbor = 0;
-            if (!IsVoxelInChunk(nx, ny, nz))
-            {
-                if (VoxelWorld.Instance != null)
-                    neighbor = VoxelWorld.Instance.GetBlock(neighborPos + transform.position);
-            }
-            else
-            {
-                neighbor = voxelMap[nx, ny, nz];
-            }
+            byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz, neighborPos + transform.position);
 
             // Cull face against: same glass=35 (cull), fully-solid blocks (cull)
             // Show face against: air (0), water (7), flowers (9-11), leaves (12)
@@ -1584,28 +1672,28 @@ public class Chunk : MonoBehaviour
         int y = Mathf.FloorToInt(neighborPos.y);
         int z = Mathf.FloorToInt(neighborPos.z);
 
-        byte neighbor = 0;
-
-        if (!IsVoxelInChunk(x, y, z))
-        {
-            if (VoxelWorld.Instance != null)
-                neighbor = VoxelWorld.Instance.GetBlock(neighborPos + transform.position);
-        }
-        else
-        {
-            neighbor = voxelMap[x, y, z];
-        }
+        byte neighbor = GetVoxelFromNeighborOrWorld(x, y, z, neighborPos + transform.position);
 
         if (neighbor == 0) return false;
 
         bool currentIsWater  = (currentBlockType == 7);
         bool neighborIsWater = (neighbor == 7);
+
+        // Check if neighbor is a custom transparent block
+        bool neighborIsTransparentBlock = false;
+        var def = BlockRegistry.GetDefinition(neighbor);
+        if (def != null)
+        {
+            neighborIsTransparentBlock = def.isTransparent;
+        }
+
         // Flowers, leaves, glass (ID 35), and stairs are transparent — treat like air for solid-mesh culling purposes
         bool neighborIsFlower = (neighbor == 9 || neighbor == 10 || neighbor == 11 || neighbor == 12 || neighbor == 35 ||
                                  neighbor == 13 || neighbor == 14 ||
                                  neighbor == 38 || neighbor == 40 || neighbor == 41 || neighbor == 42 ||
                                  neighbor == 39 || neighbor == 43 || neighbor == 44 || neighbor == 45 ||
-                                 neighbor == 46 || neighbor == 47 || neighbor == 22 || neighbor == 26 || neighbor == 27);
+                                 neighbor == 46 || neighbor == 47 || neighbor == 22 || neighbor == 26 || neighbor == 27 ||
+                                 neighborIsTransparentBlock);
 
         if (currentIsWater)
         {

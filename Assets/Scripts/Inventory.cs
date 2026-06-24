@@ -600,6 +600,22 @@ public class Inventory : MonoBehaviour
         {
             item.itemID = 99;
         }
+        else if (itemName.Equals("Wolf Spawn Egg", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.itemID = 98;
+        }
+        else if (itemName.Equals("Coal Chunk", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.itemID = 97;
+        }
+        else if (itemName.Equals("Iron Ingot", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.itemID = 96;
+        }
+        else if (itemName.Equals("Sheep Spawn Egg", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.itemID = 95;
+        }
 
         // Parse tool characteristics
         ToolType tType;
@@ -675,6 +691,22 @@ public class Inventory : MonoBehaviour
                 Sprite wrenchLoaded = Resources.Load<Sprite>("WrenchIcon");
                 sprite = (wrenchLoaded != null) ? wrenchLoaded : StarterItems.MakeBlockIcon(new Color(0.75f, 0.75f, 0.75f));
             }
+            else if (itemName.Equals("Wolf Spawn Egg", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = CreateWolfSpawnEggIcon();
+            }
+            else if (itemName.Equals("Sheep Spawn Egg", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = CreateSheepSpawnEggIcon();
+            }
+            else if (itemName.Equals("Coal Chunk", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = CreateCoalChunkIcon();
+            }
+            else if (itemName.Equals("Iron Ingot", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = CreateIronIngotIcon();
+            }
             else if (itemName == "Iron")
                 sprite = StarterItems.MakeBlockIcon(new Color(0.85f, 0.85f, 0.85f));
             else if (blockTypeID != 0)
@@ -734,6 +766,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Spruce Leaves", 54, 64));
             items.Add(new CreativeItemData("Coal Ore", 30, 64));
             items.Add(new CreativeItemData("Iron Ore", 31, 64));
+            items.Add(new CreativeItemData("Diamond Ore", 55, 64));
             items.Add(new CreativeItemData("Crafting Table", 36, 64));
             items.Add(new CreativeItemData("Furnace", 37, 64));
             items.Add(new CreativeItemData("Wooden Stairs", 38, 64));
@@ -763,6 +796,10 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Wooden Sword", 0, 1));
             items.Add(new CreativeItemData("Wooden Rake", 0, 1));
             items.Add(new CreativeItemData("Wrench", 0, 1));
+            items.Add(new CreativeItemData("Wolf Spawn Egg", 0, 64));
+            items.Add(new CreativeItemData("Sheep Spawn Egg", 0, 64));
+            items.Add(new CreativeItemData("Coal Chunk", 0, 64));
+            items.Add(new CreativeItemData("Iron Ingot", 0, 64));
             items.Add(new CreativeItemData("Iron", 0, 64));
             items.Add(new CreativeItemData("Diamond", 0, 64));
             items.Add(new CreativeItemData("Stick", 0, 64));
@@ -802,6 +839,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Spruce Leaves", 54, 64));
             items.Add(new CreativeItemData("Coal Ore", 30, 64));
             items.Add(new CreativeItemData("Iron Ore", 31, 64));
+            items.Add(new CreativeItemData("Diamond Ore", 55, 64));
             items.Add(new CreativeItemData("Crafting Table", 36, 64));
             items.Add(new CreativeItemData("Furnace", 37, 64));
             items.Add(new CreativeItemData("Wooden Stairs", 38, 64));
@@ -837,6 +875,10 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Wooden Rake", 0, 1));
             // Wrench, materials
             items.Add(new CreativeItemData("Wrench", 0, 1));
+            items.Add(new CreativeItemData("Wolf Spawn Egg", 0, 64));
+            items.Add(new CreativeItemData("Sheep Spawn Egg", 0, 64));
+            items.Add(new CreativeItemData("Coal Chunk", 0, 64));
+            items.Add(new CreativeItemData("Iron Ingot", 0, 64));
             items.Add(new CreativeItemData("Iron", 0, 64));
             items.Add(new CreativeItemData("Diamond", 0, 64));
         }
@@ -858,6 +900,11 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Dandelion", 10, 64));
             items.Add(new CreativeItemData("Iris", 11, 64));
             items.Add(new CreativeItemData("Apple", 0, 64));
+        }
+        else if (category == "SPAWNERS")
+        {
+            items.Add(new CreativeItemData("Wolf Spawn Egg", 0, 64));
+            items.Add(new CreativeItemData("Sheep Spawn Egg", 0, 64));
         }
 
         // Dynamically size the slots array to match the populated items list size (indefinite slots)
@@ -918,6 +965,202 @@ public class Inventory : MonoBehaviour
             for (int x = 32 - width; x <= 32 + width; x++)
             {
                 px[y * SZ + x] = cyan;
+            }
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    private static Sprite CreateCoalChunkIcon()
+    {
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        Color darkGray = new Color(0.15f, 0.15f, 0.15f, 1f);
+        Color midGray = new Color(0.25f, 0.25f, 0.25f, 1f);
+        Color lightGray = new Color(0.35f, 0.35f, 0.35f, 1f);
+        Color outline = new Color(0.05f, 0.05f, 0.05f, 1f);
+
+        for (int y = 16; y <= 48; y++)
+        {
+            int rx = 16 - Mathf.Abs(32 - y);
+            if (y > 32) rx = Mathf.RoundToInt(rx * 0.9f);
+            for (int x = 32 - rx; x <= 32 + rx; x++)
+            {
+                if (x == 32 - rx || x == 32 + rx || y == 16 || y == 48)
+                {
+                    px[y * SZ + x] = outline;
+                }
+                else
+                {
+                    float noise = Mathf.PerlinNoise(x * 0.15f, y * 0.15f);
+                    px[y * SZ + x] = noise > 0.6f ? lightGray : (noise > 0.3f ? midGray : darkGray);
+                }
+            }
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    private static Sprite CreateIronIngotIcon()
+    {
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        Color metal = new Color(0.85f, 0.85f, 0.87f, 1f);
+        Color shadow = new Color(0.65f, 0.65f, 0.67f, 1f);
+        Color highlight = new Color(0.98f, 0.98f, 1.0f, 1f);
+        Color outline = new Color(0.35f, 0.35f, 0.37f, 1f);
+
+        for (int y = 20; y <= 44; y++)
+        {
+            int offset = (y - 20) / 2;
+            int startX = 20 - offset;
+            int width = 28;
+            for (int x = startX; x < startX + width; x++)
+            {
+                if (x == startX || x == startX + width - 1 || y == 20 || y == 44)
+                {
+                    px[y * SZ + x] = outline;
+                }
+                else
+                {
+                    if (y >= 40 || x >= startX + width - 3)
+                        px[y * SZ + x] = shadow;
+                    else if (y <= 24 || x <= startX + 2)
+                        px[y * SZ + x] = highlight;
+                    else
+                        px[y * SZ + x] = metal;
+                }
+            }
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    private static Sprite CreateSheepSpawnEggIcon()
+    {
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        Color eggBase = new Color(0.95f, 0.95f, 0.95f, 1f);
+        Color eggSpot = new Color(0.90f, 0.80f, 0.75f, 1f);
+        Color eggOutline = new Color(0.12f, 0.12f, 0.14f, 1f);
+
+        for (int y = 14; y <= 50; y++)
+        {
+            float normY = (y - 14f) / (50f - 14f);
+            float widthFactor = Mathf.Sin(normY * Mathf.PI);
+            if (normY > 0.4f)
+            {
+                widthFactor *= (1f - (normY - 0.4f) * 0.4f);
+            }
+            int rx = Mathf.RoundToInt(15f * widthFactor);
+
+            for (int x = 32 - rx; x <= 32 + rx; x++)
+            {
+                if (x == 32 - rx || x == 32 + rx || y == 14 || y == 50)
+                {
+                    px[y * SZ + x] = eggOutline;
+                }
+                else
+                {
+                    bool isSpot = false;
+                    Vector2[] spots = new Vector2[] {
+                        new Vector2(28f, 22f),
+                        new Vector2(37f, 26f),
+                        new Vector2(30f, 38f),
+                        new Vector2(39f, 42f),
+                        new Vector2(25f, 30f),
+                        new Vector2(34f, 18f)
+                    };
+                    foreach (var s in spots)
+                    {
+                        if (Vector2.Distance(new Vector2(x, y), s) < 3.2f)
+                        {
+                            isSpot = true;
+                            break;
+                        }
+                    }
+
+                    px[y * SZ + x] = isSpot ? eggSpot : eggBase;
+                }
+            }
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    private static Sprite CreateWolfSpawnEggIcon()
+    {
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        // Base color: light gray egg
+        Color eggBase = new Color(0.75f, 0.75f, 0.78f, 1f);
+        // Spots color: dark charcoal/gray
+        Color eggSpot = new Color(0.25f, 0.25f, 0.28f, 1f);
+        // Shadow/outline color
+        Color eggOutline = new Color(0.12f, 0.12f, 0.14f, 1f);
+
+        for (int y = 14; y <= 50; y++)
+        {
+            float normY = (y - 14f) / (50f - 14f);
+            float widthFactor = Mathf.Sin(normY * Mathf.PI);
+            if (normY > 0.4f)
+            {
+                widthFactor *= (1f - (normY - 0.4f) * 0.4f);
+            }
+            int rx = Mathf.RoundToInt(15f * widthFactor);
+
+            for (int x = 32 - rx; x <= 32 + rx; x++)
+            {
+                if (x == 32 - rx || x == 32 + rx || y == 14 || y == 50)
+                {
+                    px[y * SZ + x] = eggOutline;
+                }
+                else
+                {
+                    bool isSpot = false;
+                    Vector2[] spots = new Vector2[] {
+                        new Vector2(28f, 22f),
+                        new Vector2(37f, 26f),
+                        new Vector2(30f, 38f),
+                        new Vector2(39f, 42f),
+                        new Vector2(25f, 30f),
+                        new Vector2(34f, 18f)
+                    };
+                    foreach (var s in spots)
+                    {
+                        if (Vector2.Distance(new Vector2(x, y), s) < 3.2f)
+                        {
+                            isSpot = true;
+                            break;
+                        }
+                    }
+
+                    px[y * SZ + x] = isSpot ? eggSpot : eggBase;
+                }
             }
         }
 

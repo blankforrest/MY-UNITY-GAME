@@ -29,6 +29,9 @@ public class DroppedItem : MonoBehaviour
     private float          aliveTime   = 0f;  // prevents premature settling on ledges
     private bool           wasAttracted = false;
 
+    [HideInInspector] public Vector3 throwForce = Vector3.zero;
+    [HideInInspector] public float pickupDelay = 0.6f;
+
     void Start()
     {
         gameObject.layer = 2; // "Ignore Raycast" layer
@@ -38,7 +41,7 @@ public class DroppedItem : MonoBehaviour
         trigger.isTrigger = true;
         trigger.radius    = 0.6f;
         trigger.enabled   = false;
-        Invoke(nameof(EnablePickup), 0.6f);
+        Invoke(nameof(EnablePickup), pickupDelay);
 
         // Non-trigger collider so Rigidbody lands on the terrain mesh
         BoxCollider groundCol = gameObject.AddComponent<BoxCollider>();
@@ -54,8 +57,15 @@ public class DroppedItem : MonoBehaviour
         rb.constraints           = RigidbodyConstraints.FreezeRotationX
                                  | RigidbodyConstraints.FreezeRotationZ;
 
-        // Small downward nudge so items don't hover if spawned exactly on a surface
-        rb.AddForce(Vector3.down * 2f, ForceMode.Impulse);
+        // Small downward nudge/forward throw force
+        if (throwForce != Vector3.zero)
+        {
+            rb.AddForce(throwForce, ForceMode.Impulse);
+        }
+        else
+        {
+            rb.AddForce(Vector3.down * 2f, ForceMode.Impulse);
+        }
 
         BuildMiniCube();
 

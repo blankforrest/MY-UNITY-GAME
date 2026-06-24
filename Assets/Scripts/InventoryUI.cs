@@ -38,8 +38,8 @@ public class InventoryUI : MonoBehaviour
     private bool subscribed = false;
     private GameObject  tabsContainer;
     private string      activeCategory = "ALL";
-    private Image[]     tabImages = new Image[5];
-    private string[]    categories = new string[] { "ALL", "BLOCKS", "TOOLS", "VEHICLES", "FOLIAGE" };
+    private Image[]     tabImages = new Image[6];
+    private string[]    categories = new string[] { "ALL", "BLOCKS", "TOOLS", "VEHICLES", "FOLIAGE", "SPAWNERS" };
     private RectTransform contentRT;
 
     void Awake()
@@ -921,11 +921,12 @@ public class InventoryUI : MonoBehaviour
     {
         switch (category)
         {
-            case "ALL": return 49; // wood, dirt, etc. + tools
+            case "ALL": return 50; // wood, dirt, etc. + tools
             case "BLOCKS": return 17;
             case "TOOLS": return 24;
             case "VEHICLES": return 5;
             case "FOLIAGE": return 4;
+            case "SPAWNERS": return 1;
             default: return 35;
         }
     }

@@ -162,7 +162,7 @@ public class FurnaceManager : MonoBehaviour
     private static float GetFuelBurnTime(Item item)
     {
         if (item == null) return 0f;
-        if (item.itemName == "Coal Ore") return 16f; // burns for 16s (smelts ~3 sand)
+        if (item.itemName == "Coal Ore" || item.itemName == "Coal Chunk") return 16f; // burns for 16s (smelts ~3 items)
         if (item.itemName == "Wood") return 8f;     // burns for 8s
         if (item.itemName == "Plank") return 4f;    // burns for 4s
         if (item.itemName == "Stick") return 2f;    // burns for 2s
@@ -171,18 +171,23 @@ public class FurnaceManager : MonoBehaviour
 
     private bool CanSmelt(FurnaceState state)
     {
-        // Must have Sand in the input slot
+        // Must have Sand or Iron Ore in the input slot
         if (state.inputSlot == null || state.inputSlot.item == null || state.inputSlot.amount <= 0)
             return false;
 
-        if (state.inputSlot.item.itemName != "Sand")
+        string inputName = state.inputSlot.item.itemName;
+        if (inputName != "Sand" && inputName != "Iron Ore")
             return false;
 
-        // Output slot checks: must be empty, or Glass and have room (max stack 64)
+        // Output slot checks: must be empty, or matching result and have room (max stack 64)
         if (state.outputSlot == null || state.outputSlot.item == null)
             return true;
 
-        if (state.outputSlot.item.itemName == "Glass" && state.outputSlot.amount < 64)
+        string outputName = state.outputSlot.item.itemName;
+        if (inputName == "Sand" && outputName == "Glass" && state.outputSlot.amount < 64)
+            return true;
+
+        if (inputName == "Iron Ore" && outputName == "Iron Ingot" && state.outputSlot.amount < 64)
             return true;
 
         return false;
@@ -192,24 +197,29 @@ public class FurnaceManager : MonoBehaviour
     {
         if (!CanSmelt(state)) return;
 
-        // Consume 1 sand
+        string inputName = state.inputSlot.item.itemName;
+
+        // Consume 1 input
         state.inputSlot.amount--;
         if (state.inputSlot.amount <= 0)
         {
             state.inputSlot = null;
         }
 
-        // Add 1 glass
+        string resultName = (inputName == "Sand") ? "Glass" : "Iron Ingot";
+        int resultTypeID = (inputName == "Sand") ? 35 : 0;
+
+        // Add 1 output
         if (state.outputSlot == null || state.outputSlot.item == null)
         {
-            // Create a Glass item
-            Item glassItem = Inventory.Instance?.CreateItem("Glass", 35);
-            if (glassItem == null)
+            Item outputItem = Inventory.Instance?.CreateItem(resultName, resultTypeID);
+            if (outputItem == null)
             {
-                // Fallback creation if Inventory.Instance is null (though it shouldn't be)
-                glassItem = new Item { itemName = "Glass", blockTypeID = 35 };
+                outputItem = ScriptableObject.CreateInstance<Item>();
+                outputItem.itemName = resultName;
+                outputItem.blockTypeID = resultTypeID;
             }
-            state.outputSlot = new InventorySlot(glassItem, 1);
+            state.outputSlot = new InventorySlot(outputItem, 1);
         }
         else
         {
@@ -242,7 +252,7 @@ public class FurnaceManager : MonoBehaviour
             Chunk chunk = VoxelWorld.Instance.GetChunkFromVector3(worldPos);
             if (chunk != null)
             {
-                chunk.UpdateChunk();
+                chunk.isDirty = true;
             }
         }
     }

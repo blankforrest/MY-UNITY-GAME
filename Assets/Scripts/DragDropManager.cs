@@ -255,13 +255,13 @@ public class DragDropManager : MonoBehaviour
 
         if (leftReleased || rightReleased)
         {
+            SlotUI releaseSlot = RaycastSlot(mousePos);
+
             if (isPressing)
             {
                 isPressing = false;
                 if (!wasLongPressTriggered)
                 {
-                    // Quick click!
-                    SlotUI releaseSlot = RaycastSlot(mousePos);
                     if (releaseSlot == clickedSlotOnPress && releaseSlot != null)
                     {
                         bool isShiftHeld = Keyboard.current != null && (Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed);
@@ -274,19 +274,35 @@ public class DragDropManager : MonoBehaviour
                             HandleQuickClick(releaseSlot, pressButton == 0);
                         }
                     }
+                    else if (releaseSlot == null)
+                    {
+                        // Dragged directly from a slot to the outside
+                        if (clickedSlotOnPress != null && (heldItem == null || heldItem.item == null))
+                        {
+                            var slotData = clickedSlotOnPress.GetItemData();
+                            if (slotData != null && slotData.item != null && slotData.amount > 0)
+                            {
+                                heldItem = new InventorySlot(slotData.item, slotData.amount);
+                                clickedSlotOnPress.WriteItemData(null);
+                                clickedSlotOnPress.Refresh();
+                                DropHeldItemInWorld();
+                                Inventory.Instance?.onInventoryChangedCallback?.Invoke();
+                            }
+                        }
+                        else if (heldItem != null && heldItem.item != null)
+                        {
+                            DropHeldItemInWorld();
+                        }
+                    }
                 }
                 clickedSlotOnPress = null;
             }
             else
             {
                 // Released when not pressing/dragging (e.g. click release outside slots)
-                if (heldItem != null)
+                if (heldItem != null && releaseSlot == null)
                 {
-                    SlotUI hit = RaycastSlot(mousePos);
-                    if (hit == null && !IsPointerOverUI())
-                    {
-                        DropHeldItemInWorld();
-                    }
+                    DropHeldItemInWorld();
                 }
             }
         }
@@ -895,13 +911,46 @@ public class DragDropManager : MonoBehaviour
     {
         if (heldItem != null && heldItem.item != null && heldItem.amount > 0)
         {
-            GameObject player = GameObject.FindWithTag("Player");
-            Vector3 dropPos = player != null ? player.transform.position + Vector3.up : Vector3.zero;
+            Camera playerCam = Camera.main;
+            Vector3 throwDir = Vector3.forward;
+            Vector3 dropPos = Vector3.zero;
+
+            if (playerCam != null)
+            {
+                Vector2 mousePos = Mouse.current != null ? Mouse.current.position.ReadValue() : new Vector2(Screen.width / 2f, Screen.height / 2f);
+                Ray ray = playerCam.ScreenPointToRay(mousePos);
+                throwDir = ray.direction;
+                throwDir.Normalize();
+
+                // Spawn offset from the camera in the drop direction (1.5f units to clear the player capsule)
+                dropPos = playerCam.transform.position + throwDir * 1.5f;
+            }
+            else
+            {
+                GameObject player = GameObject.FindWithTag("Player");
+                dropPos = player != null ? player.transform.position + Vector3.up * 1.5f : Vector3.zero;
+            }
+
             DroppedItem dropped = DroppedItem.Spawn(heldItem.item, heldItem.amount, dropPos, (byte)heldItem.item.blockTypeID);
 
-            if (dropped != null && WrenchItem.Instance != null && heldItem.item.itemID == WrenchItem.Instance.wrenchItemID)
+            if (dropped != null)
             {
-                dropped.overrideMesh = WrenchItem.BuildWrenchMesh();
+                if (WrenchItem.Instance != null && heldItem.item.itemID == WrenchItem.Instance.wrenchItemID)
+                {
+                    dropped.overrideMesh = WrenchItem.BuildWrenchMesh();
+                }
+
+                if (playerCam != null)
+                {
+                    dropped.throwForce = throwDir * 6.5f; // Strong throw velocity in cursor direction
+                }
+                else
+                {
+                    dropped.throwForce = new Vector3(0f, 2.5f, 5f);
+                }
+
+                // Prevent player from immediately picking it up
+                dropped.pickupDelay = 1.5f;
             }
 
             heldItem = null;

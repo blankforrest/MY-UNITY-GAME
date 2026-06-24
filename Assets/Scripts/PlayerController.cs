@@ -486,7 +486,7 @@ public class PlayerController : MonoBehaviour
                     velocity.y = -verticalSpeed;
                 }
             }
-            else if (inWater)
+            else if (inWater && !isGrounded)
             {
                 if (Keyboard.current.spaceKey.isPressed)
                 {
@@ -500,17 +500,20 @@ public class PlayerController : MonoBehaviour
 
                         if (VoxelWorld.Instance != null)
                         {
-                            Vector3 checkPosLow = transform.position + checkDir * 0.7f + new Vector3(0f, 0.2f, 0f);
-                            Vector3 checkPosMid = transform.position + checkDir * 0.7f + new Vector3(0f, 0.7f, 0f);
-                            Vector3 checkPosHigh = transform.position + checkDir * 0.7f + new Vector3(0f, 1.2f, 0f);
+                            Vector3 checkPosLow = transform.position + checkDir * 0.8f + new Vector3(0f, 0.2f, 0f);
+                            Vector3 checkPosMid = transform.position + checkDir * 0.8f + new Vector3(0f, 0.9f, 0f);
+                            Vector3 checkPosHigh = transform.position + checkDir * 0.8f + new Vector3(0f, 1.6f, 0f);
+                            Vector3 checkPosExtra = transform.position + checkDir * 0.8f + new Vector3(0f, 2.0f, 0f);
 
                             byte blockLow = VoxelWorld.Instance.GetBlock(checkPosLow);
                             byte blockMid = VoxelWorld.Instance.GetBlock(checkPosMid);
                             byte blockHigh = VoxelWorld.Instance.GetBlock(checkPosHigh);
+                            byte blockExtra = VoxelWorld.Instance.GetBlock(checkPosExtra);
 
                             if ((blockLow != 0 && blockLow != 7) || 
                                 (blockMid != 0 && blockMid != 7) || 
-                                (blockHigh != 0 && blockHigh != 7))
+                                (blockHigh != 0 && blockHigh != 7) ||
+                                (blockExtra != 0 && blockExtra != 7))
                             {
                                 hasWallInFront = true;
                             }

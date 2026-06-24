@@ -108,17 +108,114 @@ public class PauseMenu : MonoBehaviour
         Image pbImg = pauseButtonGO.GetComponent<Image>();
         pbImg.color = new Color(0.12f, 0.14f, 0.18f, 0.85f);
 
-        GameObject pbTxtGO = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
-        pbTxtGO.transform.SetParent(pauseButtonGO.transform, false);
-        RectTransform pbTxtRT = pbTxtGO.GetComponent<RectTransform>();
-        pbTxtRT.anchorMin = Vector2.zero;
-        pbTxtRT.anchorMax = Vector2.one;
-        pbTxtRT.sizeDelta = Vector2.zero;
-        TextMeshProUGUI pbTmp = pbTxtGO.GetComponent<TextMeshProUGUI>();
-        pbTmp.text = "<b>‖</b>";
-        pbTmp.fontSize = 22;
-        pbTmp.alignment = TextAlignmentOptions.Center;
-        pbTmp.color = Color.white;
+        Sprite pauseSprite = null;
+#if UNITY_EDITOR
+        try
+        {
+            string spritesDir = System.IO.Path.Combine(Application.dataPath, "Sprites");
+            string resourcesDir = System.IO.Path.Combine(Application.dataPath, "Resources");
+            if (!System.IO.Directory.Exists(resourcesDir))
+            {
+                System.IO.Directory.CreateDirectory(resourcesDir);
+            }
+            string genPath = @"C:\Users\HP\.gemini\antigravity\brain\2c52bc4a-ca8b-434c-a9dc-4801b06e2bfa\pause_icon_solid_1782267737022.png";
+            string spritePath = System.IO.Path.Combine(spritesDir, "pause_icon.png");
+            string destPath = System.IO.Path.Combine(resourcesDir, "pause_icon.png");
+            
+            if (System.IO.File.Exists(genPath))
+            {
+                System.IO.File.Copy(genPath, spritePath, true);
+                System.IO.File.Copy(genPath, destPath, true);
+                UnityEditor.AssetDatabase.Refresh();
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning("Failed to copy solid pause icon: " + e.Message);
+        }
+#endif
+
+        Texture2D rawTex = Resources.Load<Texture2D>("pause_icon");
+        if (rawTex == null)
+        {
+#if UNITY_EDITOR
+            string path = System.IO.Path.Combine(Application.dataPath, "Sprites/pause_icon.png");
+            if (System.IO.File.Exists(path))
+            {
+                byte[] data = System.IO.File.ReadAllBytes(path);
+                rawTex = new Texture2D(2, 2);
+                if (!rawTex.LoadImage(data)) rawTex = null;
+            }
+#endif
+        }
+
+        if (rawTex != null)
+        {
+            try
+            {
+                Texture2D transparentTex = new Texture2D(rawTex.width, rawTex.height, TextureFormat.RGBA32, false);
+                transparentTex.filterMode = FilterMode.Bilinear;
+                
+                RenderTexture tmp = RenderTexture.GetTemporary(rawTex.width, rawTex.height, 0, RenderTextureFormat.Default, RenderTextureReadWrite.Linear);
+                Graphics.Blit(rawTex, tmp);
+                RenderTexture previous = RenderTexture.active;
+                RenderTexture.active = tmp;
+                transparentTex.ReadPixels(new Rect(0, 0, tmp.width, tmp.height), 0, 0);
+                transparentTex.Apply();
+                RenderTexture.active = previous;
+                RenderTexture.ReleaseTemporary(tmp);
+
+                Color[] pixels = transparentTex.GetPixels();
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    if (pixels[i].r < 0.2f && pixels[i].g < 0.2f && pixels[i].b < 0.2f)
+                    {
+                        pixels[i] = Color.clear;
+                    }
+                    else
+                    {
+                        pixels[i] = Color.white;
+                    }
+                }
+                transparentTex.SetPixels(pixels);
+                transparentTex.Apply();
+                pauseSprite = Sprite.Create(transparentTex, new Rect(0, 0, transparentTex.width, transparentTex.height), new Vector2(0.5f, 0.5f));
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("Error creating transparent pause icon: " + e.Message);
+            }
+        }
+
+        if (pauseSprite != null)
+        {
+            GameObject pbIconGO = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+            pbIconGO.transform.SetParent(pauseButtonGO.transform, false);
+            RectTransform pbIconRT = pbIconGO.GetComponent<RectTransform>();
+            pbIconRT.anchorMin = new Vector2(0.5f, 0.5f);
+            pbIconRT.anchorMax = new Vector2(0.5f, 0.5f);
+            pbIconRT.pivot = new Vector2(0.5f, 0.5f);
+            pbIconRT.sizeDelta = new Vector2(20, 20);
+            
+            Image pbIconImg = pbIconGO.GetComponent<Image>();
+            pbIconImg.sprite = pauseSprite;
+            pbIconImg.color = Color.white;
+            pbIconImg.raycastTarget = false;
+        }
+        else
+        {
+            GameObject pbTxtGO = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+            pbTxtGO.transform.SetParent(pauseButtonGO.transform, false);
+            RectTransform pbTxtRT = pbTxtGO.GetComponent<RectTransform>();
+            pbTxtRT.anchorMin = Vector2.zero;
+            pbTxtRT.anchorMax = Vector2.one;
+            pbTxtRT.sizeDelta = Vector2.zero;
+            TextMeshProUGUI pbTmp = pbTxtGO.GetComponent<TextMeshProUGUI>();
+            pbTmp.text = "<b>‖</b>";
+            pbTmp.fontSize = 22;
+            pbTmp.alignment = TextAlignmentOptions.Center;
+            pbTmp.color = Color.white;
+        }
 
         Button pbBtn = pauseButtonGO.GetComponent<Button>();
         pbBtn.onClick.AddListener(() => TogglePause());

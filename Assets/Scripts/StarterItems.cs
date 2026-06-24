@@ -206,6 +206,7 @@ public class StarterItems : MonoBehaviour
             case 52: return new Color(0.38f, 0.68f, 0.28f); // Birch Leaves
             case 53: return new Color(0.31f, 0.22f, 0.12f); // Spruce Log
             case 54: return new Color(0.13f, 0.38f, 0.22f); // Spruce Leaves
+            case 55: return new Color(0.20f, 0.85f, 0.88f); // Diamond Ore
             case 26: return new Color(0.82f, 0.58f, 0.16f); // Large Propeller (brass)
             default: return Color.white;
         }
