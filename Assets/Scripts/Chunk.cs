@@ -989,6 +989,18 @@ public class Chunk : MonoBehaviour
         // Any active vehicle
         foreach (var vc in Object.FindObjectsByType<VehicleController>(FindObjectsSortMode.None))
             IgnoreFoliageCollisionWith(vc.GetComponentsInChildren<Collider>());
+
+        // Any active animals (Sheep and Wolves)
+        foreach (var sheep in Object.FindObjectsByType<SheepAI>(FindObjectsSortMode.None))
+        {
+            var animalCC = sheep.GetComponent<CharacterController>();
+            if (animalCC != null) Physics.IgnoreCollision(animalCC, foliageMeshCollider, true);
+        }
+        foreach (var wolf in Object.FindObjectsByType<WolfAI>(FindObjectsSortMode.None))
+        {
+            var animalCC = wolf.GetComponent<CharacterController>();
+            if (animalCC != null) Physics.IgnoreCollision(animalCC, foliageMeshCollider, true);
+        }
     }
 
     int GetWaterDepth(int x, int y, int z)
@@ -1237,11 +1249,12 @@ public class Chunk : MonoBehaviour
 
             byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz, neighborPos + transform.position);
 
-            // Skip face if neighbour is another leaves block (cull) or any solid block
-            if (neighbor == 12) continue;  // adjacent leaves cull each other
-            // Skip if neighbour is fully opaque solid (not air/water/flowers/leaves)
+            // Skip face if neighbour is any leaf-type block (they all cull each other)
+            if (neighbor == 12 || neighbor == 52 || neighbor == 54) continue;
+            // Skip if neighbour is fully opaque solid (not air/water/flowers/any leaves)
             if (neighbor != 0 && neighbor != 7 && neighbor != 9 &&
-                neighbor != 10 && neighbor != 11 && neighbor != 12) continue;
+                neighbor != 10 && neighbor != 11 &&
+                neighbor != 12 && neighbor != 52 && neighbor != 54) continue;
 
             Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, 12);
 

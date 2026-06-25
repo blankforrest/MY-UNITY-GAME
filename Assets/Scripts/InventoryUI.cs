@@ -225,6 +225,54 @@ public class InventoryUI : MonoBehaviour
         scrollRect.inertia = false;
         scrollRect.scrollSensitivity = 35f;
 
+        // ── Create Vertical Scrollbar ────────────────────────────────────────
+        GameObject scrollbarGO = new GameObject("Scrollbar", typeof(RectTransform), typeof(Image), typeof(Scrollbar));
+        scrollbarGO.transform.SetParent(scrollGO.transform, false);
+        RectTransform scrollbarRT = scrollbarGO.GetComponent<RectTransform>();
+        scrollbarRT.anchorMin = new Vector2(1f, 0f);
+        scrollbarRT.anchorMax = new Vector2(1f, 1f);
+        scrollbarRT.pivot = new Vector2(1f, 1f);
+        scrollbarRT.anchoredPosition = new Vector2(14f, 0f); // position offset slightly to the right of the grid
+        scrollbarRT.sizeDelta = new Vector2(8f, 0f); // 8px wide
+
+        Image scrollbarImg = scrollbarGO.GetComponent<Image>();
+        scrollbarImg.color = new Color(0f, 0f, 0f, 0.25f); // track background
+
+        GameObject slidingAreaGO = new GameObject("Sliding Area", typeof(RectTransform));
+        slidingAreaGO.transform.SetParent(scrollbarGO.transform, false);
+        RectTransform slidingAreaRT = slidingAreaGO.GetComponent<RectTransform>();
+        slidingAreaRT.anchorMin = Vector2.zero;
+        slidingAreaRT.anchorMax = Vector2.one;
+        slidingAreaRT.sizeDelta = Vector2.zero;
+        slidingAreaRT.anchoredPosition = Vector2.zero;
+
+        GameObject handleGO = new GameObject("Handle", typeof(RectTransform), typeof(Image));
+        handleGO.transform.SetParent(slidingAreaGO.transform, false);
+        RectTransform handleRT = handleGO.GetComponent<RectTransform>();
+        handleRT.anchorMin = Vector2.zero;
+        handleRT.anchorMax = Vector2.one;
+        handleRT.sizeDelta = Vector2.zero;
+        handleRT.anchoredPosition = Vector2.zero;
+
+        Image handleImg = handleGO.GetComponent<Image>();
+        handleImg.color = new Color(1f, 1f, 1f, 0.4f);
+
+        Scrollbar scrollbar = scrollbarGO.GetComponent<Scrollbar>();
+        scrollbar.direction = Scrollbar.Direction.BottomToTop;
+        scrollbar.handleRect = handleRT;
+        scrollbar.targetGraphic = handleImg;
+        scrollbar.transition = Selectable.Transition.ColorTint;
+
+        ColorBlock colors = scrollbar.colors;
+        colors.normalColor = new Color(1f, 1f, 1f, 0.4f);
+        colors.highlightedColor = new Color(1f, 1f, 1f, 0.7f);
+        colors.pressedColor = new Color(1f, 1f, 1f, 0.9f);
+        colors.selectedColor = new Color(1f, 1f, 1f, 0.4f);
+        colors.disabledColor = new Color(1f, 1f, 1f, 0.1f);
+        scrollbar.colors = colors;
+
+        scrollRect.verticalScrollbar = scrollbar;
+
         // ── Create Viewport ──────────────────────────────────────────
         GameObject viewportGO = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
         viewportGO.transform.SetParent(scrollGO.transform, false);

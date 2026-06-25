@@ -16,6 +16,7 @@ public class StarterItems : MonoBehaviour
         { "Wood",       "Sprites/wood_block"       },
         { "Plank",      "Sprites/plank_block"      },
         { "Stone",      "Sprites/stone_block"      },
+        { "Gravel",     "Sprites/gravel_block"     },
         { "Dirt",       "Sprites/dirt_block"       },
         { "Iron",       "Sprites/iron_bar"         },
         { "Stick",      "Sprites/stick"            },
@@ -237,19 +238,24 @@ public class StarterItems : MonoBehaviour
 
         item.blockTypeID = blockTypeID;
 
-        // Try to load custom sprite from registry if the block definition has custom textures
+        // Try to load custom sprite from registry
         if (blockTypeID != 0)
         {
             BlockDefinition def = BlockRegistry.GetDefinition((byte)blockTypeID);
             if (def != null)
             {
+                // If they have an inventoryIcon assigned manually in the inspector, prioritize it!
+                if (def.inventoryIcon != null)
+                {
+                    item.icon = def.inventoryIcon;
+                    return item;
+                }
+
+                // Otherwise, if they have custom textures, generate on the fly
                 bool hasCustomTextures = (def.textureTop != null || def.textureSide != null || def.textureBottom != null);
                 if (hasCustomTextures)
                 {
-                    if (def.inventoryIcon == null)
-                    {
-                        def.inventoryIcon = MakeIsometricBlock(blockTypeID, Color.white);
-                    }
+                    def.inventoryIcon = MakeIsometricBlock(blockTypeID, Color.white);
                     item.icon = def.inventoryIcon;
                     return item;
                 }
@@ -819,6 +825,16 @@ public class StarterItems : MonoBehaviour
         foreach (var def in BlockRegistry.RegisteredBlocks)
         {
             if (def == null) continue;
+
+            // If the user already assigned a custom 2D sprite in the inspector, do not overwrite it!
+            if (def.inventoryIcon != null)
+            {
+                if (def.dropItem != null && def.dropItem.icon == null)
+                {
+                    def.dropItem.icon = def.inventoryIcon;
+                }
+                continue;
+            }
 
             // Check if this block has custom textures assigned in the database
             bool hasCustomTextures = (def.textureTop != null || def.textureSide != null || def.textureBottom != null);

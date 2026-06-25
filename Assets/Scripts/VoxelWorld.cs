@@ -329,7 +329,7 @@ public class VoxelWorld : MonoBehaviour
             UnloadDistant(current);
         }
 
-        ProcessRebuildQueue(2);
+        ProcessRebuildQueue(4);
     }
 
     public void RegisterDirtyChunk(Chunk chunk)
@@ -506,157 +506,75 @@ public class VoxelWorld : MonoBehaviour
         int ly = Mathf.FloorToInt(local.y);
         int lz = Mathf.FloorToInt(local.z);
 
-        // Spawn drop when breaking — skip if suppressed (e.g. vehicle conversion) or vehicle/special blocks
+        // Spawn drop when breaking — skip if suppressed (e.g. vehicle conversion)
         if (blockID == 0 && !suppressDrop)
         {
             byte existing = chunk.GetVoxel(lx, ly, lz);
-            bool isCustomBlock = (BlockRegistry.GetDefinition(existing) != null);
-            if (existing != 0 && (existing <= 14 || existing == 20 || existing == 21 || existing == 22 || existing == 23 || existing == 26 || existing == 27 || existing == 50 || existing == 36 || (existing >= 30 && existing <= 47) || isCustomBlock))
+            if (existing != 0)
             {
                 Item drop = null;
 
-                if (isCustomBlock)
-                {
-                    var def = BlockRegistry.GetDefinition(existing);
-                    bool requiresPickaxe = (def.preferredTool == ToolType.Pickaxe);
-                    InventorySlot customSlot = Hotbar.Instance != null ? Hotbar.Instance.GetSelectedSlot() : null;
-                    Item customHeld = customSlot?.item;
-                    bool hasPick = (customHeld != null && customHeld.toolType == ToolType.Pickaxe);
+                // 1. Check if the block has a definition in the Registry
+                BlockDefinition def = BlockRegistry.GetDefinition(existing);
+                
+                // Get player mode
+                var pc = FindFirstObjectByType<PlayerController>();
+                bool isCreative = (pc != null && pc.isCreativeMode);
 
-                    if (requiresPickaxe && !hasPick)
+                if (!isCreative)
+                {
+                    // 2. Determine tool requirements
+                    bool requiresPickaxe = false;
+                    if (def != null)
                     {
-                        drop = null;
+                        requiresPickaxe = (def.preferredTool == ToolType.Pickaxe);
                     }
                     else
                     {
-                        drop = def.dropItem;
-                        // Fallback: if dropItem is null but it's a solid custom block, we can create a temporary block item so it doesn't drop nothing by accident
-                        if (drop == null)
-                        {
-                            drop = ScriptableObject.CreateInstance<Item>();
-                            drop.itemName = def.blockName;
-                            drop.blockTypeID = def.blockID;
-                            drop.icon = def.inventoryIcon;
-                        }
+                        // Fallback pickaxe requirements if def is null
+                        requiresPickaxe = (existing == 3 || existing == 30 || existing == 31 || existing == 32 || 
+                                           existing == 33 || existing == 37 || existing == 47 || existing == 39 || 
+                                           existing == 43 || existing == 44 || existing == 45 || existing == 55);
                     }
-                }
 
-                // Force custom item generation for vehicle components to avoid inspector misconfigurations
-                if (existing == 20)
-                {
-                    drop = ScriptableObject.CreateInstance<Item>();
-                    drop.itemName = "Small Wheel";
-                    drop.blockTypeID = 20;
-                    drop.icon = VehicleSpawner.CreateWheelIcon(false);
-                }
-                else if (existing == 21 || existing == 23)
-                {
-                    drop = ScriptableObject.CreateInstance<Item>();
-                    drop.itemName = "Large Wheel";
-                    drop.blockTypeID = 21;
-                    drop.icon = VehicleSpawner.CreateWheelIcon(true);
-                }
-                else if (existing == 22)
-                {
-                    drop = ScriptableObject.CreateInstance<Item>();
-                    drop.itemName = "Propeller";
-                    drop.blockTypeID = 22;
-                    drop.icon = VehicleSpawner.CreatePropellerIcon();
-                }
-                else if (existing == 26 || existing == 27)
-                {
-                    drop = ScriptableObject.CreateInstance<Item>();
-                    drop.itemName = "Large Propeller";
-                    drop.blockTypeID = 26;
-                    drop.icon = VehicleSpawner.CreateLargePropellerIcon();
-                }
-                else if (existing == 50)
-                {
-                    drop = ScriptableObject.CreateInstance<Item>();
-                    drop.itemName = "Control Block";
-                    drop.blockTypeID = 50;
-                    drop.icon = VehicleSpawner.CreateControlBlockIcon();
-                }
+                    // Check if player is holding a pickaxe
+                    InventorySlot selectedSlot = Hotbar.Instance != null ? Hotbar.Instance.GetSelectedSlot() : null;
+                    Item heldItem = selectedSlot?.item;
+                    bool hasPickaxe = (heldItem != null && heldItem.toolType == ToolType.Pickaxe);
 
-                if (drop == null && blockDrops != null && existing < blockDrops.Length)
-                {
-                    drop = blockDrops[existing];
-                }
-
-                // Pickaxe requirement check
-                bool isPickaxeRequired = (existing == 3 || existing == 30 || existing == 31 || existing == 32 || existing == 33 || existing == 37 || existing == 47 || existing == 39 || existing == 43 || existing == 44 || existing == 45 || existing == 55);
-                InventorySlot selectedSlot = Hotbar.Instance != null ? Hotbar.Instance.GetSelectedSlot() : null;
-                Item heldItem = selectedSlot?.item;
-                bool hasPickaxe = (heldItem != null && heldItem.toolType == ToolType.Pickaxe);
-
-                // Robust fallback for Wood (1), Plank (2), Stone (3)
-                if (drop == null)
-                {
-                    if (isPickaxeRequired && !hasPickaxe)
+                    if (requiresPickaxe && !hasPickaxe)
                     {
-                        // Drops nothing!
                         drop = null;
+                        Debug.Log($"[ModifyBlock] Drop denied: block {existing} requires a pickaxe, but player is not holding one.");
                     }
-                    else if (existing == 1)
+                    else
                     {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Wood";
-                        drop.blockTypeID = 1;
-                        drop.icon = Resources.Load<Sprite>("Sprites/wood_block");
-                    }
-                    else if (existing == 2)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Plank";
-                        drop.blockTypeID = 2;
-                        drop.icon = Resources.Load<Sprite>("Sprites/plank_block");
-                    }
-                    else if (existing == 3)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Stone";
-                        drop.blockTypeID = 3;
-                        drop.icon = Resources.Load<Sprite>("Sprites/stone_block");
-                    }
-                    else if (existing == 4)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Grass Block";
-                        drop.blockTypeID = 4;
-                        drop.icon = StarterItems.MakeGrassBlockIcon();
-                    }
-                    else if (existing == 13)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Short Grass";
-                        drop.blockTypeID = 13;
-                        drop.icon = StarterItems.MakeShortGrassIcon();
-                    }
-                    else if (existing == 14)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Tall Grass";
-                        drop.blockTypeID = 14;
-                        drop.icon = StarterItems.MakeTallGrassIcon();
-                    }
-                    else if (existing == 5)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Dirt";
-                        drop.blockTypeID = 5;
-                        Sprite loaded = Resources.Load<Sprite>("Sprites/dirt_block");
-                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.45f, 0.30f, 0.18f));
-                    }
-                    else if (existing == 8 || existing == 34)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Sand";
-                        drop.blockTypeID = existing;
-                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.86f, 0.78f, 0.58f), existing);
-                    }
-                    else if (existing == 30)
-                    {
-                        if (hasPickaxe && UnityEngine.Random.value < 0.10f)
+                        // 3. Resolve the drop via Registry definition
+                        if (def != null)
+                        {
+                            if (def.dropRule == DropRule.DropsSelf)
+                            {
+                                if (def.dropItem == null)
+                                {
+                                    def.dropItem = StarterItems.CreateItemInstance(def.blockName, def.blockID, Color.white);
+                                }
+                                drop = def.dropItem;
+                            }
+                            else if (def.dropRule == DropRule.DropsCustomItem)
+                            {
+                                drop = def.dropItem;
+                            }
+                        }
+
+                        // 4. Legacy and Special Overrides (e.g. Coal Ore, Leaves, Glass, Vehicle components)
+                        
+                        // Water (7) or Bedrock (48) or Glass (35) -> no drop
+                        if (existing == 7 || existing == 48 || existing == 35)
+                        {
+                            drop = null;
+                        }
+                        // Diamond Ore (55) -> always drops Diamond item (blockTypeID 0)
+                        else if (existing == 55)
                         {
                             drop = Inventory.Instance != null ? Inventory.Instance.CreateItem("Diamond", 0) : null;
                             if (drop == null)
@@ -666,178 +584,213 @@ public class VoxelWorld : MonoBehaviour
                                 drop.blockTypeID = 0;
                             }
                         }
-                        else
+                        // Coal Ore (30) -> 10% chance Diamond, 90% chance Coal Chunk
+                        else if (existing == 30)
                         {
-                            drop = Inventory.Instance != null ? Inventory.Instance.CreateItem("Coal Chunk", 0) : null;
-                            if (drop == null)
+                            if (UnityEngine.Random.value < 0.10f)
+                            {
+                                drop = Inventory.Instance != null ? Inventory.Instance.CreateItem("Diamond", 0) : null;
+                                if (drop == null)
+                                {
+                                    drop = ScriptableObject.CreateInstance<Item>();
+                                    drop.itemName = "Diamond";
+                                    drop.blockTypeID = 0;
+                                }
+                            }
+                            else
+                            {
+                                drop = Inventory.Instance != null ? Inventory.Instance.CreateItem("Coal Chunk", 0) : null;
+                                if (drop == null)
+                                {
+                                    drop = ScriptableObject.CreateInstance<Item>();
+                                    drop.itemName = "Coal Chunk";
+                                    drop.blockTypeID = 0;
+                                }
+                            }
+                        }
+                        // Leaves (12) -> 20% chance Apple
+                        else if (existing == 12)
+                        {
+                            if (UnityEngine.Random.value < 0.20f)
                             {
                                 drop = ScriptableObject.CreateInstance<Item>();
-                                drop.itemName = "Coal Chunk";
+                                drop.itemName = "Apple";
                                 drop.blockTypeID = 0;
+                                drop.icon = MakeAppleIcon();
+                            }
+                            else
+                            {
+                                if (def != null && def.dropItem != null)
+                                {
+                                    drop = def.dropItem;
+                                }
+                                else
+                                {
+                                    drop = ScriptableObject.CreateInstance<Item>();
+                                    drop.itemName = "Leaves";
+                                    drop.blockTypeID = 12;
+                                    drop.icon = StarterItems.MakeBlockIcon(new Color(0.20f, 0.50f, 0.10f));
+                                }
+                            }
+                        }
+                        // Flower (9)
+                        else if (existing == 9)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Flower";
+                            drop.blockTypeID = 9;
+                            drop.icon = MakeFlowerIcon();
+                        }
+                        // Dandelion (10)
+                        else if (existing == 10)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Dandelion";
+                            drop.blockTypeID = 10;
+                            drop.icon = MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.95f, 0.85f, 0.10f), new Color(0.95f, 0.65f, 0.05f));
+                        }
+                        // Iris (11)
+                        else if (existing == 11)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Iris";
+                            drop.blockTypeID = 11;
+                            drop.icon = MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.40f, 0.20f, 0.90f), new Color(1.00f, 0.80f, 0.10f));
+                        }
+                        // Short Grass (13)
+                        else if (existing == 13)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Short Grass";
+                            drop.blockTypeID = 13;
+                            drop.icon = StarterItems.MakeShortGrassIcon();
+                        }
+                        // Tall Grass (14)
+                        else if (existing == 14)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Tall Grass";
+                            drop.blockTypeID = 14;
+                            drop.icon = StarterItems.MakeTallGrassIcon();
+                        }
+                        // Vehicle Small Wheel (20)
+                        else if (existing == 20)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Small Wheel";
+                            drop.blockTypeID = 20;
+                            drop.icon = VehicleSpawner.CreateWheelIcon(false);
+                        }
+                        // Vehicle Large Wheel Anchor/Helper (21, 23)
+                        else if (existing == 21 || existing == 23)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Large Wheel";
+                            drop.blockTypeID = 21;
+                            drop.icon = VehicleSpawner.CreateWheelIcon(true);
+                        }
+                        // Vehicle Propeller (22)
+                        else if (existing == 22)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Propeller";
+                            drop.blockTypeID = 22;
+                            drop.icon = VehicleSpawner.CreatePropellerIcon();
+                        }
+                        // Vehicle Large Propeller Anchor/Helper (26, 27)
+                        else if (existing == 26 || existing == 27)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Large Propeller";
+                            drop.blockTypeID = 26;
+                            drop.icon = VehicleSpawner.CreateLargePropellerIcon();
+                        }
+                        // Vehicle Control Block (50)
+                        else if (existing == 50)
+                        {
+                            drop = ScriptableObject.CreateInstance<Item>();
+                            drop.itemName = "Control Block";
+                            drop.blockTypeID = 50;
+                            drop.icon = VehicleSpawner.CreateControlBlockIcon();
+                        }
+                        // Fallback generator for standard or missing blocks
+                        else if (drop == null)
+                        {
+                            if (def != null)
+                            {
+                                drop = ScriptableObject.CreateInstance<Item>();
+                                drop.itemName = def.blockName;
+                                drop.blockTypeID = def.blockID;
+                                drop.icon = def.inventoryIcon;
+                                
+                                // Make sure standard/fallback block icons are populated
+                                if (drop.icon == null)
+                                {
+                                    if (existing == 1) drop.icon = Resources.Load<Sprite>("Sprites/wood_block");
+                                    else if (existing == 2) drop.icon = Resources.Load<Sprite>("Sprites/plank_block");
+                                    else if (existing == 3) drop.icon = Resources.Load<Sprite>("Sprites/stone_block");
+                                    else if (existing == 4) drop.icon = StarterItems.MakeGrassBlockIcon();
+                                    else if (existing == 5) drop.icon = Resources.Load<Sprite>("Sprites/dirt_block") ?? StarterItems.MakeBlockIcon(new Color(0.45f, 0.30f, 0.18f));
+                                    else if (existing == 13) drop.icon = StarterItems.MakeShortGrassIcon();
+                                    else if (existing == 14) drop.icon = StarterItems.MakeTallGrassIcon();
+                                    else if (existing == 36) drop.icon = Resources.Load<Sprite>("Sprites/crafting_table") ?? StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f), 36);
+                                    else if (existing == 37) drop.icon = Resources.Load<Sprite>("Sprites/furnace") ?? StarterItems.MakeBlockIcon(new Color(0.5f, 0.5f, 0.5f), 37);
+                                    else if (existing == 38 || existing == 40 || existing == 41 || existing == 42) drop.icon = Resources.Load<Sprite>("Sprites/wooden_stairs") ?? StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f), 38);
+                                    else if (existing == 39 || existing == 43 || existing == 44 || existing == 45) drop.icon = Resources.Load<Sprite>("Sprites/stone_stairs") ?? StarterItems.MakeBlockIcon(new Color(0.52f, 0.52f, 0.54f), 39);
+                                    else if (existing == 46) drop.icon = Resources.Load<Sprite>("Sprites/wooden_slab") ?? StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f), 46);
+                                    else if (existing == 47) drop.icon = Resources.Load<Sprite>("Sprites/stone_slab") ?? StarterItems.MakeBlockIcon(new Color(0.52f, 0.52f, 0.54f), 47);
+                                    else if (existing == 56) drop.icon = Resources.Load<Sprite>("Sprites/gravel_block") ?? StarterItems.MakeBlockIcon(new Color(0.48f, 0.48f, 0.48f), 56);
+                                }
+                            }
+                            else
+                            {
+                                // Legacy pure hardcoded fallback
+                                if (existing == 1)
+                                {
+                                    drop = ScriptableObject.CreateInstance<Item>();
+                                    drop.itemName = "Wood";
+                                    drop.blockTypeID = 1;
+                                    drop.icon = Resources.Load<Sprite>("Sprites/wood_block");
+                                }
+                                else if (existing == 2)
+                                {
+                                    drop = ScriptableObject.CreateInstance<Item>();
+                                    drop.itemName = "Plank";
+                                    drop.blockTypeID = 2;
+                                    drop.icon = Resources.Load<Sprite>("Sprites/plank_block");
+                                }
+                                else if (existing == 3)
+                                {
+                                    drop = ScriptableObject.CreateInstance<Item>();
+                                    drop.itemName = "Stone";
+                                    drop.blockTypeID = 3;
+                                    drop.icon = Resources.Load<Sprite>("Sprites/stone_block");
+                                }
+                                else if (existing == 4)
+                                {
+                                    drop = ScriptableObject.CreateInstance<Item>();
+                                    drop.itemName = "Grass Block";
+                                    drop.blockTypeID = 4;
+                                    drop.icon = StarterItems.MakeGrassBlockIcon();
+                                }
+                                else if (existing == 5)
+                                {
+                                    drop = ScriptableObject.CreateInstance<Item>();
+                                    drop.itemName = "Dirt";
+                                    drop.blockTypeID = 5;
+                                    Sprite loaded = Resources.Load<Sprite>("Sprites/dirt_block");
+                                    drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.45f, 0.30f, 0.18f));
+                                }
                             }
                         }
                     }
-                    else if (existing == 31)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Iron Ore";
-                        drop.blockTypeID = 31;
-                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.85f, 0.65f, 0.52f), 31);
-                    }
-                    else if (existing == 55) // Diamond Ore
-                    {
-                        drop = Inventory.Instance != null ? Inventory.Instance.CreateItem("Diamond", 0) : null;
-                        if (drop == null)
-                        {
-                            drop = ScriptableObject.CreateInstance<Item>();
-                            drop.itemName = "Diamond";
-                            drop.blockTypeID = 0;
-                        }
-                    }
-                    else if (existing == 32)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Gold Block";
-                        drop.blockTypeID = 32;
-                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.98f, 0.82f, 0.15f), 32);
-                    }
-                    else if (existing == 33)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Iron Block";
-                        drop.blockTypeID = 33;
-                        drop.icon = StarterItems.MakeBlockIcon(new Color(0.88f, 0.93f, 0.98f), 33);
-                    }
-                    else if (existing == 35)
-                    {
-                        // Glass shatters — no item drop (drop stays null)
-                    }
-                    else if (existing == 36)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Crafting Table";
-                        drop.blockTypeID = 36;
-                        Sprite loaded = Resources.Load<Sprite>("Sprites/crafting_table");
-                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f), 36);
-                    }
-                    else if (existing == 37)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Furnace";
-                        drop.blockTypeID = 37;
-                        Sprite loaded = Resources.Load<Sprite>("Sprites/furnace");
-                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.5f, 0.5f, 0.5f), 37);
-                    }
-                    else if (existing == 38 || existing == 40 || existing == 41 || existing == 42)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Wooden Stairs";
-                        drop.blockTypeID = 38;
-                        Sprite loaded = Resources.Load<Sprite>("Sprites/wooden_stairs");
-                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f), 38);
-                    }
-                    else if (existing == 39 || existing == 43 || existing == 44 || existing == 45)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Stone Stairs";
-                        drop.blockTypeID = 39;
-                        Sprite loaded = Resources.Load<Sprite>("Sprites/stone_stairs");
-                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.52f, 0.52f, 0.54f), 39);
-                    }
-                    else if (existing == 46)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Wooden Slab";
-                        drop.blockTypeID = 46;
-                        Sprite loaded = Resources.Load<Sprite>("Sprites/wooden_slab");
-                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.72f, 0.58f, 0.37f), 46);
-                    }
-                    else if (existing == 47)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Stone Slab";
-                        drop.blockTypeID = 47;
-                        Sprite loaded = Resources.Load<Sprite>("Sprites/stone_slab");
-                        drop.icon = loaded != null ? loaded : StarterItems.MakeBlockIcon(new Color(0.52f, 0.52f, 0.54f), 47);
-                    }
-                    else if (existing == 9)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Flower";
-                        drop.blockTypeID = 9;
-                        drop.icon = MakeFlowerIcon();
-                    }
-                    else if (existing == 10)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Dandelion";
-                        drop.blockTypeID = 10;
-                        drop.icon = MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.95f, 0.85f, 0.10f), new Color(0.95f, 0.65f, 0.05f));
-                    }
-                    else if (existing == 11)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Iris";
-                        drop.blockTypeID = 11;
-                        drop.icon = MakeFlowerIcon(new Color(0.22f, 0.58f, 0.12f), new Color(0.40f, 0.20f, 0.90f), new Color(1.00f, 0.80f, 0.10f));
-                    }
-                    else if (existing == 12)
-                    {
-                        var pc = FindFirstObjectByType<PlayerController>();
-                        bool isCreative = (pc != null && pc.isCreativeMode);
-                        if (!isCreative && UnityEngine.Random.value < 0.20f)
-                        {
-                            drop = ScriptableObject.CreateInstance<Item>();
-                            drop.itemName = "Apple";
-                            drop.blockTypeID = 0;
-                            drop.icon = MakeAppleIcon();
-                        }
-                        else
-                        {
-                            drop = ScriptableObject.CreateInstance<Item>();
-                            drop.itemName = "Leaves";
-                            drop.blockTypeID = 12;
-                            drop.icon = StarterItems.MakeBlockIcon(new Color(0.20f, 0.50f, 0.10f));
-                        }
-                    }
-                    else if (existing == 20)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Small Wheel";
-                        drop.blockTypeID = 20;
-                        drop.icon = VehicleSpawner.CreateWheelIcon(false);
-                    }
-                    else if (existing == 21 || existing == 23)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Large Wheel";
-                        drop.blockTypeID = 21;
-                        drop.icon = VehicleSpawner.CreateWheelIcon(true);
-                    }
-                    else if (existing == 26 || existing == 27)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Large Propeller";
-                        drop.blockTypeID = 26;
-                        drop.icon = VehicleSpawner.CreateLargePropellerIcon();
-                    }
-                    else if (existing == 22)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Propeller";
-                        drop.blockTypeID = 22;
-                        drop.icon = VehicleSpawner.CreatePropellerIcon();
-                    }
-                    else if (existing == 50)
-                    {
-                        drop = ScriptableObject.CreateInstance<Item>();
-                        drop.itemName = "Control Block";
-                        drop.blockTypeID = 50;
-                        drop.icon = VehicleSpawner.CreateControlBlockIcon();
-                    }
                 }
 
-                if (drop != null) DroppedItem.Spawn(drop, 1, pos, existing);
+                if (drop != null)
+                {
+                    DroppedItem.Spawn(drop, 1, pos, existing);
+                    Debug.Log($"[ModifyBlock] Successfully spawned drop item: {drop.itemName} for block ID {existing}");
+                }
             }
         }
         if (blockID != 0)
@@ -1064,6 +1017,8 @@ public class VoxelWorld : MonoBehaviour
             return 39;
         if (blockID == 55)     // Diamond Ore
             return 40;
+        if (blockID == 56)     // Gravel
+            return 3;
         
         // Grass (ID 4 or 6)
         return (face == 2) ? 0 : (face == 3) ? 2 : 1;
@@ -1303,20 +1258,37 @@ public class VoxelWorld : MonoBehaviour
         {
             int px = i % w;
             Color c = src[i];
-            
+
             bool inGlassTile = (px >= glassTileXStart && px < glassTileXEnd);
             if (inGlassTile)
             {
-                out_[i] = c; // Preserve the exact alpha generated by MinecraftGlass
+                // Preserve the exact alpha generated by MinecraftGlass
+                out_[i] = c;
             }
             else
             {
-                // Convert magenta key pixels in flower and grass tiles to alpha=0
-                bool inFlowerOrGrassTile = (px >= 9 * tileSize && px < 12 * tileSize) || (px >= 27 * tileSize && px < 29 * tileSize);
-                bool isMagenta    = (c.r > 0.8f && c.g < 0.2f && c.b > 0.8f);
-                out_[i] = inFlowerOrGrassTile && isMagenta
-                    ? new Color(c.r, c.g, c.b, 0f)  // transparent
-                    : new Color(c.r, c.g, c.b, 1f);  // opaque
+                // Convert magenta key pixels in procedural flower/grass tiles to alpha=0
+                bool inFlowerOrGrassTile = (px >= 9 * tileSize && px < 12 * tileSize)
+                                        || (px >= 27 * tileSize && px < 29 * tileSize);
+                bool isMagenta = (c.r > 0.8f && c.g < 0.2f && c.b > 0.8f);
+
+                if (inFlowerOrGrassTile && isMagenta)
+                {
+                    // Transparent key colour used by procedural foliage
+                    out_[i] = new Color(c.r, c.g, c.b, 0f);
+                }
+                else if (c.a < 1f)
+                {
+                    // Custom PNG tile already has a real alpha channel — preserve it.
+                    // This makes background-removed textures (e.g. leaves, gravel) show
+                    // transparent pixels instead of rendering them white/opaque.
+                    out_[i] = c;
+                }
+                else
+                {
+                    // Fully opaque procedural tile — keep alpha=1
+                    out_[i] = new Color(c.r, c.g, c.b, 1f);
+                }
             }
         }
 

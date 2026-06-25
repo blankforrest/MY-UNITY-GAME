@@ -279,7 +279,7 @@ public class Inventory : MonoBehaviour
             else if (i == 4)
             {
                 string n = slot?.item?.itemName;
-                if (n != "Iron Block" && n != "Iron Ore" && n != "Stone") isControlBlock3x3 = false;
+                if (n != "Iron Block" && n != "Iron Ore" && n != "Stone" && n != "Gravel") isControlBlock3x3 = false;
             }
             else
             {
@@ -304,7 +304,7 @@ public class Inventory : MonoBehaviour
             }
             else
             {
-                if (slot?.item?.itemName != "Stone") isFurnace3x3 = false;
+                if (slot?.item?.itemName != "Stone" && slot?.item?.itemName != "Gravel") isFurnace3x3 = false;
             }
         }
         if (isFurnace3x3)
@@ -329,7 +329,7 @@ public class Inventory : MonoBehaviour
         foreach (int idx in indicesA)
         {
             if (tableCraftingSlots[idx]?.item?.itemName != "Plank") isWoodStairsA = false;
-            if (tableCraftingSlots[idx]?.item?.itemName != "Stone") isStoneStairsA = false;
+            if (tableCraftingSlots[idx]?.item?.itemName != "Stone" && tableCraftingSlots[idx]?.item?.itemName != "Gravel") isStoneStairsA = false;
         }
         foreach (int idx in emptyA)
         {
@@ -343,7 +343,7 @@ public class Inventory : MonoBehaviour
         foreach (int idx in indicesB)
         {
             if (tableCraftingSlots[idx]?.item?.itemName != "Plank") isWoodStairsB = false;
-            if (tableCraftingSlots[idx]?.item?.itemName != "Stone") isStoneStairsB = false;
+            if (tableCraftingSlots[idx]?.item?.itemName != "Stone" && tableCraftingSlots[idx]?.item?.itemName != "Gravel") isStoneStairsB = false;
         }
         foreach (int idx in emptyB)
         {
@@ -381,7 +381,7 @@ public class Inventory : MonoBehaviour
             {
                 int idx = r * 3 + c;
                 if (tableCraftingSlots[idx]?.item?.itemName != "Plank") rowIsPlank = false;
-                if (tableCraftingSlots[idx]?.item?.itemName != "Stone") rowIsStone = false;
+                if (tableCraftingSlots[idx]?.item?.itemName != "Stone" && tableCraftingSlots[idx]?.item?.itemName != "Gravel") rowIsStone = false;
             }
 
             bool othersEmpty = true;
@@ -635,14 +635,19 @@ public class Inventory : MonoBehaviour
             BlockDefinition def = BlockRegistry.GetDefinition((byte)blockTypeID);
             if (def != null)
             {
-                bool hasCustomTextures = (def.textureTop != null || def.textureSide != null || def.textureBottom != null);
-                if (hasCustomTextures)
+                // If they have an inventoryIcon assigned manually in the inspector, prioritize it!
+                if (def.inventoryIcon != null)
                 {
-                    if (def.inventoryIcon == null)
+                    sprite = def.inventoryIcon;
+                }
+                else
+                {
+                    bool hasCustomTextures = (def.textureTop != null || def.textureSide != null || def.textureBottom != null);
+                    if (hasCustomTextures)
                     {
                         def.inventoryIcon = StarterItems.MakeIsometricBlock(blockTypeID, Color.white);
+                        sprite = def.inventoryIcon;
                     }
-                    sprite = def.inventoryIcon;
                 }
             }
         }
@@ -771,6 +776,7 @@ public class Inventory : MonoBehaviour
             // ── 1. Blocks ──────────────────────────────────────────
             items.Add(new CreativeItemData("Grass Block", 4, 64));
             items.Add(new CreativeItemData("Stone", 3, 64));
+            items.Add(new CreativeItemData("Gravel", 56, 64));
             items.Add(new CreativeItemData("Plank", 2, 64));
             items.Add(new CreativeItemData("Wood", 1, 64));
             items.Add(new CreativeItemData("Dirt", 5, 64));
@@ -844,6 +850,7 @@ public class Inventory : MonoBehaviour
         {
             items.Add(new CreativeItemData("Grass Block", 4, 64));
             items.Add(new CreativeItemData("Stone", 3, 64));
+            items.Add(new CreativeItemData("Gravel", 56, 64));
             items.Add(new CreativeItemData("Plank", 2, 64));
             items.Add(new CreativeItemData("Wood", 1, 64));
             items.Add(new CreativeItemData("Dirt", 5, 64));
@@ -1341,7 +1348,7 @@ public class Inventory : MonoBehaviour
             if (itm == null) return;
             string name = itm.itemName;
             if (name == "Plank") { matName = "Plank"; tier = ToolTier.Wood; }
-            else if (name == "Stone") { matName = "Stone"; tier = ToolTier.Stone; }
+            else if (name == "Stone" || name == "Gravel") { matName = "Stone"; tier = ToolTier.Stone; }
             else if (name == "Iron") { matName = "Iron"; tier = ToolTier.Iron; }
             else if (name == "Diamond") { matName = "Diamond"; tier = ToolTier.Diamond; }
         };

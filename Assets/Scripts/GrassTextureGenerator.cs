@@ -583,6 +583,8 @@ public static class GrassTextureGenerator
                 tile = 39;
             else if (blockType == 55) // Diamond Ore
                 tile = 40;
+            else if (blockType == 56) // Gravel
+                tile = 3;
             else                     // Grass (blockType == 4 or 6)
                 tile = (face == 2) ? 0   // top    → grass top
                      : (face == 3) ? 2   // bottom → dirt

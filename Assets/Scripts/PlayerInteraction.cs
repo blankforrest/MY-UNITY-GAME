@@ -93,6 +93,14 @@ public class PlayerInteraction : MonoBehaviour
                     ResetBreakingState();
                     return; // Intercept click
                 }
+
+                SheepAI sheep = hit.collider.GetComponentInParent<SheepAI>();
+                if (sheep != null)
+                {
+                    sheep.TakeDamage(4f); // Deal 4 damage
+                    ResetBreakingState();
+                    return; // Intercept click
+                }
             }
         }
 
@@ -446,6 +454,22 @@ public class PlayerInteraction : MonoBehaviour
                             idToPlace = blockType;
                         VoxelWorld.Instance.ModifyBlock(center, idToPlace);
                         PlacedBlockRegistry.Instance?.Register(pos);
+                    }
+
+                    PlayerController pc = FindFirstObjectByType<PlayerController>();
+                    bool isCreative = (pc != null && pc.isCreativeMode);
+                    if (!isCreative)
+                    {
+                        placeSlot.amount--;
+                        if (placeSlot.amount <= 0)
+                        {
+                            placeSlot.item = null;
+                            Hotbar.Instance?.SetSlot(Hotbar.Instance.SelectedIndex, null, 0);
+                        }
+                        else
+                        {
+                            Hotbar.Instance?.SetSlot(Hotbar.Instance.SelectedIndex, placeSlot.item, placeSlot.amount);
+                        }
                     }
                 }
             }

@@ -71,6 +71,23 @@ public class SheepAI : MonoBehaviour
         // Cache player reference
         player = FindFirstObjectByType<PlayerController>();
 
+        // Ignore collision with all foliage mesh colliders in the world
+        foreach (var chunk in FindObjectsByType<Chunk>(FindObjectsSortMode.None))
+        {
+            if (chunk != null)
+            {
+                Transform foliage = chunk.transform.Find("Foliage");
+                if (foliage != null)
+                {
+                    Collider foliageCollider = foliage.GetComponent<Collider>();
+                    if (foliageCollider != null && cc != null)
+                    {
+                        Physics.IgnoreCollision(cc, foliageCollider, true);
+                    }
+                }
+            }
+        }
+
         // Start idling
         SwitchState(State.Idle);
     }

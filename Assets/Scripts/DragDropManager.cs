@@ -285,13 +285,23 @@ public class DragDropManager : MonoBehaviour
                                 heldItem = new InventorySlot(slotData.item, slotData.amount);
                                 clickedSlotOnPress.WriteItemData(null);
                                 clickedSlotOnPress.Refresh();
-                                DropHeldItemInWorld();
+                                if (!IsPointerOverUI())
+                                {
+                                    DropHeldItemInWorld();
+                                }
+                                else
+                                {
+                                    UpdateGhostVisual();
+                                }
                                 Inventory.Instance?.onInventoryChangedCallback?.Invoke();
                             }
                         }
                         else if (heldItem != null && heldItem.item != null)
                         {
-                            DropHeldItemInWorld();
+                            if (!IsPointerOverUI())
+                            {
+                                DropHeldItemInWorld();
+                            }
                         }
                     }
                 }
@@ -302,7 +312,10 @@ public class DragDropManager : MonoBehaviour
                 // Released when not pressing/dragging (e.g. click release outside slots)
                 if (heldItem != null && releaseSlot == null)
                 {
-                    DropHeldItemInWorld();
+                    if (!IsPointerOverUI())
+                    {
+                        DropHeldItemInWorld();
+                    }
                 }
             }
         }
