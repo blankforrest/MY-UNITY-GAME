@@ -15,10 +15,10 @@ MonoBehaviour:
   blocks:
   - blockName: Wood
     blockID: 1
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: b08844b714ff56d4db8885e09b9cff33, type: 3}
+    textureTop: {fileID: 2800000, guid: 157a6181ae7da5641871b994b799657b, type: 3}
+    textureSide: {fileID: 2800000, guid: 9eaddd3f4adb64540829ac571f41204d, type: 3}
+    textureBottom: {fileID: 2800000, guid: 157a6181ae7da5641871b994b799657b, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -55,10 +55,10 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Stone
     blockID: 3
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 602b488793b66cc459d169abe39b19ed, type: 3}
+    textureTop: {fileID: 2800000, guid: 12fff6a9907e5884597b2faf75e48333, type: 3}
+    textureSide: {fileID: 2800000, guid: 12fff6a9907e5884597b2faf75e48333, type: 3}
+    textureBottom: {fileID: 2800000, guid: 12fff6a9907e5884597b2faf75e48333, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -75,10 +75,10 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Grass Block
     blockID: 4
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: d3c1df4b92570d44489314f4ca54e4f2, type: 3}
+    textureTop: {fileID: 2800000, guid: 7ce3a3957e4d3854b868872cffccc10b, type: 3}
+    textureSide: {fileID: 2800000, guid: 373959c22b4533b4da5419214a3a59b4, type: 3}
+    textureBottom: {fileID: 2800000, guid: 7a3f7fffe40fb154b8b7a8b021a8bbb2, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -95,10 +95,10 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Dirt
     blockID: 5
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 34711e80b44d04545825552f5b03a01f, type: 3}
+    textureTop: {fileID: 2800000, guid: 7a3f7fffe40fb154b8b7a8b021a8bbb2, type: 3}
+    textureSide: {fileID: 2800000, guid: 7a3f7fffe40fb154b8b7a8b021a8bbb2, type: 3}
+    textureBottom: {fileID: 2800000, guid: 7a3f7fffe40fb154b8b7a8b021a8bbb2, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -155,10 +155,10 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Sand
     blockID: 8
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: e62c826779dd2e844a76bb0ea30ef18f, type: 3}
+    textureTop: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
+    textureSide: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
+    textureBottom: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -235,10 +235,10 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Leaves
     blockID: 12
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 1c605dd242eb1b94c9671db2c86ea67a, type: 3}
+    textureTop: {fileID: 2800000, guid: a953535ca99089742a96d8879aebfa29, type: 3}
+    textureSide: {fileID: 2800000, guid: a953535ca99089742a96d8879aebfa29, type: 3}
+    textureBottom: {fileID: 2800000, guid: a953535ca99089742a96d8879aebfa29, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -535,10 +535,10 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Sand (Unused ID)
     blockID: 34
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: e62c826779dd2e844a76bb0ea30ef18f, type: 3}
+    textureTop: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
+    textureSide: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
+    textureBottom: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -695,10 +695,10 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Bedrock
     blockID: 48
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: eb782551a12b8e643a0302b89aa5af96, type: 3}
+    textureTop: {fileID: 2800000, guid: 1855c3ef42c9b494fa9445a02b0a9bfe, type: 3}
+    textureSide: {fileID: 2800000, guid: 1855c3ef42c9b494fa9445a02b0a9bfe, type: 3}
+    textureBottom: {fileID: 2800000, guid: 1855c3ef42c9b494fa9445a02b0a9bfe, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -715,10 +715,10 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Cactus
     blockID: 49
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 04391fc9fd4b455458b860af4bf27d30, type: 3}
+    textureTop: {fileID: 2800000, guid: 87361bf11ea04474fb224291b4a36784, type: 3}
+    textureSide: {fileID: 2800000, guid: 0c80adbb0e874674d96973bc9ebe20c0, type: 3}
+    textureBottom: {fileID: 2800000, guid: 87361bf11ea04474fb224291b4a36784, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -755,10 +755,10 @@ MonoBehaviour:
     vehiclePartType: ControlBlock
   - blockName: Birch Log
     blockID: 51
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 90d0775375258dd418b3f1981ca6f735, type: 3}
+    textureTop: {fileID: 2800000, guid: 3630901869b91f643b93ff28cce4174c, type: 3}
+    textureSide: {fileID: 2800000, guid: c6260ae0bf5546c428112d5759f86f64, type: 3}
+    textureBottom: {fileID: 2800000, guid: 3630901869b91f643b93ff28cce4174c, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -775,10 +775,10 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Birch Leaves
     blockID: 52
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 01059a8b348fe224aac05ac2dbbfa23b, type: 3}
+    textureTop: {fileID: 2800000, guid: 4fcadcda1435167418b75b09cc716a45, type: 3}
+    textureSide: {fileID: 2800000, guid: 4fcadcda1435167418b75b09cc716a45, type: 3}
+    textureBottom: {fileID: 2800000, guid: 4fcadcda1435167418b75b09cc716a45, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -795,10 +795,10 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Spruce Log
     blockID: 53
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 90949315344393642b7d4de8feabe2d9, type: 3}
+    textureTop: {fileID: 2800000, guid: 2652f847158065e459e9041a19a6da9b, type: 3}
+    textureSide: {fileID: 2800000, guid: 1398f9d04b24fed4186214ba3d3b2cca, type: 3}
+    textureBottom: {fileID: 2800000, guid: 2652f847158065e459e9041a19a6da9b, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -855,10 +855,10 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Gravel
     blockID: 56
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 238c750355e418d47955144c4cec7ada, type: 3}
+    textureTop: {fileID: 2800000, guid: dbfbc9b243f0fab4e982ed7ec895b510, type: 3}
+    textureSide: {fileID: 2800000, guid: dbfbc9b243f0fab4e982ed7ec895b510, type: 3}
+    textureBottom: {fileID: 2800000, guid: dbfbc9b243f0fab4e982ed7ec895b510, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
