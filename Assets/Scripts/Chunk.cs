@@ -12,7 +12,7 @@ public class Chunk : MonoBehaviour
     private MeshCollider meshCollider;
     private MeshRenderer meshRenderer;
 
-    private byte[,,] voxelMap;
+    public byte[] voxelMap { get; private set; }
     public Vector2 chunkPos { get; private set; }
     private bool renderersEnabled = true;
 
@@ -40,6 +40,21 @@ public class Chunk : MonoBehaviour
     private Chunk neighborSouth;
     private Chunk neighborEast;
     private Chunk neighborWest;
+
+    // Thread safety variables to hold cloned maps & data for mesh generation
+    private byte[] threadVoxelMap;
+    private byte[] threadWestMap;
+    private byte[] threadEastMap;
+    private byte[] threadSouthMap;
+    private byte[] threadNorthMap;
+    private Vector3 chunkWorldPos;
+    private List<VehicleController.CachedVehicleData> cachedVehicles;
+    private HashSet<Vector3Int> cachedBurningFurnaces;
+    private Dictionary<Vector3Int, int> cachedFurnaceFacings;
+    private bool isUpdating = false;
+    private bool needsReupdate = false;
+    private int currentUpdateVersion = 0;
+    private System.Threading.Tasks.Task activeTask;
 
     int vertexIndex = 0;
     List<Vector3> vertices = new List<Vector3>(4096);
@@ -79,6 +94,7 @@ public class Chunk : MonoBehaviour
     public void Initialize(Vector2 pos, Material mat)
     {
         chunkPos = pos;
+        chunkWorldPos = transform.position;
         meshFilter = GetComponent<MeshFilter>();
         meshCollider = GetComponent<MeshCollider>();
         meshRenderer = GetComponent<MeshRenderer>();
@@ -130,10 +146,10 @@ public class Chunk : MonoBehaviour
 
     private void ClearNeighborReferences()
     {
-        if (neighborEast != null) neighborEast.neighborWest = null;
-        if (neighborWest != null) neighborWest.neighborEast = null;
-        if (neighborNorth != null) neighborNorth.neighborSouth = null;
-        if (neighborSouth != null) neighborSouth.neighborNorth = null;
+        if (neighborEast != null) { neighborEast.neighborWest = null; neighborEast.isDirty = true; }
+        if (neighborWest != null) { neighborWest.neighborEast = null; neighborWest.isDirty = true; }
+        if (neighborNorth != null) { neighborNorth.neighborSouth = null; neighborNorth.isDirty = true; }
+        if (neighborSouth != null) { neighborSouth.neighborNorth = null; neighborSouth.isDirty = true; }
     }
 
     private void RecalculateMaxVoxelHeight()
@@ -145,7 +161,8 @@ public class Chunk : MonoBehaviour
             {
                 for (int z = 0; z < VoxelData.ChunkWidth; z++)
                 {
-                    if (voxelMap[x, y, z] != 0)
+                    int flatIndex = VoxelData.GetFlatIndex(x, y, z);
+                    if (voxelMap[flatIndex] != 0)
                     {
                         maxVoxelHeight = y;
                         return;
@@ -155,11 +172,13 @@ public class Chunk : MonoBehaviour
         }
     }
 
-    private byte GetVoxelFromNeighborOrWorld(int x, int y, int z, Vector3 worldPosFallback)
+    private byte GetVoxelFromNeighborOrWorld(int x, int y, int z)
     {
+        byte[] currentMap = (threadVoxelMap != null) ? threadVoxelMap : voxelMap;
+
         if (x >= 0 && x < VoxelData.ChunkWidth && y >= 0 && y < VoxelData.ChunkHeight && z >= 0 && z < VoxelData.ChunkWidth)
         {
-            return voxelMap[x, y, z];
+            return currentMap[VoxelData.GetFlatIndex(x, y, z)];
         }
 
         if (y < 0 || y >= VoxelData.ChunkHeight)
@@ -167,26 +186,35 @@ public class Chunk : MonoBehaviour
             return 0;
         }
 
+        byte[] targetMap = currentMap;
+        int targetX = x;
+        int targetZ = z;
+
         if (x < 0)
         {
-            if (neighborWest != null) return neighborWest.voxelMap[x + VoxelData.ChunkWidth, y, z];
+            targetMap = (threadWestMap != null) ? threadWestMap : (neighborWest != null ? neighborWest.voxelMap : null);
+            targetX += VoxelData.ChunkWidth;
         }
         else if (x >= VoxelData.ChunkWidth)
         {
-            if (neighborEast != null) return neighborEast.voxelMap[x - VoxelData.ChunkWidth, y, z];
+            targetMap = (threadEastMap != null) ? threadEastMap : (neighborEast != null ? neighborEast.voxelMap : null);
+            targetX -= VoxelData.ChunkWidth;
         }
-        else if (z < 0)
+
+        if (z < 0)
         {
-            if (neighborSouth != null) return neighborSouth.voxelMap[x, y, z + VoxelData.ChunkWidth];
+            targetMap = (threadSouthMap != null) ? threadSouthMap : (neighborSouth != null ? neighborSouth.voxelMap : null);
+            targetZ += VoxelData.ChunkWidth;
         }
         else if (z >= VoxelData.ChunkWidth)
         {
-            if (neighborNorth != null) return neighborNorth.voxelMap[x, y, z - VoxelData.ChunkWidth];
+            targetMap = (threadNorthMap != null) ? threadNorthMap : (neighborNorth != null ? neighborNorth.voxelMap : null);
+            targetZ -= VoxelData.ChunkWidth;
         }
 
-        if (VoxelWorld.Instance != null)
+        if (targetMap != null)
         {
-            return VoxelWorld.Instance.GetBlock(worldPosFallback);
+            return targetMap[VoxelData.GetFlatIndex(targetX, y, targetZ)];
         }
 
         return 0;
@@ -288,9 +316,9 @@ public class Chunk : MonoBehaviour
 
     void PopulateVoxelMap()
     {
-        voxelMap = new byte[VoxelData.ChunkWidth, VoxelData.ChunkHeight, VoxelData.ChunkWidth];
-
         int elementCount = VoxelData.ChunkWidth * VoxelData.ChunkHeight * VoxelData.ChunkWidth;
+        voxelMap = new byte[elementCount];
+
         NativeArray<byte> flatVoxelMap = new NativeArray<byte>(elementCount, Allocator.TempJob);
 
         PopulateVoxelMapJob job = new PopulateVoxelMapJob
@@ -306,18 +334,8 @@ public class Chunk : MonoBehaviour
         JobHandle handle = job.Schedule();
         handle.Complete();
 
-        // Copy back to managed voxelMap array
-        for (int x = 0; x < VoxelData.ChunkWidth; x++)
-        {
-            for (int y = 0; y < VoxelData.ChunkHeight; y++)
-            {
-                for (int z = 0; z < VoxelData.ChunkWidth; z++)
-                {
-                    int flatIndex = x * (VoxelData.ChunkHeight * VoxelData.ChunkWidth) + y * VoxelData.ChunkWidth + z;
-                    voxelMap[x, y, z] = flatVoxelMap[flatIndex];
-                }
-            }
-        }
+        // Copy back to managed voxelMap array in a single blit
+        flatVoxelMap.CopyTo(voxelMap);
 
         flatVoxelMap.Dispose();
 
@@ -463,11 +481,15 @@ public class Chunk : MonoBehaviour
                         }
 
                         float oceanFloorNoise = Noise2D(ox * 0.015f, oz * 0.015f);
-                        float oceanHeight = (oceanFloorNoise * ChunkHeight * 0.08f) + (ChunkHeight * 0.08f) + heightOffset;
+                        float oceanDetail = Noise2D(ox * 0.06f, oz * 0.06f) * 2.5f;
+                        float oceanHeight = 12f + (oceanFloorNoise * 7f) + oceanDetail;
 
-                        float duneNoise = Noise2D(ox * 0.012f, oz * 0.012f);
+                        // Multi-octave desert dune generator
+                        float duneNoise1 = Noise2D(ox * 0.01f, oz * 0.01f);
+                        float duneNoise2 = Noise2D(ox * 0.03f, oz * 0.03f) * 0.25f;
+                        float duneNoise = (duneNoise1 + duneNoise2) / 1.25f;
                         duneNoise = math.pow(duneNoise, 2f);
-                        float desertHeight = (duneNoise * ChunkHeight * 0.12f) + (ChunkHeight * 0.22f) + heightOffset;
+                        float desertHeight = (duneNoise * ChunkHeight * 0.26f) + (ChunkHeight * 0.22f) + heightOffset;
 
                         float plainsNoise = Noise2D(ox * 0.01f, oz * 0.01f);
                         float plainsHeight = (plainsNoise * ChunkHeight * 0.03f) + (ChunkHeight * 0.22f) + heightOffset;
@@ -507,7 +529,8 @@ public class Chunk : MonoBehaviour
                             landHeight = forestHeight;
                         }
 
-                        float oceanWeight = math.clamp((continentNoise - 0.45f) / 0.10f, 0f, 1f);
+                        // We use a slightly wider window (0.12f instead of 0.10f) for a more gradual slope into deep ocean
+                        float oceanWeight = math.clamp((continentNoise - 0.45f) / 0.12f, 0f, 1f);
                         oceanWeight = oceanWeight * oceanWeight * (3f - 2f * oceanWeight); // Smoothstep
                         exactHeight = math.lerp(landHeight, oceanHeight, oceanWeight);
                         exactHeight = math.max(2f, exactHeight);
@@ -530,7 +553,6 @@ public class Chunk : MonoBehaviour
                             riverStrength = math.clamp((0.65f - continentNoise) / 0.10f, 0f, 1f);
 
                         bool isRiver = (riverStrength > 0f) && (riverCenterDist < riverWidth);
-                        bool isOcean = (continentNoise > 0.50f);
 
                         if (isRiver)
                         {
@@ -543,9 +565,18 @@ public class Chunk : MonoBehaviour
                             float carvedHeight = math.lerp(riverbedHeight, exactHeight, riverFactor);
                             exactHeight = math.min(exactHeight, carvedHeight);
                         }
-                        else if (!isOcean)
+                        else
                         {
-                            exactHeight = math.max(exactHeight, seaLevel + 1.5f);
+                            // Smoothly phase out the land height clamp as the continent transitions into the ocean
+                            float minHeight = math.lerp(seaLevel + 1.5f, 2f, oceanWeight);
+                            exactHeight = math.max(minHeight, exactHeight);
+                        }
+
+                        // Lower beach height by 1 block using perlin noise
+                        float beachNoise = Noise2D(ox * 0.1f, oz * 0.1f);
+                        if (exactHeight <= seaLevel + 1.6f && exactHeight >= seaLevel && beachNoise > 0.0f)
+                        {
+                            exactHeight -= 1.0f;
                         }
 
                         int floorY = (int)math.floor(exactHeight);
@@ -832,18 +863,23 @@ public class Chunk : MonoBehaviour
         }
     }
 
+    public void EditVoxel(int x, int y, int z, byte newID)
+    {
+        if (IsVoxelInChunk(x, y, z))
+        {
+            int flatIndex = VoxelData.GetFlatIndex(x, y, z);
+            voxelMap[flatIndex] = newID;
+            RecalculateMaxVoxelHeight();
+            UpdateChunk();
+        }
+    }
+
     public void EditVoxel(Vector3 localPosition, byte newID)
     {
         int x = Mathf.FloorToInt(localPosition.x);
         int y = Mathf.FloorToInt(localPosition.y);
         int z = Mathf.FloorToInt(localPosition.z);
-
-        if (IsVoxelInChunk(x, y, z))
-        {
-            voxelMap[x, y, z] = newID;
-            RecalculateMaxVoxelHeight();
-            UpdateChunk();
-        }
+        EditVoxel(x, y, z, newID);
     }
 
     public byte GetVoxel(int x, int y, int z)
@@ -851,7 +887,7 @@ public class Chunk : MonoBehaviour
         if (!IsVoxelInChunk(x, y, z))
             return 0;
 
-        return voxelMap[x, y, z];
+        return voxelMap[VoxelData.GetFlatIndex(x, y, z)];
     }
 
     bool IsVoxelInChunk(int x, int y, int z)
@@ -862,16 +898,90 @@ public class Chunk : MonoBehaviour
             return true;
     }
 
+
     public void UpdateChunk()
     {
+        if (isUpdating) { needsReupdate = true; return; }
+
+        isUpdating    = true;
+        needsReupdate = false;
+        currentUpdateVersion++;
+        int myVersion = currentUpdateVersion;
+
+        chunkWorldPos = transform.position;
+        cachedVehicles = VehicleController.GetCachedVehicles();
+        cachedBurningFurnaces = FurnaceManager.Instance != null ? FurnaceManager.GetBurningFurnaces() : null;
+        cachedFurnaceFacings = FurnaceManager.Instance != null ? FurnaceManager.GetFurnaceFacings() : null;
+
+        threadVoxelMap = (byte[])voxelMap.Clone();
+        threadWestMap  = neighborWest  != null ? neighborWest.voxelMap  : null;
+        threadEastMap  = neighborEast  != null ? neighborEast.voxelMap  : null;
+        threadSouthMap = neighborSouth != null ? neighborSouth.voxelMap : null;
+        threadNorthMap = neighborNorth != null ? neighborNorth.voxelMap : null;
+        int currentMaxHeight = maxVoxelHeight;
+        _isDirty = false;
+
+        // ClearMeshData allocates FRESH list objects, so the background thread
+        // writes to its own private collections — no shared-list race condition.
+        ClearMeshData();
+
+        activeTask = System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                int scanHeight = Mathf.Min(VoxelData.ChunkHeight, currentMaxHeight + 1);
+                for (int y = 0; y < scanHeight; y++)
+                for (int x = 0; x < VoxelData.ChunkWidth; x++)
+                for (int z = 0; z < VoxelData.ChunkWidth; z++)
+                {
+                    byte val = threadVoxelMap[VoxelData.GetFlatIndex(x, y, z)];
+                    if (val != 0) UpdateVoxelMeshData(new Vector3(x, y, z), val);
+                }
+            }
+            catch (System.Exception ex) { Debug.LogError($"[Chunk] UpdateChunk thread failed: {ex}"); }
+        });
+
+        activeTask.ContinueWith(t =>
+        {
+            if (this == null) return;
+            if (myVersion != currentUpdateVersion) { isUpdating = false; return; }
+
+            threadVoxelMap = null; threadWestMap = null; threadEastMap = null;
+            threadSouthMap = null; threadNorthMap = null;
+            cachedVehicles = null; cachedBurningFurnaces = null; cachedFurnaceFacings = null;
+
+            CreateMesh();
+            isUpdating = false;
+            if (needsReupdate) UpdateChunk();
+        }, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    public void UpdateChunkSync()
+    {
+        currentUpdateVersion++;
+        if (activeTask != null && !activeTask.IsCompleted)
+        {
+            try { activeTask.Wait(); }
+            catch { /* failure already logged */ }
+        }
+
+        isUpdating = false; needsReupdate = false;
+        chunkWorldPos = transform.position;
+        threadVoxelMap = null; threadWestMap = null; threadEastMap = null;
+        threadSouthMap = null; threadNorthMap = null;
+        cachedVehicles = null; cachedBurningFurnaces = null; cachedFurnaceFacings = null;
+
+        // Fresh lists — no shared state with any previous async task
         ClearMeshData();
 
         int scanHeight = Mathf.Min(VoxelData.ChunkHeight, maxVoxelHeight + 1);
         for (int y = 0; y < scanHeight; y++)
-            for (int x = 0; x < VoxelData.ChunkWidth; x++)
-                for (int z = 0; z < VoxelData.ChunkWidth; z++)
-                    if (voxelMap[x, y, z] != 0)
-                        UpdateVoxelMeshData(new Vector3(x, y, z), voxelMap[x, y, z]);
+        for (int x = 0; x < VoxelData.ChunkWidth; x++)
+        for (int z = 0; z < VoxelData.ChunkWidth; z++)
+        {
+            byte val = voxelMap[VoxelData.GetFlatIndex(x, y, z)];
+            if (val != 0) UpdateVoxelMeshData(new Vector3(x, y, z), val);
+        }
 
         CreateMesh();
         _isDirty = false;
@@ -879,27 +989,29 @@ public class Chunk : MonoBehaviour
 
     void ClearMeshData()
     {
-        vertexIndex = 0;
-        vertices.Clear();
-        triangles.Clear();
-        uvs.Clear();
+        // Allocate NEW list objects each time so async builds always write
+        // to their own private collections — eliminates cross-thread list corruption.
+        vertexIndex  = 0;
+        vertices     = new List<Vector3>(4096);
+        triangles    = new List<int>(6144);
+        uvs          = new List<Vector2>(4096);
 
         waterVertexIndex = 0;
-        waterVertices.Clear();
-        waterTriangles.Clear();
-        waterUvs.Clear();
-        waterColors.Clear();
+        waterVertices    = new List<Vector3>(2048);
+        waterTriangles   = new List<int>(3072);
+        waterUvs         = new List<Vector2>(2048);
+        waterColors      = new List<Color>(2048);
 
         foliageVertexIndex = 0;
-        foliageVertices.Clear();
-        foliageTriangles.Clear();
-        foliageUvs.Clear();
-        foliageColors.Clear();
+        foliageVertices    = new List<Vector3>(2048);
+        foliageTriangles   = new List<int>(3072);
+        foliageUvs         = new List<Vector2>(2048);
+        foliageColors      = new List<Color>(2048);
 
         glassVertexIndex = 0;
-        glassVertices.Clear();
-        glassTriangles.Clear();
-        glassUvs.Clear();
+        glassVertices    = new List<Vector3>(1024);
+        glassTriangles   = new List<int>(1536);
+        glassUvs         = new List<Vector2>(1024);
     }
 
     void EnsureWaterChild()
@@ -1005,10 +1117,11 @@ public class Chunk : MonoBehaviour
 
     int GetWaterDepth(int x, int y, int z)
     {
+        byte[] currentMap = (threadVoxelMap != null) ? threadVoxelMap : voxelMap;
         int depth = 0;
         for (int dy = y; dy >= 0; dy--)
         {
-            byte block = voxelMap[x, dy, z];
+            byte block = currentMap[VoxelData.GetFlatIndex(x, dy, z)];
             if (block == 7) // Water
             {
                 depth++;
@@ -1031,9 +1144,9 @@ public class Chunk : MonoBehaviour
         }
 
         // ── Leaves: render as solid faces but on the foliage (alpha-cutout) mesh ─
-        if (blockType == 12)
+        if (blockType == 12 || blockType == 52 || blockType == 54)
         {
-            AddLeavesBlock(pos);
+            AddLeavesBlock(pos, blockType);
             return;
         }
 
@@ -1086,23 +1199,40 @@ public class Chunk : MonoBehaviour
         if (isWater)
         {
             // Convert chunk-local voxel position to world space (centre of the voxel)
-            Vector3 center = transform.position + pos + new Vector3(0.5f, 0.5f, 0.5f);
+            Vector3 center = chunkWorldPos + pos + new Vector3(0.5f, 0.5f, 0.5f);
             // Check center and the 4 horizontal corners of the water block.
             // If any of these points are inside a vehicle's dry zone, suppress the voxel.
-            if (VehicleController.IsWorldPosInsideVehicle(center) ||
-                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(-0.45f, 0f, -0.45f)) ||
-                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(0.45f, 0f, -0.45f)) ||
-                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(-0.45f, 0f, 0.45f)) ||
-                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(0.45f, 0f, 0.45f)))
+            bool insideVehicle = false;
+            if (threadVoxelMap != null)
+            {
+                insideVehicle = VehicleController.IsWorldPosInsideVehicleCached(center, cachedVehicles) ||
+                                VehicleController.IsWorldPosInsideVehicleCached(center + new Vector3(-0.45f, 0f, -0.45f), cachedVehicles) ||
+                                VehicleController.IsWorldPosInsideVehicleCached(center + new Vector3(0.45f, 0f, -0.45f), cachedVehicles) ||
+                                VehicleController.IsWorldPosInsideVehicleCached(center + new Vector3(-0.45f, 0f, 0.45f), cachedVehicles) ||
+                                VehicleController.IsWorldPosInsideVehicleCached(center + new Vector3(0.45f, 0f, 0.45f), cachedVehicles);
+            }
+            else
+            {
+                insideVehicle = VehicleController.IsWorldPosInsideVehicle(center) ||
+                                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(-0.45f, 0f, -0.45f)) ||
+                                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(0.45f, 0f, -0.45f)) ||
+                                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(-0.45f, 0f, 0.45f)) ||
+                                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(0.45f, 0f, 0.45f));
+            }
+
+            if (insideVehicle)
             {
                 return;
             }
         }
 
         int depth = 1;
+        bool isWaterSurface = false;
         if (isWater)
         {
             depth = GetWaterDepth(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y), Mathf.FloorToInt(pos.z));
+            byte blockAbove = GetVoxelFromNeighborOrWorld(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y) + 1, Mathf.FloorToInt(pos.z));
+            isWaterSurface = (blockAbove != 7);
         }
 
         for (int p = 0; p < 6; p++)
@@ -1113,10 +1243,10 @@ public class Chunk : MonoBehaviour
                 {
                     Vector3 vert = VoxelData.voxelVerts[VoxelData.voxelTris[p, i]];
                     
-                    // Squash the top vertices down if this is water
-                    if (isWater && vert.y > 0.5f)
+                    // Squash the top vertices down if this is the water surface
+                    if (isWater && isWaterSurface && vert.y > 0.5f)
                     {
-                        vert.y = 0.85f; // Water is slightly lower
+                        vert.y = 0.85f; // Water surface is slightly lower
                     }
                     
                     if (isWater)
@@ -1139,16 +1269,33 @@ public class Chunk : MonoBehaviour
 
                 // Per-face atlas UVs based on block type
                 bool isFurnaceLit = false;
-                if (uvBlockType == 37 && FurnaceManager.Instance != null)
+                int furnaceFacing = -1;
+                if (uvBlockType == 37)
                 {
                     Vector3Int worldPos = new Vector3Int(
-                        Mathf.FloorToInt(transform.position.x + pos.x),
-                        Mathf.FloorToInt(transform.position.y + pos.y),
-                        Mathf.FloorToInt(transform.position.z + pos.z)
+                        Mathf.FloorToInt(chunkWorldPos.x + pos.x),
+                        Mathf.FloorToInt(chunkWorldPos.y + pos.y),
+                        Mathf.FloorToInt(chunkWorldPos.z + pos.z)
                     );
-                    isFurnaceLit = FurnaceManager.Instance.IsFurnaceBurning(worldPos);
+                    if (threadVoxelMap != null)
+                    {
+                        isFurnaceLit = cachedBurningFurnaces != null && cachedBurningFurnaces.Contains(worldPos);
+                        if (cachedFurnaceFacings != null && cachedFurnaceFacings.TryGetValue(worldPos, out int f))
+                        {
+                            furnaceFacing = f;
+                        }
+                    }
+                    else if (FurnaceManager.Instance != null)
+                    {
+                        isFurnaceLit = FurnaceManager.Instance.IsFurnaceBurning(worldPos);
+                        var fState = FurnaceManager.Instance.GetOrCreateFurnace(worldPos);
+                        if (fState != null)
+                        {
+                            furnaceFacing = fState.facingDirection;
+                        }
+                    }
                 }
-                Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, uvBlockType, isFurnaceLit);
+                Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, uvBlockType, isFurnaceLit, furnaceFacing);
                 if (isWater)
                 {
                     waterUvs.AddRange(faceUVs);
@@ -1237,7 +1384,7 @@ public class Chunk : MonoBehaviour
     /// (alpha-cutout) mesh so the chunky leaf texture renders with the gap pixels
     /// clipped out rather than opaque black squares.
     /// </summary>
-    void AddLeavesBlock(Vector3 pos)
+    void AddLeavesBlock(Vector3 pos, byte blockType)
     {
         for (int p = 0; p < 6; p++)
         {
@@ -1247,7 +1394,7 @@ public class Chunk : MonoBehaviour
             int ny = Mathf.FloorToInt(neighborPos.y);
             int nz = Mathf.FloorToInt(neighborPos.z);
 
-            byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz, neighborPos + transform.position);
+            byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz);
 
             // Skip face if neighbour is any leaf-type block (they all cull each other)
             if (neighbor == 12 || neighbor == 52 || neighbor == 54) continue;
@@ -1256,7 +1403,7 @@ public class Chunk : MonoBehaviour
                 neighbor != 10 && neighbor != 11 &&
                 neighbor != 12 && neighbor != 52 && neighbor != 54) continue;
 
-            Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, 12);
+            Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, blockType);
 
             for (int i = 0; i < 4; i++)
             {
@@ -1272,23 +1419,8 @@ public class Chunk : MonoBehaviour
             foliageTriangles.Add(foliageVertexIndex + 1);
             foliageTriangles.Add(foliageVertexIndex + 3);
             foliageVertexIndex += 4;
-
-            // Add invisible face to the solid mesh collider for player collision
-            float transU = 9f / (float)GrassTextureGenerator.TILE_COUNT;
-            Vector2 transparentUV = new Vector2(transU, 0f);
-            for (int i = 0; i < 4; i++)
-            {
-                vertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, i]]);
-                uvs.Add(transparentUV);
-            }
-
-            triangles.Add(vertexIndex);
-            triangles.Add(vertexIndex + 1);
-            triangles.Add(vertexIndex + 2);
-            triangles.Add(vertexIndex + 2);
-            triangles.Add(vertexIndex + 1);
-            triangles.Add(vertexIndex + 3);
-            vertexIndex += 4;
+            // Leaves use only the foliage MeshCollider (already excluded for player + vehicles).
+            // No invisible geometry is emitted into the solid mesh, so leaves are passable.
         }
     }
 
@@ -1369,7 +1501,7 @@ public class Chunk : MonoBehaviour
         int ny = Mathf.FloorToInt(neighborPos.y);
         int nz = Mathf.FloorToInt(neighborPos.z);
 
-        byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz, neighborPos + transform.position);
+        byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz);
 
         return neighbor != 0 && neighbor != 7 && neighbor != 9 && neighbor != 10 && neighbor != 11 && neighbor != 13 && neighbor != 14 && neighbor != 23 && neighbor != 27;
     }
@@ -1627,7 +1759,7 @@ public class Chunk : MonoBehaviour
     /// </summary>
     void AddGlassToSolidMesh(Vector3 pos)
     {
-        float transU = 9f / (float)GrassTextureGenerator.TILE_COUNT;
+        float transU = 9f / (float)BlockRegistry.TotalTilesCount;
         Vector2 transparentUV = new Vector2(transU, 0f);
 
         for (int p = 0; p < 6; p++)
@@ -1637,7 +1769,7 @@ public class Chunk : MonoBehaviour
             int ny = Mathf.FloorToInt(neighborPos.y);
             int nz = Mathf.FloorToInt(neighborPos.z);
 
-            byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz, neighborPos + transform.position);
+            byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz);
 
             // Cull face against: same glass=35 (cull), fully-solid blocks (cull)
             // Show face against: air (0), water (7), flowers (9-11), leaves (12)
@@ -1685,7 +1817,7 @@ public class Chunk : MonoBehaviour
         int y = Mathf.FloorToInt(neighborPos.y);
         int z = Mathf.FloorToInt(neighborPos.z);
 
-        byte neighbor = GetVoxelFromNeighborOrWorld(x, y, z, neighborPos + transform.position);
+        byte neighbor = GetVoxelFromNeighborOrWorld(x, y, z);
 
         if (neighbor == 0) return false;
 
@@ -1852,7 +1984,7 @@ public class Chunk : MonoBehaviour
         for (int y = 0; y < scanHeight; y++)
             for (int x = 0; x < VoxelData.ChunkWidth; x++)
                 for (int z = 0; z < VoxelData.ChunkWidth; z++)
-                    if (voxelMap[x, y, z] == 7) // Water only
+                    if (voxelMap[VoxelData.GetFlatIndex(x, y, z)] == 7) // Water only
                         UpdateVoxelMeshData(new Vector3(x, y, z), 7);
 
         // Upload only the water mesh — no collider, no terrain touch

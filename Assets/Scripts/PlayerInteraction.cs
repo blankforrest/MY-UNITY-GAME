@@ -429,6 +429,35 @@ public class PlayerInteraction : MonoBehaviour
                             idToPlace = (pos == gridPos) ? (byte)21 : (byte)23;
                         else if (blockType == 26)
                             idToPlace = (pos == gridPos) ? (byte)26 : (byte)27;
+                        else if (blockType == 37)
+                        {
+                            idToPlace = 37;
+                            Vector3 forward = playerCam.transform.forward;
+                            forward.y = 0f;
+                            forward.Normalize();
+
+                            int facing = 0; // 0=Back (South), 1=Front (North), 4=Left (West), 5=Right (East)
+                            if (Mathf.Abs(forward.z) > Mathf.Abs(forward.x))
+                            {
+                                if (forward.z > 0f) // Looking North -> faces South (0)
+                                    facing = 0;
+                                else // Looking South -> faces North (1)
+                                    facing = 1;
+                            }
+                            else
+                            {
+                                if (forward.x > 0f) // Looking East -> faces West (4)
+                                    facing = 4;
+                                else // Looking West -> faces East (5)
+                                    facing = 5;
+                            }
+
+                            var fState = FurnaceManager.Instance?.GetOrCreateFurnace(pos);
+                            if (fState != null)
+                            {
+                                fState.facingDirection = facing;
+                            }
+                        }
                         else if (blockType == 38 || blockType == 39)
                         {
                             Vector3 forward = playerCam.transform.forward;

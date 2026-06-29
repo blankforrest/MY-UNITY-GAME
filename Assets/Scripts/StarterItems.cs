@@ -100,6 +100,7 @@ public class StarterItems : MonoBehaviour
 
     private void GenerateBlockSpritesIfMissing()
     {
+        if (Application.isPlaying) return; // Do not write files/modify assets at runtime during Play Mode
         string dir = System.IO.Path.Combine(Application.dataPath, "Resources/Sprites");
         if (!System.IO.Directory.Exists(dir))
         {
@@ -144,6 +145,7 @@ public class StarterItems : MonoBehaviour
 
     private void ApplyTransparencyKey(string path)
     {
+        if (Application.isPlaying) return; // Do not write files/modify assets at runtime during Play Mode
         if (!System.IO.File.Exists(path)) return;
         try
         {
@@ -322,6 +324,18 @@ public class StarterItems : MonoBehaviour
         else if (itemName.Equals("Apple", System.StringComparison.OrdinalIgnoreCase))
         {
             item.icon = VoxelWorld.MakeAppleIcon();
+        }
+        else if (itemName.Equals("Wool", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.icon = VoxelWorld.MakeWoolIcon();
+        }
+        else if (itemName.Equals("Mutton", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.icon = VoxelWorld.MakeMuttonIcon();
+        }
+        else if (itemName.Equals("Leather", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.icon = VoxelWorld.MakeLeatherIcon();
         }
         else if (itemName.Equals("Grass Block", System.StringComparison.OrdinalIgnoreCase) || blockTypeID == 4)
         {
@@ -814,12 +828,6 @@ public class StarterItems : MonoBehaviour
 
     private void GenerateCustomBlockSprites()
     {
-        string dir = System.IO.Path.Combine(Application.dataPath, "Blocks");
-        if (!System.IO.Directory.Exists(dir))
-        {
-            System.IO.Directory.CreateDirectory(dir);
-        }
-
         bool createdAny = false;
         
         foreach (var def in BlockRegistry.RegisteredBlocks)
@@ -840,7 +848,7 @@ public class StarterItems : MonoBehaviour
             bool hasCustomTextures = (def.textureTop != null || def.textureSide != null || def.textureBottom != null);
             if (hasCustomTextures)
             {
-                // Generate a 3D isometric sprite from its custom textures
+                // Generate a 3D isometric sprite from its custom textures in memory
                 Sprite sprite = MakeIsometricBlock(def.blockID, Color.white);
                 if (sprite != null)
                 {
@@ -851,20 +859,34 @@ public class StarterItems : MonoBehaviour
                         def.dropItem.icon = sprite;
                     }
 
-                    // Save the PNG file to Assets/Blocks/
-                    string fileName = def.blockName.Replace(" ", "_").ToLower() + "_block.png";
-                    string path = System.IO.Path.Combine(dir, fileName);
-                    
-                    byte[] bytes = sprite.texture.EncodeToPNG();
-                    System.IO.File.WriteAllBytes(path, bytes);
-                    Debug.Log($"[StarterItems] Generated and saved custom block 3D sprite: {path}");
-                    createdAny = true;
+                    // Save the PNG file to Assets/Blocks/ only if we are in editor edit mode
+                    if (!Application.isPlaying)
+                    {
+                        string dir = System.IO.Path.Combine(Application.dataPath, "Blocks");
+                        if (!System.IO.Directory.Exists(dir))
+                        {
+                            System.IO.Directory.CreateDirectory(dir);
+                        }
+                        string fileName = def.blockName.Replace(" ", "_").ToLower() + "_block.png";
+                        string path = System.IO.Path.Combine(dir, fileName);
+                        try
+                        {
+                            byte[] bytes = sprite.texture.EncodeToPNG();
+                            System.IO.File.WriteAllBytes(path, bytes);
+                            Debug.Log($"[StarterItems] Generated and saved custom block 3D sprite: {path}");
+                            createdAny = true;
+                        }
+                        catch (System.Exception e)
+                        {
+                            Debug.LogError($"[StarterItems] Failed to save custom block sprite: {e.Message}");
+                        }
+                    }
                 }
             }
         }
 
 #if UNITY_EDITOR
-        if (createdAny)
+        if (createdAny && !Application.isPlaying)
         {
             UnityEditor.AssetDatabase.Refresh();
         }

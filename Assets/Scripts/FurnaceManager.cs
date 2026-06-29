@@ -13,6 +13,7 @@ public class FurnaceState
     public float maxFuelBurnTime = 0f;
     public float smeltProgress = 0f;
     public float smeltTimeRequired = 5f; // 5 seconds per sand
+    public int facingDirection = 0; // 0=Back (South), 1=Front (North), 4=Left (West), 5=Right (East)
 }
 
 public class FurnaceManager : MonoBehaviour
@@ -242,6 +243,35 @@ public class FurnaceManager : MonoBehaviour
             return state.fuelBurnTimeLeft > 0f;
         }
         return false;
+    }
+
+    public static HashSet<Vector3Int> GetBurningFurnaces()
+    {
+        var set = new HashSet<Vector3Int>();
+        if (_instance != null)
+        {
+            foreach (var kvp in _instance._furnaces)
+            {
+                if (kvp.Value.fuelBurnTimeLeft > 0f)
+                {
+                    set.Add(kvp.Key);
+                }
+            }
+        }
+        return set;
+    }
+
+    public static Dictionary<Vector3Int, int> GetFurnaceFacings()
+    {
+        var dict = new Dictionary<Vector3Int, int>();
+        if (_instance != null)
+        {
+            foreach (var kvp in _instance._furnaces)
+            {
+                dict[kvp.Key] = kvp.Value.facingDirection;
+            }
+        }
+        return dict;
     }
 
     private void TriggerChunkRebuildAt(Vector3Int position)

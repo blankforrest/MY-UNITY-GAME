@@ -3,7 +3,15 @@ using System.Collections.Generic;
 
 public static class BlockRegistry
 {
-    public static List<BlockDefinition> RegisteredBlocks { get; private set; } = new List<BlockDefinition>();
+    private static List<BlockDefinition> _registeredBlocks = new List<BlockDefinition>();
+    public static List<BlockDefinition> RegisteredBlocks
+    {
+        get
+        {
+            CheckAndEnsureInitialized();
+            return _registeredBlocks;
+        }
+    }
     private static Dictionary<byte, BlockDefinition> byID = new Dictionary<byte, BlockDefinition>();
     private static Dictionary<string, BlockDefinition> byName = new Dictionary<string, BlockDefinition>();
 
@@ -16,9 +24,107 @@ public static class BlockRegistry
     // Tracking active point lights for light-emitting blocks
     private static Dictionary<Vector3Int, GameObject> activeLights = new Dictionary<Vector3Int, GameObject>();
 
+    private static bool _isInitializing = false;
+    private static void CheckAndEnsureInitialized()
+    {
+        if (_isInitializing) return;
+        if (_registeredBlocks.Count == 0 && VoxelWorld.Instance != null && VoxelWorld.Instance.blockDatabase != null)
+        {
+            _isInitializing = true;
+            try
+            {
+                Debug.Log("[BlockRegistry] Lost static state detected. Re-initializing mappings from blockDatabase...");
+                Initialize(VoxelWorld.Instance.blockDatabase.blocks);
+                RebuildRegistryMappings();
+            }
+            finally
+            {
+                _isInitializing = false;
+            }
+        }
+    }
+
+    public static void RebuildRegistryMappings()
+    {
+        if (VoxelWorld.Instance == null || VoxelWorld.Instance.blockDatabase == null) return;
+
+        int baseTilesCount = 41; // GrassTextureGenerator.TILE_COUNT
+        BlockRegistry.TotalTilesCount = baseTilesCount;
+
+        List<Texture2D> texturesToAppend = new List<Texture2D>();
+        Dictionary<Texture2D, int> textureTileIndices = new Dictionary<Texture2D, int>();
+
+        int customCount = _registeredBlocks.Count;
+        for (int i = 0; i < customCount; i++)
+        {
+            BlockDefinition def = _registeredBlocks[i];
+            if (def == null) continue;
+
+            if (def.textureTop != null && !textureTileIndices.ContainsKey(def.textureTop))
+            {
+                textureTileIndices[def.textureTop] = -1;
+                texturesToAppend.Add(def.textureTop);
+            }
+            if (def.textureSide != null && !textureTileIndices.ContainsKey(def.textureSide))
+            {
+                textureTileIndices[def.textureSide] = -1;
+                texturesToAppend.Add(def.textureSide);
+            }
+            if (def.textureBottom != null && !textureTileIndices.ContainsKey(def.textureBottom))
+            {
+                textureTileIndices[def.textureBottom] = -1;
+                texturesToAppend.Add(def.textureBottom);
+            }
+            if (def.textureFront != null && !textureTileIndices.ContainsKey(def.textureFront))
+            {
+                textureTileIndices[def.textureFront] = -1;
+                texturesToAppend.Add(def.textureFront);
+            }
+            if (def.textureFrontLit != null && !textureTileIndices.ContainsKey(def.textureFrontLit))
+            {
+                textureTileIndices[def.textureFrontLit] = -1;
+                texturesToAppend.Add(def.textureFrontLit);
+            }
+        }
+
+        // Assign tile indices
+        for (int i = 0; i < texturesToAppend.Count; i++)
+        {
+            textureTileIndices[texturesToAppend[i]] = baseTilesCount + i;
+        }
+
+        BlockRegistry.TotalTilesCount = baseTilesCount + texturesToAppend.Count;
+
+        // Register face tiles
+        for (int i = 0; i < customCount; i++)
+        {
+            BlockDefinition def = _registeredBlocks[i];
+            if (def == null) continue;
+
+            def.resolvedTopTile = def.textureTop != null ? textureTileIndices[def.textureTop] : -1;
+            def.resolvedSideTile = def.textureSide != null ? textureTileIndices[def.textureSide] : -1;
+            def.resolvedBottomTile = def.textureBottom != null ? textureTileIndices[def.textureBottom] : -1;
+            def.resolvedFrontTile = def.textureFront != null ? textureTileIndices[def.textureFront] : def.resolvedSideTile;
+            def.resolvedFrontLitTile = def.textureFrontLit != null ? textureTileIndices[def.textureFrontLit] : def.resolvedFrontTile;
+
+            bool hasCustom = (def.textureTop != null || def.textureSide != null || def.textureBottom != null || def.textureFront != null || def.textureFrontLit != null);
+            if (hasCustom || def.blockID >= 60)
+            {
+                int topTile = def.resolvedTopTile != -1 ? def.resolvedTopTile : GetDefaultTileIndex(def.blockID, 2);
+                int sideTile = def.resolvedSideTile != -1 ? def.resolvedSideTile : GetDefaultTileIndex(def.blockID, 1);
+                int bottomTile = def.resolvedBottomTile != -1 ? def.resolvedBottomTile : GetDefaultTileIndex(def.blockID, 3);
+                int frontTile = def.resolvedFrontTile != -1 ? def.resolvedFrontTile : sideTile;
+
+                RegisterFaceTiles(def.blockID, topTile, sideTile, bottomTile);
+            }
+        }
+        
+        Debug.Log($"[BlockRegistry] Rebuilt face tile mappings. TotalTilesCount: {BlockRegistry.TotalTilesCount}");
+    }
+
     public static void Initialize(List<BlockDefinition> customDefs)
     {
-        RegisteredBlocks.Clear();
+        _registeredBlocks.Clear();
         byID.Clear();
         byName.Clear();
         faceTiles.Clear();
@@ -44,7 +150,7 @@ public static class BlockRegistry
             {
                 byID[def.blockID] = def;
                 byName[def.blockName] = def;
-                RegisteredBlocks.Add(def);
+                _registeredBlocks.Add(def);
 
                 // Auto-configure the associated Item SO if present (DropsCustomItem) or generate one dynamically (DropsSelf)
                 if (def.dropRule == DropRule.DropsSelf)
@@ -80,12 +186,14 @@ public static class BlockRegistry
 
     public static BlockDefinition GetDefinition(byte id)
     {
+        CheckAndEnsureInitialized();
         if (byID.TryGetValue(id, out var def)) return def;
         return null;
     }
 
     public static BlockDefinition GetDefinition(string name)
     {
+        CheckAndEnsureInitialized();
         if (byName.TryGetValue(name, out var def)) return def;
         return null;
     }
@@ -102,13 +210,120 @@ public static class BlockRegistry
         };
     }
 
-    public static int GetTileIndex(byte blockID, int face)
+    public static int GetTileIndex(byte blockID, int face, bool isLit = false, int facing = -1)
     {
-        if (faceTiles.TryGetValue(blockID, out var tiles))
+        CheckAndEnsureInitialized();
+        BlockDefinition def = GetDefinition(blockID);
+        if (def != null)
         {
-            if (face >= 0 && face < 6) return tiles[face];
+            if (face == 2)
+            {
+                return def.resolvedTopTile != -1 ? def.resolvedTopTile : GetDefaultTileIndex(blockID, face, isLit, facing);
+            }
+            if (face == 3)
+            {
+                return def.resolvedBottomTile != -1 ? def.resolvedBottomTile : GetDefaultTileIndex(blockID, face, isLit, facing);
+            }
+
+            // Determine if this face is the front face of the block
+            bool isFront = (facing != -1) ? (face == facing) : (blockID == 37 ? face == 0 : face == 1);
+            if (isFront)
+            {
+                if (isLit)
+                    return def.resolvedFrontLitTile != -1 ? def.resolvedFrontLitTile : GetDefaultTileIndex(blockID, face, isLit, facing);
+                return def.resolvedFrontTile != -1 ? def.resolvedFrontTile : GetDefaultTileIndex(blockID, face, isLit, facing);
+            }
+
+            return def.resolvedSideTile != -1 ? def.resolvedSideTile : GetDefaultTileIndex(blockID, face, isLit, facing);
         }
-        return -1;
+        return GetDefaultTileIndex(blockID, face, isLit, facing);
+    }
+
+    public static int GetDefaultTileIndex(byte blockID, int face, bool isLit = false, int facing = -1)
+    {
+        // Maps block face to default hardcoded atlas tile index
+        if (blockID == 1)      // Wood
+            return (face == 2 || face == 3) ? 4 : 5;
+        if (blockID == 2)      // Plank
+            return 6;
+        if (blockID == 3)      // Stone
+            return 3;
+        if (blockID == 5)      // Dirt
+            return 2;
+        if (blockID == 7)      // Water
+            return 7;
+        if (blockID == 8 || blockID == 34) // Sand
+            return 8;
+        if (blockID == 9)      // Flower
+            return 9;
+        if (blockID == 10)     // Dandelion
+            return 10;
+        if (blockID == 11)     // Iris
+            return 11;
+        if (blockID == 12)     // Leaves
+            return 12;
+        if (blockID == 13)     // Short Grass
+            return 27;
+        if (blockID == 14)     // Tall Grass
+            return 28;
+        if (blockID == 20)     // Small Wheel
+            return (face == 4 || face == 5) ? 16 : 15;
+        if (blockID == 21 || blockID == 23) // Large Wheel
+            return (face == 4 || face == 5) ? 17 : 15;
+        if (blockID == 22 || blockID == 26) // Propeller
+            return (face == 0 || face == 1) ? 29 : 30;
+        if (blockID == 24)     // Propeller Casing
+            return 30;
+        if (blockID == 25)     // Propeller Blade
+            return 31;
+        if (blockID == 50)     // Control Block
+            return (face == 1) ? 14 : 13;
+        if (blockID == 30)     // Coal Ore
+            return 18;
+        if (blockID == 31)     // Iron Ore
+            return 19;
+        if (blockID == 32)     // Gold Block
+            return 20;
+        if (blockID == 33)     // Iron Block
+            return 21;
+        if (blockID == 35)     // Glass
+            return 22;
+        if (blockID == 36)     // Crafting Table
+            return (face == 2) ? 23 : (face == 3) ? 6 : 24;
+        if (blockID == 37)     // Furnace
+        {
+            if (face == 2 || face == 3) return 3; // Top / Bottom (Stone)
+            bool isFront = (facing != -1) ? (face == facing) : (face == 0); // default South (0)
+            if (isFront) return isLit ? 26 : 25;
+            return 3; // other sides are stone (3)
+        }
+        if (blockID == 38 || blockID == 40 || blockID == 41 || blockID == 42) // Wooden Stairs
+            return 6;
+        if (blockID == 39 || blockID == 43 || blockID == 44 || blockID == 45) // Stone Stairs
+            return 3;
+        if (blockID == 46)     // Wooden Slab
+            return 6;
+        if (blockID == 47)     // Stone Slab
+            return 3;
+        if (blockID == 48)     // Bedrock
+            return 32;
+        if (blockID == 49)     // Cactus
+            return 33;
+        if (blockID == 51)     // Birch Log
+            return (face == 2 || face == 3) ? 35 : 34;
+        if (blockID == 52)     // Birch Leaves
+            return 36;
+        if (blockID == 53)     // Spruce Log
+            return (face == 2 || face == 3) ? 38 : 37;
+        if (blockID == 54)     // Spruce Leaves
+            return 39;
+        if (blockID == 55)     // Diamond Ore
+            return 40;
+        if (blockID == 56)     // Gravel
+            return 3;
+        
+        // Grass (ID 4 or 6)
+        return (face == 2) ? 0 : (face == 3) ? 2 : 1;
     }
 
     // ── Point Lights Management ────────────────────────────────────────────────

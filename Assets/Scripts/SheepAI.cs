@@ -30,6 +30,9 @@ public class SheepAI : MonoBehaviour
     private Vector3 wanderDirection = Vector3.zero;
     private Vector3 fleeDirection = Vector3.zero;
 
+    private float raycastTimer = 0f;
+    private const float raycastInterval = 0.1f;
+
     // Model Transforms
     private Transform modelRoot;
     private Transform head;
@@ -200,15 +203,53 @@ public class SheepAI : MonoBehaviour
         return legRoot.transform;
     }
 
+    private bool IsInWater()
+    {
+        if (VoxelWorld.Instance == null) return false;
+        Vector3 pos = transform.position;
+        byte blockFeet = VoxelWorld.Instance.GetBlock(pos);
+        byte blockCenter = VoxelWorld.Instance.GetBlock(pos + Vector3.up * 0.4f);
+        return blockFeet == 7 || blockCenter == 7;
+    }
+
+    private float GetWaterSurfaceY(float x, float z)
+    {
+        if (VoxelWorld.Instance == null) return 0f;
+        int ix = Mathf.FloorToInt(x);
+        int iz = Mathf.FloorToInt(z);
+        for (int y = VoxelData.ChunkHeight - 1; y >= 0; y--)
+        {
+            byte block = VoxelWorld.Instance.GetBlock(new Vector3(ix, y, iz));
+            if (block == 7)
+            {
+                return y + 1f;
+            }
+        }
+        return 0f;
+    }
+
     private void ApplyGravity()
     {
-        if (cc.isGrounded)
+        if (IsInWater())
         {
-            verticalVelocity = -0.5f;
+            float surfaceY = GetWaterSurfaceY(transform.position.x, transform.position.z);
+            float bob = Mathf.Sin(Time.time * 2.5f) * 0.05f;
+            float targetY = surfaceY - 0.55f + bob; // float with belly submerged
+            
+            float diff = targetY - transform.position.y;
+            verticalVelocity = diff * 4.0f;
+            verticalVelocity = Mathf.Clamp(verticalVelocity, -2f, 2f);
         }
         else
         {
-            verticalVelocity += gravity * Time.deltaTime;
+            if (cc.isGrounded)
+            {
+                verticalVelocity = -0.5f;
+            }
+            else
+            {
+                verticalVelocity += gravity * Time.deltaTime;
+            }
         }
     }
 
@@ -269,10 +310,16 @@ public class SheepAI : MonoBehaviour
             return;
         }
 
-        CheckAndJumpIfBlocked();
-        CheckCliffsAndWater();
+        raycastTimer -= Time.deltaTime;
+        if (raycastTimer <= 0f)
+        {
+            raycastTimer = raycastInterval;
+            CheckAndJumpIfBlocked();
+            CheckCliffsAndWater();
+        }
 
-        Vector3 hMove = wanderDirection * walkSpeed;
+        float currentWalkSpeed = IsInWater() ? walkSpeed * 0.5f : walkSpeed;
+        Vector3 hMove = wanderDirection * currentWalkSpeed;
         Vector3 finalMove = new Vector3(hMove.x, verticalVelocity, hMove.z);
         cc.Move(finalMove * Time.deltaTime);
 
@@ -303,10 +350,16 @@ public class SheepAI : MonoBehaviour
             }
         }
 
-        CheckAndJumpIfBlocked();
-        CheckCliffsAndWaterFleeing();
+        raycastTimer -= Time.deltaTime;
+        if (raycastTimer <= 0f)
+        {
+            raycastTimer = raycastInterval;
+            CheckAndJumpIfBlocked();
+            CheckCliffsAndWaterFleeing();
+        }
 
-        Vector3 hMove = fleeDirection * fleeSpeed;
+        float currentFleeSpeed = IsInWater() ? fleeSpeed * 0.5f : fleeSpeed;
+        Vector3 hMove = fleeDirection * currentFleeSpeed;
         Vector3 finalMove = new Vector3(hMove.x, verticalVelocity, hMove.z);
         cc.Move(finalMove * Time.deltaTime);
 
@@ -326,7 +379,7 @@ public class SheepAI : MonoBehaviour
             Vector3 fwd = currentState == State.Scared ? fleeDirection : wanderDirection;
             if (Physics.Raycast(rayStart, fwd, out hit, 0.65f))
             {
-                if (!hit.collider.isTrigger)
+                if (!hit.collider.isTrigger && !hit.collider.name.Contains("Foliage"))
                 {
                     verticalVelocity = jumpForce;
                 }
@@ -336,6 +389,8 @@ public class SheepAI : MonoBehaviour
 
     private void CheckCliffsAndWater()
     {
+        if (IsInWater()) return;
+
         Vector3 checkPos = transform.position + transform.forward * 0.6f + Vector3.up * 0.1f;
         RaycastHit hit;
         if (!Physics.Raycast(checkPos, Vector3.down, out hit, 2.0f))
@@ -350,6 +405,8 @@ public class SheepAI : MonoBehaviour
 
     private void CheckCliffsAndWaterFleeing()
     {
+        if (IsInWater()) return;
+
         Vector3 checkPos = transform.position + transform.forward * 0.6f + Vector3.up * 0.1f;
         RaycastHit hit;
         if (!Physics.Raycast(checkPos, Vector3.down, out hit, 2.0f))
@@ -473,12 +530,19 @@ public class SheepAI : MonoBehaviour
             }
         }
 
-        // Spawn drops (Apple as food/mutton out of the box!)
-        Item appleDrop = StarterItems.CreateItemInstance("Apple", 0, Color.red);
-        if (appleDrop != null)
+        // Spawn drops: Mutton and Wool
+        Item muttonDrop = StarterItems.CreateItemInstance("Mutton", 0, Color.white);
+        if (muttonDrop != null)
         {
             int amount = Random.Range(1, 3);
-            DroppedItem.Spawn(appleDrop, amount, transform.position + Vector3.up * 0.4f);
+            DroppedItem.Spawn(muttonDrop, amount, transform.position + Vector3.up * 0.4f);
+        }
+
+        Item woolDrop = StarterItems.CreateItemInstance("Wool", 0, Color.white);
+        if (woolDrop != null)
+        {
+            int amount = Random.Range(1, 3);
+            DroppedItem.Spawn(woolDrop, amount, transform.position + Vector3.up * 0.4f);
         }
     }
 

@@ -48,9 +48,10 @@ public class WolfSpawner : MonoBehaviour
 
         if (y > 0f && y < VoxelData.ChunkHeight)
         {
-            // Verify block below is solid (not water)
+            // Verify block below is solid (not water) and block at feet is not water
             byte blockBelow = VoxelWorld.Instance.GetBlock(new Vector3(x, y - 0.5f, z));
-            if (blockBelow != 0 && blockBelow != 7)
+            byte blockAtFeet = VoxelWorld.Instance.GetBlock(new Vector3(x, y, z));
+            if (blockBelow != 0 && blockBelow != 7 && blockAtFeet != 7)
             {
                 SpawnWolf(new Vector3(x, y + 0.1f, z));
             }

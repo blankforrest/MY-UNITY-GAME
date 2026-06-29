@@ -39,6 +39,11 @@ public class VoxelWorld : MonoBehaviour
         if (Instance == null) Instance = this;
         else { Destroy(gameObject); return; }
 
+        if (GetComponent<DayNightCycle>() == null)
+        {
+            gameObject.AddComponent<DayNightCycle>();
+        }
+
         InitializeMaterials();
     }
 
@@ -369,7 +374,7 @@ public class VoxelWorld : MonoBehaviour
                 rebuildQueueSet.Remove(chunk);
                 if (chunk.isDirty)
                 {
-                    chunk.UpdateChunk();
+                    chunk.UpdateChunkSync();
                 }
             }
         }
@@ -861,6 +866,8 @@ public class VoxelWorld : MonoBehaviour
             MakeTextureReadable(def.textureTop);
             MakeTextureReadable(def.textureSide);
             MakeTextureReadable(def.textureBottom);
+            MakeTextureReadable(def.textureFront);
+            MakeTextureReadable(def.textureFrontLit);
 #endif
 
             if (def.textureTop != null && !textureTileIndices.ContainsKey(def.textureTop))
@@ -878,6 +885,16 @@ public class VoxelWorld : MonoBehaviour
                 textureTileIndices[def.textureBottom] = -1;
                 texturesToAppend.Add(def.textureBottom);
             }
+            if (def.textureFront != null && !textureTileIndices.ContainsKey(def.textureFront))
+            {
+                textureTileIndices[def.textureFront] = -1;
+                texturesToAppend.Add(def.textureFront);
+            }
+            if (def.textureFrontLit != null && !textureTileIndices.ContainsKey(def.textureFrontLit))
+            {
+                textureTileIndices[def.textureFrontLit] = -1;
+                texturesToAppend.Add(def.textureFrontLit);
+            }
         }
 
         int extraTiles = texturesToAppend.Count;
@@ -888,11 +905,17 @@ public class VoxelWorld : MonoBehaviour
             for (int i = 0; i < customCount; i++)
             {
                 BlockDefinition def = BlockRegistry.RegisteredBlocks[i];
+                def.resolvedTopTile = -1;
+                def.resolvedSideTile = -1;
+                def.resolvedBottomTile = -1;
+                def.resolvedFrontTile = -1;
+                def.resolvedFrontLitTile = -1;
+
                 if (def.blockID >= 60)
                 {
-                    int topTile = GetDefaultTileIndex(def.blockID, 2);
-                    int sideTile = GetDefaultTileIndex(def.blockID, 1);
-                    int bottomTile = GetDefaultTileIndex(def.blockID, 3);
+                    int topTile = BlockRegistry.GetDefaultTileIndex(def.blockID, 2);
+                    int sideTile = BlockRegistry.GetDefaultTileIndex(def.blockID, 1);
+                    int bottomTile = BlockRegistry.GetDefaultTileIndex(def.blockID, 3);
                     BlockRegistry.RegisterFaceTiles(def.blockID, topTile, sideTile, bottomTile);
                 }
             }
@@ -926,13 +949,19 @@ public class VoxelWorld : MonoBehaviour
         {
             BlockDefinition def = BlockRegistry.RegisteredBlocks[i];
             
+            def.resolvedTopTile = def.textureTop != null ? textureTileIndices[def.textureTop] : -1;
+            def.resolvedSideTile = def.textureSide != null ? textureTileIndices[def.textureSide] : -1;
+            def.resolvedBottomTile = def.textureBottom != null ? textureTileIndices[def.textureBottom] : -1;
+            def.resolvedFrontTile = def.textureFront != null ? textureTileIndices[def.textureFront] : def.resolvedSideTile;
+            def.resolvedFrontLitTile = def.textureFrontLit != null ? textureTileIndices[def.textureFrontLit] : def.resolvedFrontTile;
+
             // Check if this block overrides any textures or is a custom block
-            bool hasCustom = (def.textureTop != null || def.textureSide != null || def.textureBottom != null);
+            bool hasCustom = (def.textureTop != null || def.textureSide != null || def.textureBottom != null || def.textureFront != null || def.textureFrontLit != null);
             if (hasCustom || def.blockID >= 60)
             {
-                int topTile = def.textureTop != null ? textureTileIndices[def.textureTop] : GetDefaultTileIndex(def.blockID, 2);
-                int sideTile = def.textureSide != null ? textureTileIndices[def.textureSide] : GetDefaultTileIndex(def.blockID, 1);
-                int bottomTile = def.textureBottom != null ? textureTileIndices[def.textureBottom] : GetDefaultTileIndex(def.blockID, 3);
+                int topTile = def.resolvedTopTile != -1 ? def.resolvedTopTile : BlockRegistry.GetDefaultTileIndex(def.blockID, 2);
+                int sideTile = def.resolvedSideTile != -1 ? def.resolvedSideTile : BlockRegistry.GetDefaultTileIndex(def.blockID, 1);
+                int bottomTile = def.resolvedBottomTile != -1 ? def.resolvedBottomTile : BlockRegistry.GetDefaultTileIndex(def.blockID, 3);
 
                 BlockRegistry.RegisterFaceTiles(def.blockID, topTile, sideTile, bottomTile);
             }
@@ -942,87 +971,7 @@ public class VoxelWorld : MonoBehaviour
         return expandedAtlas;
     }
 
-    private int GetDefaultTileIndex(byte blockID, int face)
-    {
-        // Maps block face to default hardcoded atlas tile index
-        if (blockID == 1)      // Wood
-            return (face == 2 || face == 3) ? 4 : 5;
-        if (blockID == 2)      // Plank
-            return 6;
-        if (blockID == 3)      // Stone
-            return 3;
-        if (blockID == 5)      // Dirt
-            return 2;
-        if (blockID == 7)      // Water
-            return 7;
-        if (blockID == 8 || blockID == 34) // Sand
-            return 8;
-        if (blockID == 9)      // Flower
-            return 9;
-        if (blockID == 10)     // Dandelion
-            return 10;
-        if (blockID == 11)     // Iris
-            return 11;
-        if (blockID == 12)     // Leaves
-            return 12;
-        if (blockID == 13)     // Short Grass
-            return 27;
-        if (blockID == 14)     // Tall Grass
-            return 28;
-        if (blockID == 20)     // Small Wheel
-            return (face == 4 || face == 5) ? 16 : 15;
-        if (blockID == 21 || blockID == 23) // Large Wheel
-            return (face == 4 || face == 5) ? 17 : 15;
-        if (blockID == 22 || blockID == 26) // Propeller
-            return (face == 0 || face == 1) ? 29 : 30;
-        if (blockID == 24)     // Propeller Casing
-            return 30;
-        if (blockID == 25)     // Propeller Blade
-            return 31;
-        if (blockID == 50)     // Control Block
-            return (face == 1) ? 14 : 13;
-        if (blockID == 30)     // Coal Ore
-            return 18;
-        if (blockID == 31)     // Iron Ore
-            return 19;
-        if (blockID == 32)     // Gold Block
-            return 20;
-        if (blockID == 33)     // Iron Block
-            return 21;
-        if (blockID == 35)     // Glass
-            return 22;
-        if (blockID == 36)     // Crafting Table
-            return (face == 2) ? 23 : (face == 3) ? 6 : 24;
-        if (blockID == 37)     // Furnace
-            return (face == 2 || face == 3) ? 3 : 25; // default unlit front
-        if (blockID == 38 || blockID == 40 || blockID == 41 || blockID == 42) // Wooden Stairs
-            return 6;
-        if (blockID == 39 || blockID == 43 || blockID == 44 || blockID == 45) // Stone Stairs
-            return 3;
-        if (blockID == 46)     // Wooden Slab
-            return 6;
-        if (blockID == 47)     // Stone Slab
-            return 3;
-        if (blockID == 48)     // Bedrock
-            return 32;
-        if (blockID == 49)     // Cactus
-            return 33;
-        if (blockID == 51)     // Birch Log
-            return (face == 2 || face == 3) ? 35 : 34;
-        if (blockID == 52)     // Birch Leaves
-            return 36;
-        if (blockID == 53)     // Spruce Log
-            return (face == 2 || face == 3) ? 38 : 37;
-        if (blockID == 54)     // Spruce Leaves
-            return 39;
-        if (blockID == 55)     // Diamond Ore
-            return 40;
-        if (blockID == 56)     // Gravel
-            return 3;
-        
-        // Grass (ID 4 or 6)
-        return (face == 2) ? 0 : (face == 3) ? 2 : 1;
-    }
+
 
     private Color[] GetResizedPixels(Texture2D tex)
     {
@@ -1054,6 +1003,9 @@ public class VoxelWorld : MonoBehaviour
     private static Sprite _cachedDandelionIcon;
     private static Sprite _cachedIrisIcon;
     private static Sprite _cachedAppleIcon;
+    private static Sprite _cachedWoolIcon;
+    private static Sprite _cachedMuttonIcon;
+    private static Sprite _cachedLeatherIcon;
 
     public static Sprite MakeAppleIcon()
     {
@@ -1126,6 +1078,185 @@ public class VoxelWorld : MonoBehaviour
         tex.Apply();
         _cachedAppleIcon = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
         return _cachedAppleIcon;
+    }
+
+    public static Sprite MakeWoolIcon()
+    {
+        if (_cachedWoolIcon != null) return _cachedWoolIcon;
+
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        void Set(int x, int y, Color c)
+        { if (x >= 0 && x < SZ && y >= 0 && y < SZ) px[y * SZ + x] = c; }
+
+        Color woolColor = new Color(0.95f, 0.95f, 0.95f, 1f);
+        Color shadeColor = new Color(0.85f, 0.85f, 0.85f, 1f);
+        Color outlineColor = new Color(0.6f, 0.6f, 0.6f, 1f);
+
+        // Draw a fluffy cloud/wool shape
+        for (int dx = -20; dx <= 20; dx++)
+        {
+            for (int dy = -16; dy <= 16; dy++)
+            {
+                // Fluffy lobes
+                float d1 = (dx - 4) * (dx - 4) + (dy - 4) * (dy - 4); // main center
+                float d2 = (dx + 10) * (dx + 10) + (dy + 2) * (dy + 2); // left lobe
+                float d3 = (dx - 12) * (dx - 12) + (dy - 2) * (dy - 2); // right lobe
+                float d4 = (dx - 2) * (dx - 2) + (dy + 8) * (dy + 8); // top lobe
+                float d5 = (dx + 2) * (dx + 2) + (dy - 10) * (dy - 10); // bottom lobe
+
+                float val = Mathf.Min(d1 / 180f, d2 / 120f, d3 / 120f, d4 / 100f, d5 / 100f);
+
+                if (val <= 0.85f)
+                {
+                    // Inside
+                    Color col = woolColor;
+                    if (val > 0.65f || dy < -6) col = shadeColor;
+                    Set(32 + dx, 32 + dy, col);
+                }
+                else if (val <= 1.0f)
+                {
+                    // Outline
+                    Set(32 + dx, 32 + dy, outlineColor);
+                }
+            }
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        _cachedWoolIcon = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+        return _cachedWoolIcon;
+    }
+
+    public static Sprite MakeMuttonIcon()
+    {
+        if (_cachedMuttonIcon != null) return _cachedMuttonIcon;
+
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        void Set(int x, int y, Color c)
+        { if (x >= 0 && x < SZ && y >= 0 && y < SZ) px[y * SZ + x] = c; }
+
+        Color meatColor = new Color(0.85f, 0.25f, 0.25f, 1f);
+        Color fatColor = new Color(0.95f, 0.90f, 0.90f, 1f);
+        Color boneColor = new Color(0.92f, 0.92f, 0.88f, 1f);
+        Color meatOutline = new Color(0.55f, 0.12f, 0.12f, 1f);
+        Color boneOutline = new Color(0.6f, 0.6f, 0.55f, 1f);
+
+        // Draw a meat chop (angled bone from bottom-left to center, meat surrounding top-right)
+        // Bone
+        for (int i = -16; i <= 2; i++)
+        {
+            // Draw bone along diagonal x = y
+            int bx = 32 + i;
+            int by = 32 + i;
+            Set(bx, by, boneColor);
+            Set(bx - 1, by + 1, boneOutline);
+            Set(bx + 1, by - 1, boneOutline);
+        }
+        // Bone tip (rounded end at bottom-left)
+        Set(15, 15, boneOutline);
+        Set(16, 15, boneOutline);
+        Set(15, 16, boneOutline);
+
+        // Meat body (oval shape around center/top-right)
+        for (int dx = -14; dx <= 18; dx++)
+        {
+            for (int dy = -14; dy <= 18; dy++)
+            {
+                // Offset oval
+                float ox = dx - 4;
+                float oy = dy - 4;
+                float d = ox * ox + oy * oy - ox * oy * 0.8f; // slanted oval
+
+                if (d <= 140f)
+                {
+                    // Draw meat
+                    Color col = meatColor;
+                    // Draw fat marbling/stripes
+                    if (Mathf.Abs(ox - oy) < 2f || Mathf.Abs(ox - oy + 8f) < 2f)
+                    {
+                        col = fatColor;
+                    }
+                    Set(32 + dx, 32 + dy, col);
+                }
+                else if (d <= 165f)
+                {
+                    // Meat Outline
+                    Set(32 + dx, 32 + dy, meatOutline);
+                }
+            }
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        _cachedMuttonIcon = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+        return _cachedMuttonIcon;
+    }
+
+    public static Sprite MakeLeatherIcon()
+    {
+        if (_cachedLeatherIcon != null) return _cachedLeatherIcon;
+
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        void Set(int x, int y, Color c)
+        { if (x >= 0 && x < SZ && y >= 0 && y < SZ) px[y * SZ + x] = c; }
+
+        Color leatherColor = new Color(0.62f, 0.42f, 0.28f, 1f);
+        Color leatherShade = new Color(0.52f, 0.35f, 0.22f, 1f);
+        Color leatherOutline = new Color(0.35f, 0.20f, 0.10f, 1f);
+
+        // Draw a stretched animal hide shape (like a rough cross/star or a rect with indented sides)
+        for (int dx = -18; dx <= 18; dx++)
+        {
+            for (int dy = -22; dy <= 22; dy++)
+            {
+                // Compute distance from center with indentations
+                float absX = Mathf.Abs(dx);
+                float absY = Mathf.Abs(dy);
+
+                // Indentation formula (larger x/y in corners)
+                float boundary = 16f;
+                if (absY < 6) boundary = 13f; // pinch the waist
+                if (absX < 6) boundary = 20f; // stretch head/tail
+                
+                // Corner check (indents corners)
+                float cornerVal = absX + absY * 0.7f;
+
+                if (cornerVal <= 26f && absX <= boundary + 2 && absY <= 21)
+                {
+                    bool isOutline = (cornerVal > 24.5f || absX >= boundary || absY >= 20);
+                    if (isOutline)
+                    {
+                        Set(32 + dx, 32 + dy, leatherOutline);
+                    }
+                    else
+                    {
+                        Color col = leatherColor;
+                        if (dy < -4 || dx > 6) col = leatherShade;
+                        Set(32 + dx, 32 + dy, col);
+                    }
+                }
+            }
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        _cachedLeatherIcon = Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+        return _cachedLeatherIcon;
     }
 
     /// <summary>Procedurally generates a small sprite icon representing a flower.</summary>

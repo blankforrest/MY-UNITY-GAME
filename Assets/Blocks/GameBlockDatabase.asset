@@ -19,6 +19,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: 157a6181ae7da5641871b994b799657b, type: 3}
     textureSide: {fileID: 2800000, guid: 9eaddd3f4adb64540829ac571f41204d, type: 3}
     textureBottom: {fileID: 2800000, guid: 157a6181ae7da5641871b994b799657b, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -35,10 +37,12 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Plank
     blockID: 2
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: e0007bdfd094d10469bde5cfaa61f27d, type: 3}
+    textureTop: {fileID: 2800000, guid: 2c5a8a18ed106d348a8b5efcd7b0524d, type: 3}
+    textureSide: {fileID: 2800000, guid: 2c5a8a18ed106d348a8b5efcd7b0524d, type: 3}
+    textureBottom: {fileID: 2800000, guid: 2c5a8a18ed106d348a8b5efcd7b0524d, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -59,6 +63,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: 12fff6a9907e5884597b2faf75e48333, type: 3}
     textureSide: {fileID: 2800000, guid: 12fff6a9907e5884597b2faf75e48333, type: 3}
     textureBottom: {fileID: 2800000, guid: 12fff6a9907e5884597b2faf75e48333, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -79,6 +85,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: 7ce3a3957e4d3854b868872cffccc10b, type: 3}
     textureSide: {fileID: 2800000, guid: 373959c22b4533b4da5419214a3a59b4, type: 3}
     textureBottom: {fileID: 2800000, guid: 7a3f7fffe40fb154b8b7a8b021a8bbb2, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -99,6 +107,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: 7a3f7fffe40fb154b8b7a8b021a8bbb2, type: 3}
     textureSide: {fileID: 2800000, guid: 7a3f7fffe40fb154b8b7a8b021a8bbb2, type: 3}
     textureBottom: {fileID: 2800000, guid: 7a3f7fffe40fb154b8b7a8b021a8bbb2, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -119,6 +129,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -139,6 +151,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -159,6 +173,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
     textureSide: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
     textureBottom: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -179,6 +195,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -199,6 +217,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -219,6 +239,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -239,6 +261,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: a953535ca99089742a96d8879aebfa29, type: 3}
     textureSide: {fileID: 2800000, guid: a953535ca99089742a96d8879aebfa29, type: 3}
     textureBottom: {fileID: 2800000, guid: a953535ca99089742a96d8879aebfa29, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -259,6 +283,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -279,6 +305,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -299,6 +327,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -319,6 +349,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -339,6 +371,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -359,6 +393,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -379,6 +415,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -399,6 +437,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -419,6 +459,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -439,6 +481,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -455,10 +499,12 @@ MonoBehaviour:
     vehiclePartType: Propeller
   - blockName: Coal Ore
     blockID: 30
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 4832635e74143134f88dc1c095b97c42, type: 3}
+    textureTop: {fileID: 2800000, guid: 01d6cb9a5a6dc1a4c875f73848c29984, type: 3}
+    textureSide: {fileID: 2800000, guid: 01d6cb9a5a6dc1a4c875f73848c29984, type: 3}
+    textureBottom: {fileID: 2800000, guid: 01d6cb9a5a6dc1a4c875f73848c29984, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -475,10 +521,12 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Iron Ore
     blockID: 31
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 539f5aee3e2747c47ac76b1a0ec0add0, type: 3}
+    textureTop: {fileID: 2800000, guid: 852a0d4c11dbee7429fbdf6f9bfd0475, type: 3}
+    textureSide: {fileID: 2800000, guid: 852a0d4c11dbee7429fbdf6f9bfd0475, type: 3}
+    textureBottom: {fileID: 2800000, guid: 852a0d4c11dbee7429fbdf6f9bfd0475, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -499,6 +547,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -519,6 +569,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -539,6 +591,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
     textureSide: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
     textureBottom: {fileID: 2800000, guid: 09b8bde14f040604b901474f47a63e74, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -555,10 +609,12 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Glass
     blockID: 35
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 1684032d7137a014e9c60775851c52b3, type: 3}
+    textureTop: {fileID: 2800000, guid: 964aed1819c65b546bd676556a33935b, type: 3}
+    textureSide: {fileID: 2800000, guid: 964aed1819c65b546bd676556a33935b, type: 3}
+    textureBottom: {fileID: 2800000, guid: 964aed1819c65b546bd676556a33935b, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -575,10 +631,12 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Crafting Table
     blockID: 36
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 6cf347db5270c724baed158652c443ef, type: 3}
+    textureTop: {fileID: 2800000, guid: 15ec82743197bee41872176f46d57db6, type: 3}
+    textureSide: {fileID: 2800000, guid: 43f07c2194f3b4042919bb65d5fb84fc, type: 3}
+    textureBottom: {fileID: 2800000, guid: 43f07c2194f3b4042919bb65d5fb84fc, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -595,10 +653,12 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Furnace
     blockID: 37
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 3bf9501b256cac947a019bd805016a41, type: 3}
+    textureTop: {fileID: 2800000, guid: 2f3e3ae1e7181714cbd985e0ff071a49, type: 3}
+    textureSide: {fileID: 2800000, guid: 2f3e3ae1e7181714cbd985e0ff071a49, type: 3}
+    textureBottom: {fileID: 2800000, guid: 2f3e3ae1e7181714cbd985e0ff071a49, type: 3}
+    textureFront: {fileID: 2800000, guid: 6ff88a7505a0e844d823dd476ef6435a, type: 3}
+    textureFrontLit: {fileID: 2800000, guid: 7fd46e3123a17014faf82ae923889551, type: 3}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -619,6 +679,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -639,6 +701,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -659,6 +723,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -679,6 +745,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -699,6 +767,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: 1855c3ef42c9b494fa9445a02b0a9bfe, type: 3}
     textureSide: {fileID: 2800000, guid: 1855c3ef42c9b494fa9445a02b0a9bfe, type: 3}
     textureBottom: {fileID: 2800000, guid: 1855c3ef42c9b494fa9445a02b0a9bfe, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -719,6 +789,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: 87361bf11ea04474fb224291b4a36784, type: 3}
     textureSide: {fileID: 2800000, guid: 0c80adbb0e874674d96973bc9ebe20c0, type: 3}
     textureBottom: {fileID: 2800000, guid: 87361bf11ea04474fb224291b4a36784, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -739,6 +811,8 @@ MonoBehaviour:
     textureTop: {fileID: 0}
     textureSide: {fileID: 0}
     textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -759,6 +833,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: 3630901869b91f643b93ff28cce4174c, type: 3}
     textureSide: {fileID: 2800000, guid: c6260ae0bf5546c428112d5759f86f64, type: 3}
     textureBottom: {fileID: 2800000, guid: 3630901869b91f643b93ff28cce4174c, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -779,6 +855,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: 4fcadcda1435167418b75b09cc716a45, type: 3}
     textureSide: {fileID: 2800000, guid: 4fcadcda1435167418b75b09cc716a45, type: 3}
     textureBottom: {fileID: 2800000, guid: 4fcadcda1435167418b75b09cc716a45, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -799,6 +877,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: 2652f847158065e459e9041a19a6da9b, type: 3}
     textureSide: {fileID: 2800000, guid: 1398f9d04b24fed4186214ba3d3b2cca, type: 3}
     textureBottom: {fileID: 2800000, guid: 2652f847158065e459e9041a19a6da9b, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -819,6 +899,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: bc8bead3492ad024eb2be6d7841392d5, type: 3}
     textureSide: {fileID: 2800000, guid: bc8bead3492ad024eb2be6d7841392d5, type: 3}
     textureBottom: {fileID: 2800000, guid: bc8bead3492ad024eb2be6d7841392d5, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -835,10 +917,12 @@ MonoBehaviour:
     vehiclePartType: None
   - blockName: Diamond Ore
     blockID: 55
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 2df3252923d6d864082fe29e7d73e387, type: 3}
+    textureTop: {fileID: 2800000, guid: ac38e9d8f0f88aa4f90eaca9a95b2761, type: 3}
+    textureSide: {fileID: 2800000, guid: ac38e9d8f0f88aa4f90eaca9a95b2761, type: 3}
+    textureBottom: {fileID: 2800000, guid: ac38e9d8f0f88aa4f90eaca9a95b2761, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1
@@ -859,6 +943,8 @@ MonoBehaviour:
     textureTop: {fileID: 2800000, guid: dbfbc9b243f0fab4e982ed7ec895b510, type: 3}
     textureSide: {fileID: 2800000, guid: dbfbc9b243f0fab4e982ed7ec895b510, type: 3}
     textureBottom: {fileID: 2800000, guid: dbfbc9b243f0fab4e982ed7ec895b510, type: 3}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
     dropRule: 0
     dropItem: {fileID: 0}
     dropAmount: 1

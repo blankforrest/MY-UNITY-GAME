@@ -111,19 +111,26 @@ public class PlayerController : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
-        spawnPoint = transform.position;
-
         // Set initial game mode from Main Menu or PlayerPrefs choice
         if (SaveLoadManager.Instance != null && SaveLoadManager.Instance.HasSaveFile())
         {
             // Loaded game: restore game mode from PlayerPrefs or load data
             string savedMode = PlayerPrefs.GetString("GameMode_" + SaveLoadManager.activeWorldSlot, "Survival");
             isCreativeMode = (savedMode == "Creative");
+            spawnPoint = transform.position;
         }
         else
         {
             // New game: set based on Main Menu selectedGameMode
             isCreativeMode = (MainMenu.selectedGameMode == "Creative");
+
+            // Find beach spawn
+            Vector3 beachSpawn = FindNearestBeachSpawn();
+            if (controller != null) controller.enabled = false;
+            transform.position = beachSpawn;
+            spawnPoint = beachSpawn;
+            if (controller != null) controller.enabled = true;
+            Debug.Log($"[PlayerController] New world spawned player at beach: {beachSpawn}");
         }
 
         // Create procedural UIs
@@ -1031,10 +1038,17 @@ public class PlayerController : MonoBehaviour
     private void OnControllerColliderHit(ControllerColliderHit hit)
     {
         Rigidbody rb = hit.collider.attachedRigidbody;
-
-        // Ignore: no rigidbody, kinematic, or something we're standing ON (pushes down)
-        if (rb == null || rb.isKinematic) return;
+        if (rb == null) return;
         if (hit.moveDirection.y < -0.3f) return;
+
+        VehicleController vc = rb.GetComponent<VehicleController>();
+        if (vc != null)
+        {
+            vc.NotifyPushed();
+        }
+
+        // Ignore push force if the rigidbody is kinematic (it will unfreeze in the next fixed update, allowing pushing on subsequent contacts)
+        if (rb.isKinematic) return;
 
         // Push direction = horizontal movement direction of the player
         Vector3 pushDir = new Vector3(hit.moveDirection.x, 0f, hit.moveDirection.z);
@@ -1098,5 +1112,147 @@ public class PlayerController : MonoBehaviour
         }
 
         return false;
+    }
+
+    private Vector3 FindNearestBeachSpawn()
+    {
+        if (SaveLoadManager.Instance == null) return transform.position;
+
+        float seedOffsetX = SaveLoadManager.worldSeedOffsetX;
+        float seedOffsetZ = SaveLoadManager.worldSeedOffsetZ;
+        int chunkHeight = VoxelData.ChunkHeight;
+        float seaLevel = Mathf.Floor(chunkHeight * 0.22f); // 28
+
+        // Helper function for 2D noise (Perlin)
+        float Noise2D(float x, float z)
+        {
+            float val = Unity.Mathematics.noise.cnoise(new Unity.Mathematics.float2(x, z)) * 0.5f + 0.5f;
+            return Mathf.Clamp01(val);
+        }
+
+        // Spiral search outwards
+        // We'll search in steps of 8 blocks up to a radius of 1200 blocks to guarantee finding a beach
+        for (int r = 0; r < 1200; r += 8)
+        {
+            // Check points on a square ring of radius r
+            for (int angleDeg = 0; angleDeg < 360; angleDeg += 30)
+            {
+                float rad = angleDeg * Mathf.Deg2Rad;
+                float globalX = Mathf.Round(Mathf.Cos(rad) * r);
+                float globalZ = Mathf.Round(Mathf.Sin(rad) * r);
+
+                float ox = globalX + seedOffsetX;
+                float oz = globalZ + seedOffsetZ;
+
+                // Base rolling noise
+                float baseNoise = Noise2D(ox * 0.02f, oz * 0.02f);
+                baseNoise = Mathf.Pow(baseNoise, 2.5f);
+                
+                float detailNoise = Noise2D(ox * 0.08f, oz * 0.08f) * 0.15f;
+                float finalNoise = baseNoise + detailNoise;
+                float exactHeight = finalNoise * chunkHeight * 0.25f + (chunkHeight / 5f);
+                
+                float continentNoise = Noise2D(ox * 0.00015f + 1234.5f, oz * 0.00015f + 5678.9f);
+                float startScale = Mathf.Clamp01(Mathf.Max(Mathf.Abs(globalX), Mathf.Abs(globalZ)) / 300f);
+                continentNoise = Mathf.Lerp(0.35f, continentNoise, startScale);
+
+                float heightOffset = 0f;
+                if (continentNoise < 0.45f)
+                {
+                    float dryT = (0.45f - continentNoise) / 0.45f;
+                    heightOffset = dryT * 18f;
+                }
+                else if (continentNoise > 0.55f)
+                {
+                    float oceanT = (continentNoise - 0.55f) / 0.45f;
+                    heightOffset = -oceanT * 22f;
+                }
+
+                // Check biomes
+                float biomeNoise = Noise2D(ox * 0.003f + 4000f, oz * 0.003f + 8000f);
+                int biome = 2;
+                if (continentNoise > 0.55f) biome = 0;
+                else if (biomeNoise < 0.25f) biome = 1;
+                else if (biomeNoise < 0.50f) biome = 2;
+                else biome = 3;
+
+                float landHeight = 0f;
+                if (biomeNoise < 0.20f)
+                {
+                    float duneN = (Noise2D(ox * 0.01f, oz * 0.01f) + Noise2D(ox * 0.03f, oz * 0.03f) * 0.25f) / 1.25f;
+                    landHeight = (Mathf.Pow(duneN, 2f) * chunkHeight * 0.26f) + (chunkHeight * 0.22f) + heightOffset;
+                }
+                else if (biomeNoise < 0.30f)
+                {
+                    float t = (biomeNoise - 0.20f) / 0.10f;
+                    t = t * t * (3f - 2f * t);
+                    float duneN = (Noise2D(ox * 0.01f, oz * 0.01f) + Noise2D(ox * 0.03f, oz * 0.03f) * 0.25f) / 1.25f;
+                    float desertH = (Mathf.Pow(duneN, 2f) * chunkHeight * 0.26f) + (chunkHeight * 0.22f) + heightOffset;
+                    float plainsH = (Noise2D(ox * 0.01f, oz * 0.01f) * chunkHeight * 0.03f) + (chunkHeight * 0.22f) + heightOffset;
+                    landHeight = Mathf.Lerp(desertH, plainsH, t);
+                }
+                else if (biomeNoise < 0.45f) landHeight = (Noise2D(ox * 0.01f, oz * 0.01f) * chunkHeight * 0.03f) + (chunkHeight * 0.22f) + heightOffset;
+                else if (biomeNoise < 0.55f)
+                {
+                    float t = (biomeNoise - 0.45f) / 0.10f;
+                    t = t * t * (3f - 2f * t);
+                    float plainsH = (Noise2D(ox * 0.01f, oz * 0.01f) * chunkHeight * 0.03f) + (chunkHeight * 0.22f) + heightOffset;
+                    float forestH = finalNoise * chunkHeight * 0.20f + (chunkHeight * 0.21f) + heightOffset;
+                    landHeight = Mathf.Lerp(plainsH, forestH, t);
+                }
+                else landHeight = finalNoise * chunkHeight * 0.20f + (chunkHeight * 0.21f) + heightOffset;
+
+                float oceanFloorNoise = Noise2D(ox * 0.015f, oz * 0.015f);
+                float oceanDetail = Noise2D(ox * 0.06f, oz * 0.06f) * 2.5f;
+                float oceanHeight = 12f + (oceanFloorNoise * 7f) + oceanDetail;
+
+                float oceanWeight = Mathf.Clamp01((continentNoise - 0.45f) / 0.12f);
+                oceanWeight = oceanWeight * oceanWeight * (3f - 2f * oceanWeight);
+                exactHeight = Mathf.Lerp(landHeight, oceanHeight, oceanWeight);
+                exactHeight = Mathf.Max(2f, exactHeight);
+
+                float warpX = Noise2D(ox * 0.015f + 10f, oz * 0.015f + 20f) * 60f;
+                float warpZ = Noise2D(ox * 0.015f + 30f, oz * 0.015f + 40f) * 60f;
+                float riverNoise = Noise2D((ox + warpX) * 0.002f + 400f, (oz + warpZ) * 0.002f + 800f);
+                float riverCenterDist = Mathf.Abs(riverNoise - 0.5f);
+                float widthNoise = Noise2D(ox * 0.01f + 150f, oz * 0.01f + 250f);
+                float riverWidth = 0.01f + widthNoise * 0.008f;
+                float riverStrength = 0f;
+                if (continentNoise < 0.45f) riverStrength = Mathf.Clamp01((continentNoise - 0.35f) / 0.10f);
+                else if (continentNoise > 0.55f) riverStrength = Mathf.Clamp01((0.65f - continentNoise) / 0.10f);
+                bool isRiver = (riverStrength > 0f) && (riverCenterDist < riverWidth);
+
+                if (isRiver)
+                {
+                    float riverFactor = Mathf.Clamp01(riverCenterDist / riverWidth);
+                    riverFactor = riverFactor * riverFactor * (3f - 2f * riverFactor);
+                    float riverbedHeight = seaLevel - (3.5f * riverStrength);
+                    exactHeight = Mathf.Min(exactHeight, Mathf.Lerp(riverbedHeight, exactHeight, riverFactor));
+                }
+                else
+                {
+                    float minHeight = Mathf.Lerp(seaLevel + 1.5f, 2f, oceanWeight);
+                    exactHeight = Mathf.Max(minHeight, exactHeight);
+                }
+
+                // Lower beach height check
+                float beachNoiseVal = Noise2D(ox * 0.1f, oz * 0.1f);
+                if (exactHeight <= seaLevel + 1.6f && exactHeight >= seaLevel && beachNoiseVal > 0.0f)
+                {
+                    exactHeight -= 1.0f;
+                }
+
+                int floorY = Mathf.FloorToInt(exactHeight);
+
+                // Is it beach sand?
+                if (!isRiver && biome != 1 && floorY <= seaLevel + 1 && floorY >= seaLevel)
+                {
+                    return new Vector3(globalX + 0.5f, floorY + 2.5f, globalZ + 0.5f);
+                }
+            }
+        }
+
+        // Fallback
+        return new Vector3(0.5f, 35f, 0.5f);
     }
 }

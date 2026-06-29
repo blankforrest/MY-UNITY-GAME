@@ -687,6 +687,18 @@ public class Inventory : MonoBehaviour
             {
                 sprite = VoxelWorld.MakeAppleIcon();
             }
+            else if (itemName.Equals("Wool", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = VoxelWorld.MakeWoolIcon();
+            }
+            else if (itemName.Equals("Mutton", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = VoxelWorld.MakeMuttonIcon();
+            }
+            else if (itemName.Equals("Leather", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = VoxelWorld.MakeLeatherIcon();
+            }
             else if (itemName.Equals("Flower", System.StringComparison.OrdinalIgnoreCase))
             {
                 sprite = VoxelWorld.MakeFlowerIcon();
@@ -829,6 +841,9 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Iron", 0, 64));
             items.Add(new CreativeItemData("Diamond", 0, 64));
             items.Add(new CreativeItemData("Stick", 0, 64));
+            items.Add(new CreativeItemData("Wool", 0, 64));
+            items.Add(new CreativeItemData("Mutton", 0, 64));
+            items.Add(new CreativeItemData("Leather", 0, 64));
 
             // ── 3. Vehicles ─────────────────────────────────────────
             items.Add(new CreativeItemData("Control Block", 50, 64));
@@ -908,6 +923,9 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Iron Ingot", 0, 64));
             items.Add(new CreativeItemData("Iron", 0, 64));
             items.Add(new CreativeItemData("Diamond", 0, 64));
+            items.Add(new CreativeItemData("Wool", 0, 64));
+            items.Add(new CreativeItemData("Mutton", 0, 64));
+            items.Add(new CreativeItemData("Leather", 0, 64));
         }
         else if (category == "VEHICLES")
         {

@@ -80,7 +80,7 @@ public class MainMenu : MonoBehaviour
         mainRT.anchorMin = new Vector2(0.5f, 0.5f);
         mainRT.anchorMax = new Vector2(0.5f, 0.5f);
         mainRT.pivot = new Vector2(0.5f, 0.5f);
-        mainRT.sizeDelta = new Vector2(500, 600);
+        mainRT.sizeDelta = new Vector2(1500, 950);
         mainRT.anchoredPosition = Vector2.zero;
 
         // 4. Title Text
@@ -90,12 +90,12 @@ public class MainMenu : MonoBehaviour
         titleRT.anchorMin = new Vector2(0.5f, 1f);
         titleRT.anchorMax = new Vector2(0.5f, 1f);
         titleRT.pivot = new Vector2(0.5f, 1f);
-        titleRT.sizeDelta = new Vector2(600, 150);
-        titleRT.anchoredPosition = new Vector2(0, 0);
+        titleRT.sizeDelta = new Vector2(1500, 250);
+        titleRT.anchoredPosition = new Vector2(0, -50);
 
         TextMeshProUGUI titleText = titleGO.GetComponent<TextMeshProUGUI>();
         titleText.text = "MY UNITY GAME";
-        titleText.fontSize = 56;
+        titleText.fontSize = 140;
         titleText.fontStyle = FontStyles.Bold;
         titleText.alignment = TextAlignmentOptions.Center;
         titleText.color = Color.white;
@@ -103,7 +103,7 @@ public class MainMenu : MonoBehaviour
         // Add uniform outline to title for readability
         titleText.fontMaterial.EnableKeyword("OUTLINE_ON");
         titleText.fontMaterial.SetColor("_OutlineColor", Color.black);
-        titleText.fontMaterial.SetFloat("_OutlineWidth", 0.25f);
+        titleText.fontMaterial.SetFloat("_OutlineWidth", 0.2f);
         titleText.UpdateMeshPadding();
 
         // 5. Button Container (Vertical layout for buttons)
@@ -113,11 +113,11 @@ public class MainMenu : MonoBehaviour
         containerRT.anchorMin = new Vector2(0.5f, 0.35f);
         containerRT.anchorMax = new Vector2(0.5f, 0.35f);
         containerRT.pivot = new Vector2(0.5f, 0.5f);
-        containerRT.sizeDelta = new Vector2(300, 310);
-        containerRT.anchoredPosition = Vector2.zero;
+        containerRT.sizeDelta = new Vector2(900, 500);
+        containerRT.anchoredPosition = new Vector2(0, -80);
 
         VerticalLayoutGroup vlg = btnContainer.GetComponent<VerticalLayoutGroup>();
-        vlg.spacing = 15;
+        vlg.spacing = 45;
         vlg.childAlignment = TextAnchor.MiddleCenter;
         vlg.childControlWidth = true;
         vlg.childControlHeight = true;
@@ -163,7 +163,7 @@ public class MainMenu : MonoBehaviour
 
         TextMeshProUGUI tmp = txtGO.GetComponent<TextMeshProUGUI>();
         tmp.text = label;
-        tmp.fontSize = 20;
+        tmp.fontSize = 60;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.color = Color.white;
 
@@ -182,7 +182,7 @@ public class MainMenu : MonoBehaviour
         setRT.anchorMin = new Vector2(0.5f, 0.5f);
         setRT.anchorMax = new Vector2(0.5f, 0.5f);
         setRT.pivot = new Vector2(0.5f, 0.5f);
-        setRT.sizeDelta = new Vector2(500, 600);
+        setRT.sizeDelta = new Vector2(1500, 950);
         setRT.anchoredPosition = Vector2.zero;
 
         Image setImg = settingsPanel.GetComponent<Image>();
@@ -195,12 +195,12 @@ public class MainMenu : MonoBehaviour
         titleRT.anchorMin = new Vector2(0.5f, 1f);
         titleRT.anchorMax = new Vector2(0.5f, 1f);
         titleRT.pivot = new Vector2(0.5f, 1f);
-        titleRT.sizeDelta = new Vector2(400, 80);
-        titleRT.anchoredPosition = new Vector2(0, -20);
+        titleRT.sizeDelta = new Vector2(1200, 200);
+        titleRT.anchoredPosition = new Vector2(0, -50);
 
         TextMeshProUGUI titleText = titleGO.GetComponent<TextMeshProUGUI>();
         titleText.text = "SETTINGS";
-        titleText.fontSize = 36;
+        titleText.fontSize = 90;
         titleText.fontStyle = FontStyles.Bold;
         titleText.alignment = TextAlignmentOptions.Center;
         titleText.color = Color.white;
@@ -209,14 +209,14 @@ public class MainMenu : MonoBehaviour
         GameObject sliderContainer = new GameObject("SettingsSliderContainer", typeof(RectTransform), typeof(VerticalLayoutGroup));
         sliderContainer.transform.SetParent(settingsPanel.transform, false);
         RectTransform scRT = sliderContainer.GetComponent<RectTransform>();
-        scRT.anchorMin = new Vector2(0.5f, 0.52f);
-        scRT.anchorMax = new Vector2(0.5f, 0.52f);
+        scRT.anchorMin = new Vector2(0.5f, 0.48f);
+        scRT.anchorMax = new Vector2(0.5f, 0.48f);
         scRT.pivot = new Vector2(0.5f, 0.5f);
-        scRT.sizeDelta = new Vector2(400, 320);
-        scRT.anchoredPosition = new Vector2(0, 20);
+        scRT.sizeDelta = new Vector2(1200, 550);
+        scRT.anchoredPosition = new Vector2(0, -20);
 
         VerticalLayoutGroup vlg = sliderContainer.GetComponent<VerticalLayoutGroup>();
-        vlg.spacing = 15;
+        vlg.spacing = 30;
         vlg.childAlignment = TextAnchor.MiddleCenter;
         vlg.childControlWidth = true;
         vlg.childControlHeight = true;
@@ -259,10 +259,10 @@ public class MainMenu : MonoBehaviour
         GameObject backGO = new GameObject("BackButtonContainer", typeof(RectTransform));
         backGO.transform.SetParent(settingsPanel.transform, false);
         RectTransform backRT = backGO.GetComponent<RectTransform>();
-        backRT.anchorMin = new Vector2(0.5f, 0.15f);
-        backRT.anchorMax = new Vector2(0.5f, 0.15f);
+        backRT.anchorMin = new Vector2(0.5f, 0.12f);
+        backRT.anchorMax = new Vector2(0.5f, 0.12f);
         backRT.pivot = new Vector2(0.5f, 0.5f);
-        backRT.sizeDelta = new Vector2(200, 50);
+        backRT.sizeDelta = new Vector2(600, 120);
         backRT.anchoredPosition = Vector2.zero;
 
         CreateMenuButton(backGO.transform, "BACK", () => SwitchToPanel("Main"));
@@ -313,7 +313,7 @@ public class MainMenu : MonoBehaviour
         helpRT.anchorMin = new Vector2(0.5f, 0.5f);
         helpRT.anchorMax = new Vector2(0.5f, 0.5f);
         helpRT.pivot = new Vector2(0.5f, 0.5f);
-        helpRT.sizeDelta = new Vector2(500, 600);
+        helpRT.sizeDelta = new Vector2(1500, 950);
         helpRT.anchoredPosition = Vector2.zero;
 
         Image helpImg = helpPanel.GetComponent<Image>();
@@ -326,12 +326,12 @@ public class MainMenu : MonoBehaviour
         titleRT.anchorMin = new Vector2(0.5f, 1f);
         titleRT.anchorMax = new Vector2(0.5f, 1f);
         titleRT.pivot = new Vector2(0.5f, 1f);
-        titleRT.sizeDelta = new Vector2(400, 80);
-        titleRT.anchoredPosition = new Vector2(0, -20);
+        titleRT.sizeDelta = new Vector2(1200, 200);
+        titleRT.anchoredPosition = new Vector2(0, -50);
 
         TextMeshProUGUI titleText = titleGO.GetComponent<TextMeshProUGUI>();
         titleText.text = "HELP / CONTROLS";
-        titleText.fontSize = 36;
+        titleText.fontSize = 90;
         titleText.fontStyle = FontStyles.Bold;
         titleText.alignment = TextAlignmentOptions.Center;
         titleText.color = Color.white;
@@ -343,8 +343,8 @@ public class MainMenu : MonoBehaviour
         infoRT.anchorMin = new Vector2(0.5f, 0.5f);
         infoRT.anchorMax = new Vector2(0.5f, 0.5f);
         infoRT.pivot = new Vector2(0.5f, 0.5f);
-        infoRT.sizeDelta = new Vector2(450, 350);
-        infoRT.anchoredPosition = new Vector2(0, 10);
+        infoRT.sizeDelta = new Vector2(1350, 600);
+        infoRT.anchoredPosition = new Vector2(0, 20);
 
         TextMeshProUGUI infoText = infoGO.GetComponent<TextMeshProUGUI>();
         infoText.text = "<b>CONTROLS & SHORTCUTS</b>\n\n" +
@@ -356,7 +356,7 @@ public class MainMenu : MonoBehaviour
                         "<b>Reset Save File:</b> Delete\n" +
                         "<b>Creative Mode (Flight):</b> C\n" +
                         "<b>Fly Up / Down:</b> Space / Left Shift";
-        infoText.fontSize = 16;
+        infoText.fontSize = 42;
         infoText.alignment = TextAlignmentOptions.Center;
         infoText.color = new Color(0.85f, 0.85f, 0.85f, 1f);
 
@@ -364,10 +364,10 @@ public class MainMenu : MonoBehaviour
         GameObject backGO = new GameObject("BackButtonContainer", typeof(RectTransform));
         backGO.transform.SetParent(helpPanel.transform, false);
         RectTransform backRT = backGO.GetComponent<RectTransform>();
-        backRT.anchorMin = new Vector2(0.5f, 0.15f);
-        backRT.anchorMax = new Vector2(0.5f, 0.15f);
+        backRT.anchorMin = new Vector2(0.5f, 0.12f);
+        backRT.anchorMax = new Vector2(0.5f, 0.12f);
         backRT.pivot = new Vector2(0.5f, 0.5f);
-        backRT.sizeDelta = new Vector2(200, 50);
+        backRT.sizeDelta = new Vector2(600, 120);
         backRT.anchoredPosition = Vector2.zero;
 
         CreateMenuButton(backGO.transform, "BACK", () => SwitchToPanel("Main"));
@@ -381,7 +381,7 @@ public class MainMenu : MonoBehaviour
         rt.anchorMin = new Vector2(0.5f, 0.5f);
         rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(500, 600);
+        rt.sizeDelta = new Vector2(1500, 950);
         rt.anchoredPosition = Vector2.zero;
 
         Image img = worldSelectionPanel.GetComponent<Image>();
@@ -394,12 +394,12 @@ public class MainMenu : MonoBehaviour
         titleRT.anchorMin = new Vector2(0.5f, 1f);
         titleRT.anchorMax = new Vector2(0.5f, 1f);
         titleRT.pivot = new Vector2(0.5f, 1f);
-        titleRT.sizeDelta = new Vector2(400, 80);
-        titleRT.anchoredPosition = new Vector2(0, -20);
+        titleRT.sizeDelta = new Vector2(1200, 200);
+        titleRT.anchoredPosition = new Vector2(0, -50);
 
         TextMeshProUGUI titleText = titleGO.GetComponent<TextMeshProUGUI>();
         titleText.text = "SELECT WORLD";
-        titleText.fontSize = 36;
+        titleText.fontSize = 90;
         titleText.fontStyle = FontStyles.Bold;
         titleText.alignment = TextAlignmentOptions.Center;
         titleText.color = Color.white;
@@ -408,16 +408,16 @@ public class MainMenu : MonoBehaviour
         GameObject scrollRectGO = new GameObject("WorldScrollRect", typeof(RectTransform), typeof(ScrollRect));
         scrollRectGO.transform.SetParent(worldSelectionPanel.transform, false);
         RectTransform scrollRectRT = scrollRectGO.GetComponent<RectTransform>();
-        scrollRectRT.anchorMin = new Vector2(0.5f, 0.58f);
-        scrollRectRT.anchorMax = new Vector2(0.5f, 0.58f);
+        scrollRectRT.anchorMin = new Vector2(0.5f, 0.50f);
+        scrollRectRT.anchorMax = new Vector2(0.5f, 0.50f);
         scrollRectRT.pivot = new Vector2(0.5f, 0.5f);
-        scrollRectRT.sizeDelta = new Vector2(420, 260);
-        scrollRectRT.anchoredPosition = Vector2.zero;
+        scrollRectRT.sizeDelta = new Vector2(1260, 520);
+        scrollRectRT.anchoredPosition = new Vector2(0, -20);
 
         ScrollRect scrollRect = scrollRectGO.GetComponent<ScrollRect>();
         scrollRect.horizontal = false; // vertical scrolling only
         scrollRect.vertical = true;
-        scrollRect.scrollSensitivity = 25f;
+        scrollRect.scrollSensitivity = 75f;
 
         // 2. Create Viewport GameObject (clips the child items)
         GameObject viewportGO = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D));
@@ -425,7 +425,7 @@ public class MainMenu : MonoBehaviour
         RectTransform viewportRT = viewportGO.GetComponent<RectTransform>();
         viewportRT.anchorMin = Vector2.zero;
         viewportRT.anchorMax = Vector2.one;
-        viewportRT.sizeDelta = new Vector2(-20, 0); // Leave room on the right for scrollbar
+        viewportRT.sizeDelta = new Vector2(-60, 0); // Leave room on the right for scrollbar
 
         // 3. Create Content GameObject (holds the items and expands/contracts)
         GameObject listContainer = new GameObject("WorldListContainer", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
@@ -437,8 +437,8 @@ public class MainMenu : MonoBehaviour
         listRT.sizeDelta = new Vector2(0, 0);   // Height driven by ContentSizeFitter
 
         VerticalLayoutGroup vlg = listContainer.GetComponent<VerticalLayoutGroup>();
-        vlg.spacing = 10;
-        vlg.padding = new RectOffset(5, 5, 5, 5);
+        vlg.spacing = 30;
+        vlg.padding = new RectOffset(15, 15, 15, 15);
         vlg.childAlignment = TextAnchor.UpperCenter;
         vlg.childControlWidth = true;
         vlg.childControlHeight = false;
@@ -456,7 +456,7 @@ public class MainMenu : MonoBehaviour
         scrollbarRT.anchorMin = new Vector2(1f, 0f); // Anchor to the right edge of ScrollRect
         scrollbarRT.anchorMax = new Vector2(1f, 1f);
         scrollbarRT.pivot = new Vector2(1f, 0.5f);
-        scrollbarRT.sizeDelta = new Vector2(12, 0); // 12 units wide
+        scrollbarRT.sizeDelta = new Vector2(36, 0); // 36 units wide
         scrollbarRT.anchoredPosition = Vector2.zero;
 
         Image scrollbarImg = scrollbarGO.GetComponent<Image>();
@@ -508,20 +508,20 @@ public class MainMenu : MonoBehaviour
                 GameObject worldItem = new GameObject("WorldItem_" + currentSlot, typeof(RectTransform), typeof(HorizontalLayoutGroup));
                 worldItem.transform.SetParent(listContainer.transform, false);
                 var itemRT = worldItem.GetComponent<RectTransform>();
-                itemRT.sizeDelta = new Vector2(380, 50);
+                itemRT.sizeDelta = new Vector2(1140, 120);
 
                 HorizontalLayoutGroup hlgItem = worldItem.GetComponent<HorizontalLayoutGroup>();
-                hlgItem.spacing = 10;
+                hlgItem.spacing = 30;
                 hlgItem.childControlWidth = false;
                 hlgItem.childControlHeight = true;
                 hlgItem.childForceExpandWidth = false;
                 hlgItem.childForceExpandHeight = true;
 
-                // Play Button (Left, width 290)
+                // Play Button (Left, width 870)
                 GameObject playBtnGO = new GameObject("PlayButton", typeof(RectTransform), typeof(Image), typeof(Button));
                 playBtnGO.transform.SetParent(worldItem.transform, false);
                 var playRT = playBtnGO.GetComponent<RectTransform>();
-                playRT.sizeDelta = new Vector2(290, 50);
+                playRT.sizeDelta = new Vector2(870, 120);
 
                 var playImg = playBtnGO.GetComponent<Image>();
                 playImg.color = new Color(0.18f, 0.20f, 0.25f, 0.9f);
@@ -539,16 +539,16 @@ public class MainMenu : MonoBehaviour
                 playTxtRT.sizeDelta = Vector2.zero;
                 var playTmp = playTxtGO.GetComponent<TextMeshProUGUI>();
                 playTmp.text = $"🌍 {worldName} ({mode})";
-                playTmp.fontSize = 16;
+                playTmp.fontSize = 42;
                 playTmp.fontStyle = FontStyles.Bold;
                 playTmp.alignment = TextAlignmentOptions.Center;
                 playTmp.color = Color.white;
 
-                // Delete Button (Right, width 80)
+                // Delete Button (Right, width 240)
                 GameObject delBtnGO = new GameObject("DeleteButton", typeof(RectTransform), typeof(Image), typeof(Button));
                 delBtnGO.transform.SetParent(worldItem.transform, false);
                 var delRT = delBtnGO.GetComponent<RectTransform>();
-                delRT.sizeDelta = new Vector2(80, 50);
+                delRT.sizeDelta = new Vector2(240, 120);
 
                 var delImg = delBtnGO.GetComponent<Image>();
                 delImg.color = new Color(0.75f, 0.15f, 0.15f, 0.9f);
@@ -574,7 +574,7 @@ public class MainMenu : MonoBehaviour
                 delTxtRT.sizeDelta = Vector2.zero;
                 var delTmp = delTxtGO.GetComponent<TextMeshProUGUI>();
                 delTmp.text = "🗑️";
-                delTmp.fontSize = 18;
+                delTmp.fontSize = 48;
                 delTmp.alignment = TextAlignmentOptions.Center;
                 delTmp.color = Color.white;
             }
@@ -584,11 +584,11 @@ public class MainMenu : MonoBehaviour
             GameObject emptyTxtGO = new GameObject("EmptyText", typeof(RectTransform), typeof(TextMeshProUGUI));
             emptyTxtGO.transform.SetParent(listContainer.transform, false);
             var emptyRT = emptyTxtGO.GetComponent<RectTransform>();
-            emptyRT.sizeDelta = new Vector2(380, 100);
+            emptyRT.sizeDelta = new Vector2(1140, 300);
 
             var tmp = emptyTxtGO.GetComponent<TextMeshProUGUI>();
             tmp.text = "No worlds found.\nCreate a new world to start your adventure!";
-            tmp.fontSize = 16;
+            tmp.fontSize = 42;
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.color = new Color(0.7f, 0.7f, 0.7f);
         }
@@ -597,14 +597,14 @@ public class MainMenu : MonoBehaviour
         GameObject selectActionsGO = new GameObject("SelectActionsContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         selectActionsGO.transform.SetParent(worldSelectionPanel.transform, false);
         RectTransform actionsRT = selectActionsGO.GetComponent<RectTransform>();
-        actionsRT.anchorMin = new Vector2(0.5f, 0.15f);
-        actionsRT.anchorMax = new Vector2(0.5f, 0.15f);
+        actionsRT.anchorMin = new Vector2(0.5f, 0.12f);
+        actionsRT.anchorMax = new Vector2(0.5f, 0.12f);
         actionsRT.pivot = new Vector2(0.5f, 0.5f);
-        actionsRT.sizeDelta = new Vector2(450, 50);
+        actionsRT.sizeDelta = new Vector2(1350, 120);
         actionsRT.anchoredPosition = Vector2.zero;
 
         HorizontalLayoutGroup selectHlg = selectActionsGO.GetComponent<HorizontalLayoutGroup>();
-        selectHlg.spacing = 20;
+        selectHlg.spacing = 60;
         selectHlg.childAlignment = TextAnchor.MiddleCenter;
         selectHlg.childControlWidth = true;
         selectHlg.childControlHeight = true;
@@ -630,7 +630,7 @@ public class MainMenu : MonoBehaviour
         rt.anchorMin = new Vector2(0.5f, 0.5f);
         rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(500, 600);
+        rt.sizeDelta = new Vector2(1500, 950);
         rt.anchoredPosition = Vector2.zero;
 
         Image img = createWorldPanel.GetComponent<Image>();
@@ -640,15 +640,15 @@ public class MainMenu : MonoBehaviour
         GameObject titleGO = new GameObject("Title", typeof(RectTransform), typeof(TextMeshProUGUI));
         titleGO.transform.SetParent(createWorldPanel.transform, false);
         RectTransform titleRT = titleGO.GetComponent<RectTransform>();
-        titleRT.anchorMin = new Vector2(0.5f, 0.90f);
-        titleRT.anchorMax = new Vector2(0.5f, 0.90f);
+        titleRT.anchorMin = new Vector2(0.5f, 0.88f);
+        titleRT.anchorMax = new Vector2(0.5f, 0.88f);
         titleRT.pivot = new Vector2(0.5f, 0.5f);
-        titleRT.sizeDelta = new Vector2(400, 80);
-        titleRT.anchoredPosition = Vector2.zero;
+        titleRT.sizeDelta = new Vector2(1200, 200);
+        titleRT.anchoredPosition = new Vector2(0, -30);
 
         TextMeshProUGUI titleText = titleGO.GetComponent<TextMeshProUGUI>();
         titleText.text = "CREATE NEW WORLD";
-        titleText.fontSize = 32;
+        titleText.fontSize = 80;
         titleText.fontStyle = FontStyles.Bold;
         titleText.alignment = TextAlignmentOptions.Center;
         titleText.color = Color.white;
@@ -657,14 +657,14 @@ public class MainMenu : MonoBehaviour
         GameObject modeContainer = new GameObject("ModeContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         modeContainer.transform.SetParent(createWorldPanel.transform, false);
         RectTransform modeRT = modeContainer.GetComponent<RectTransform>();
-        modeRT.anchorMin = new Vector2(0.5f, 0.70f);
-        modeRT.anchorMax = new Vector2(0.5f, 0.70f);
+        modeRT.anchorMin = new Vector2(0.5f, 0.72f);
+        modeRT.anchorMax = new Vector2(0.5f, 0.72f);
         modeRT.pivot = new Vector2(0.5f, 0.5f);
-        modeRT.sizeDelta = new Vector2(400, 60);
+        modeRT.sizeDelta = new Vector2(1200, 120);
         modeRT.anchoredPosition = Vector2.zero;
 
         HorizontalLayoutGroup hlg = modeContainer.GetComponent<HorizontalLayoutGroup>();
-        hlg.spacing = 20;
+        hlg.spacing = 60;
         hlg.childAlignment = TextAnchor.MiddleCenter;
         hlg.childControlWidth = true;
         hlg.childControlHeight = true;
@@ -687,7 +687,7 @@ public class MainMenu : MonoBehaviour
         survTxtRT.sizeDelta = Vector2.zero;
         survivalBtnText = survTxtGO.GetComponent<TextMeshProUGUI>();
         survivalBtnText.text = "SURVIVAL";
-        survivalBtnText.fontSize = 16;
+        survivalBtnText.fontSize = 48;
         survivalBtnText.alignment = TextAlignmentOptions.Center;
         survivalBtnText.color = Color.white;
 
@@ -707,7 +707,7 @@ public class MainMenu : MonoBehaviour
         creatTxtRT.sizeDelta = Vector2.zero;
         creativeBtnText = creatTxtGO.GetComponent<TextMeshProUGUI>();
         creativeBtnText.text = "CREATIVE";
-        creativeBtnText.fontSize = 16;
+        creativeBtnText.fontSize = 48;
         creativeBtnText.alignment = TextAlignmentOptions.Center;
         creativeBtnText.color = Color.white;
 
@@ -715,14 +715,14 @@ public class MainMenu : MonoBehaviour
         GameObject nameContainer = new GameObject("NameContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         nameContainer.transform.SetParent(createWorldPanel.transform, false);
         RectTransform nameRT = nameContainer.GetComponent<RectTransform>();
-        nameRT.anchorMin = new Vector2(0.5f, 0.58f);
-        nameRT.anchorMax = new Vector2(0.5f, 0.58f);
+        nameRT.anchorMin = new Vector2(0.5f, 0.55f);
+        nameRT.anchorMax = new Vector2(0.5f, 0.55f);
         nameRT.pivot = new Vector2(0.5f, 0.5f);
-        nameRT.sizeDelta = new Vector2(400, 45);
+        nameRT.sizeDelta = new Vector2(1200, 135);
         nameRT.anchoredPosition = Vector2.zero;
 
         HorizontalLayoutGroup nameHlg = nameContainer.GetComponent<HorizontalLayoutGroup>();
-        nameHlg.spacing = 15;
+        nameHlg.spacing = 45;
         nameHlg.childAlignment = TextAnchor.MiddleCenter;
         nameHlg.childControlWidth = false;
         nameHlg.childControlHeight = true;
@@ -733,10 +733,10 @@ public class MainMenu : MonoBehaviour
         GameObject nameLabelGO = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
         nameLabelGO.transform.SetParent(nameContainer.transform, false);
         var nameLabelRT = nameLabelGO.GetComponent<RectTransform>();
-        nameLabelRT.sizeDelta = new Vector2(100, 45);
+        nameLabelRT.sizeDelta = new Vector2(300, 135);
         var nameLabelTxt = nameLabelGO.GetComponent<TextMeshProUGUI>();
         nameLabelTxt.text = "World Name:";
-        nameLabelTxt.fontSize = 16;
+        nameLabelTxt.fontSize = 48;
         nameLabelTxt.fontStyle = FontStyles.Bold;
         nameLabelTxt.alignment = TextAlignmentOptions.Left;
         nameLabelTxt.color = Color.white;
@@ -745,20 +745,20 @@ public class MainMenu : MonoBehaviour
         GameObject nameInputGO;
         worldNameInputField = CreateInputField(nameContainer.transform, "My Awesome World", out nameInputGO);
         var nameInputRT = nameInputGO.GetComponent<RectTransform>();
-        nameInputRT.sizeDelta = new Vector2(285, 45);
+        nameInputRT.sizeDelta = new Vector2(855, 135);
 
         // Seed Container (Horizontal)
         GameObject seedContainer = new GameObject("SeedContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         seedContainer.transform.SetParent(createWorldPanel.transform, false);
         RectTransform seedRT = seedContainer.GetComponent<RectTransform>();
-        seedRT.anchorMin = new Vector2(0.5f, 0.48f);
-        seedRT.anchorMax = new Vector2(0.5f, 0.48f);
+        seedRT.anchorMin = new Vector2(0.5f, 0.38f);
+        seedRT.anchorMax = new Vector2(0.5f, 0.38f);
         seedRT.pivot = new Vector2(0.5f, 0.5f);
-        seedRT.sizeDelta = new Vector2(400, 45);
+        seedRT.sizeDelta = new Vector2(1200, 135);
         seedRT.anchoredPosition = Vector2.zero;
 
         HorizontalLayoutGroup seedHlg = seedContainer.GetComponent<HorizontalLayoutGroup>();
-        seedHlg.spacing = 15;
+        seedHlg.spacing = 45;
         seedHlg.childAlignment = TextAnchor.MiddleCenter;
         seedHlg.childControlWidth = false;
         seedHlg.childControlHeight = true;
@@ -769,10 +769,10 @@ public class MainMenu : MonoBehaviour
         GameObject seedLabelGO = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
         seedLabelGO.transform.SetParent(seedContainer.transform, false);
         var labelRT = seedLabelGO.GetComponent<RectTransform>();
-        labelRT.sizeDelta = new Vector2(100, 45);
+        labelRT.sizeDelta = new Vector2(300, 135);
         var labelTxt = seedLabelGO.GetComponent<TextMeshProUGUI>();
         labelTxt.text = "World Seed:";
-        labelTxt.fontSize = 16;
+        labelTxt.fontSize = 48;
         labelTxt.fontStyle = FontStyles.Bold;
         labelTxt.alignment = TextAlignmentOptions.Left;
         labelTxt.color = Color.white;
@@ -781,20 +781,20 @@ public class MainMenu : MonoBehaviour
         GameObject seedInputGO;
         seedInputField = CreateInputField(seedContainer.transform, "Random Seed...", out seedInputGO);
         var inputRT = seedInputGO.GetComponent<RectTransform>();
-        inputRT.sizeDelta = new Vector2(285, 45);
+        inputRT.sizeDelta = new Vector2(855, 135);
 
         // Description
         GameObject descGO = new GameObject("Description", typeof(RectTransform), typeof(TextMeshProUGUI));
         descGO.transform.SetParent(createWorldPanel.transform, false);
         RectTransform descRT = descGO.GetComponent<RectTransform>();
-        descRT.anchorMin = new Vector2(0.5f, 0.30f);
-        descRT.anchorMax = new Vector2(0.5f, 0.30f);
+        descRT.anchorMin = new Vector2(0.5f, 0.22f);
+        descRT.anchorMax = new Vector2(0.5f, 0.22f);
         descRT.pivot = new Vector2(0.5f, 0.5f);
-        descRT.sizeDelta = new Vector2(400, 100);
+        descRT.sizeDelta = new Vector2(1200, 150);
         descRT.anchoredPosition = Vector2.zero;
 
         modeDescriptionText = descGO.GetComponent<TextMeshProUGUI>();
-        modeDescriptionText.fontSize = 16;
+        modeDescriptionText.fontSize = 42;
         modeDescriptionText.alignment = TextAlignmentOptions.Center;
         modeDescriptionText.color = new Color(0.85f, 0.85f, 0.85f, 1f);
 
@@ -802,14 +802,14 @@ public class MainMenu : MonoBehaviour
         GameObject actionContainer = new GameObject("ActionContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         actionContainer.transform.SetParent(createWorldPanel.transform, false);
         RectTransform actionRT = actionContainer.GetComponent<RectTransform>();
-        actionRT.anchorMin = new Vector2(0.5f, 0.13f);
-        actionRT.anchorMax = new Vector2(0.5f, 0.13f);
+        actionRT.anchorMin = new Vector2(0.5f, 0.10f);
+        actionRT.anchorMax = new Vector2(0.5f, 0.10f);
         actionRT.pivot = new Vector2(0.5f, 0.5f);
-        actionRT.sizeDelta = new Vector2(400, 50);
+        actionRT.sizeDelta = new Vector2(1200, 120);
         actionRT.anchoredPosition = Vector2.zero;
 
         HorizontalLayoutGroup alg = actionContainer.GetComponent<HorizontalLayoutGroup>();
-        alg.spacing = 20;
+        alg.spacing = 60;
         alg.childAlignment = TextAnchor.MiddleCenter;
         alg.childControlWidth = true;
         alg.childControlHeight = true;
@@ -922,12 +922,12 @@ public class MainMenu : MonoBehaviour
             txtRT.anchorMin = new Vector2(0.5f, 0.5f);
             txtRT.anchorMax = new Vector2(0.5f, 0.5f);
             txtRT.pivot = new Vector2(0.5f, 0.5f);
-            txtRT.sizeDelta = new Vector2(500f, 100f);
+            txtRT.sizeDelta = new Vector2(1500f, 300f);
             txtRT.anchoredPosition = Vector2.zero;
 
             var tmp = txtGO.GetComponent<TextMeshProUGUI>();
             tmp.text = "🔄 LOADING WORLD...";
-            tmp.fontSize = 32f;
+            tmp.fontSize = 96f;
             tmp.fontStyle = FontStyles.Bold;
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.color = Color.white;
@@ -956,7 +956,7 @@ public class MainMenu : MonoBehaviour
         rt.anchorMin = new Vector2(0.5f, 0.5f);
         rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(400, 250);
+        rt.sizeDelta = new Vector2(1200, 750);
         rt.anchoredPosition = Vector2.zero;
 
         Image img = confirmationPanel.GetComponent<Image>();
@@ -965,7 +965,7 @@ public class MainMenu : MonoBehaviour
         // Add outline
         Outline outline = confirmationPanel.AddComponent<Outline>();
         outline.effectColor = new Color(1f, 1f, 1f, 0.2f);
-        outline.effectDistance = new Vector2(1f, -1f);
+        outline.effectDistance = new Vector2(3f, -3f);
 
         // Title
         GameObject titleGO = new GameObject("Title", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -974,12 +974,12 @@ public class MainMenu : MonoBehaviour
         titleRT.anchorMin = new Vector2(0.5f, 1f);
         titleRT.anchorMax = new Vector2(0.5f, 1f);
         titleRT.pivot = new Vector2(0.5f, 1f);
-        titleRT.sizeDelta = new Vector2(360, 80);
-        titleRT.anchoredPosition = new Vector2(0, -20);
+        titleRT.sizeDelta = new Vector2(1080, 240);
+        titleRT.anchoredPosition = new Vector2(0, -60);
 
         TextMeshProUGUI titleText = titleGO.GetComponent<TextMeshProUGUI>();
         titleText.text = $"DELETE WORLD {slot}?";
-        titleText.fontSize = 24;
+        titleText.fontSize = 72;
         titleText.fontStyle = FontStyles.Bold;
         titleText.alignment = TextAlignmentOptions.Center;
         titleText.color = new Color(1f, 0.2f, 0.2f);
@@ -991,12 +991,12 @@ public class MainMenu : MonoBehaviour
         subRT.anchorMin = new Vector2(0.5f, 0.5f);
         subRT.anchorMax = new Vector2(0.5f, 0.5f);
         subRT.pivot = new Vector2(0.5f, 0.5f);
-        subRT.sizeDelta = new Vector2(360, 60);
-        subRT.anchoredPosition = new Vector2(0, 10);
+        subRT.sizeDelta = new Vector2(1080, 180);
+        subRT.anchoredPosition = new Vector2(0, 30);
 
         TextMeshProUGUI subText = subGO.GetComponent<TextMeshProUGUI>();
         subText.text = "This action is permanent and cannot be undone.";
-        subText.fontSize = 14;
+        subText.fontSize = 42;
         subText.alignment = TextAlignmentOptions.Center;
         subText.color = new Color(0.8f, 0.8f, 0.8f);
 
@@ -1007,11 +1007,11 @@ public class MainMenu : MonoBehaviour
         containerRT.anchorMin = new Vector2(0.5f, 0.2f);
         containerRT.anchorMax = new Vector2(0.5f, 0.2f);
         containerRT.pivot = new Vector2(0.5f, 0.5f);
-        containerRT.sizeDelta = new Vector2(320, 50);
+        containerRT.sizeDelta = new Vector2(960, 150);
         containerRT.anchoredPosition = Vector2.zero;
 
         HorizontalLayoutGroup hlg = btnContainer.GetComponent<HorizontalLayoutGroup>();
-        hlg.spacing = 20;
+        hlg.spacing = 60;
         hlg.childAlignment = TextAnchor.MiddleCenter;
         hlg.childControlWidth = true;
         hlg.childControlHeight = true;
@@ -1031,7 +1031,7 @@ public class MainMenu : MonoBehaviour
         RectTransform yesTxtRT = yesTxt.GetComponent<RectTransform>();
         yesTxtRT.anchorMin = Vector2.zero; yesTxtRT.anchorMax = Vector2.one; yesTxtRT.sizeDelta = Vector2.zero;
         var yTmp = yesTxt.GetComponent<TextMeshProUGUI>();
-        yTmp.text = "DELETE"; yTmp.fontSize = 16; yTmp.fontStyle = FontStyles.Bold; yTmp.alignment = TextAlignmentOptions.Center; yTmp.color = Color.white;
+        yTmp.text = "DELETE"; yTmp.fontSize = 48; yTmp.fontStyle = FontStyles.Bold; yTmp.alignment = TextAlignmentOptions.Center; yTmp.color = Color.white;
 
         // No Button
         GameObject noBtn = new GameObject("CancelBtn", typeof(RectTransform), typeof(Image), typeof(Button), typeof(MenuButtonEffects));
@@ -1045,7 +1045,7 @@ public class MainMenu : MonoBehaviour
         RectTransform noTxtRT = noTxt.GetComponent<RectTransform>();
         noTxtRT.anchorMin = Vector2.zero; noTxtRT.anchorMax = Vector2.one; noTxtRT.sizeDelta = Vector2.zero;
         var nTmp = noTxt.GetComponent<TextMeshProUGUI>();
-        nTmp.text = "CANCEL"; nTmp.fontSize = 16; nTmp.fontStyle = FontStyles.Bold; nTmp.alignment = TextAlignmentOptions.Center; nTmp.color = Color.white;
+        nTmp.text = "CANCEL"; nTmp.fontSize = 48; nTmp.fontStyle = FontStyles.Bold; nTmp.alignment = TextAlignmentOptions.Center; nTmp.color = Color.white;
     }
 
     private TMP_InputField CreateInputField(Transform parent, string placeholderText, out GameObject inputFieldGO)
@@ -1058,7 +1058,7 @@ public class MainMenu : MonoBehaviour
         
         var outline = inputFieldGO.AddComponent<Outline>();
         outline.effectColor = new Color(1f, 1f, 1f, 0.15f);
-        outline.effectDistance = new Vector2(1f, -1f);
+        outline.effectDistance = new Vector2(3f, -3f);
 
         var inputField = inputFieldGO.GetComponent<TMP_InputField>();
 
@@ -1067,7 +1067,7 @@ public class MainMenu : MonoBehaviour
         var taRT = textArea.GetComponent<RectTransform>();
         taRT.anchorMin = Vector2.zero;
         taRT.anchorMax = Vector2.one;
-        taRT.sizeDelta = new Vector2(-20, -10);
+        taRT.sizeDelta = new Vector2(-60, -30);
 
         GameObject placeholderGO = new GameObject("Placeholder", typeof(RectTransform), typeof(TextMeshProUGUI));
         placeholderGO.transform.SetParent(textArea.transform, false);
@@ -1078,7 +1078,7 @@ public class MainMenu : MonoBehaviour
         
         var placeholderTmp = placeholderGO.GetComponent<TextMeshProUGUI>();
         placeholderTmp.text = placeholderText;
-        placeholderTmp.fontSize = 16;
+        placeholderTmp.fontSize = 48;
         placeholderTmp.fontStyle = FontStyles.Italic;
         placeholderTmp.alignment = TextAlignmentOptions.Left;
         placeholderTmp.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
@@ -1091,7 +1091,7 @@ public class MainMenu : MonoBehaviour
         textRT.sizeDelta = Vector2.zero;
         
         var textTmp = textGO.GetComponent<TextMeshProUGUI>();
-        textTmp.fontSize = 16;
+        textTmp.fontSize = 48;
         textTmp.alignment = TextAlignmentOptions.Left;
         textTmp.color = Color.white;
 
@@ -1107,7 +1107,7 @@ public class MainMenu : MonoBehaviour
         GameObject container = new GameObject(labelText + "_SliderContainer", typeof(RectTransform));
         container.transform.SetParent(parent, false);
         RectTransform containerRT = container.GetComponent<RectTransform>();
-        containerRT.sizeDelta = new Vector2(400, 60);
+        containerRT.sizeDelta = new Vector2(1200, 180);
 
         GameObject labelGO = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
         labelGO.transform.SetParent(container.transform, false);
@@ -1115,11 +1115,11 @@ public class MainMenu : MonoBehaviour
         labelRT.anchorMin = new Vector2(0f, 0.5f);
         labelRT.anchorMax = new Vector2(1f, 0.5f);
         labelRT.pivot = new Vector2(0f, 0.5f);
-        labelRT.anchoredPosition = new Vector2(0, 15);
-        labelRT.sizeDelta = new Vector2(0, 30);
+        labelRT.anchoredPosition = new Vector2(0, 45);
+        labelRT.sizeDelta = new Vector2(0, 90);
         
         TextMeshProUGUI label = labelGO.GetComponent<TextMeshProUGUI>();
-        label.fontSize = 16;
+        label.fontSize = 48;
         label.color = Color.white;
         label.text = labelText;
 
@@ -1129,8 +1129,8 @@ public class MainMenu : MonoBehaviour
         sliderRT.anchorMin = new Vector2(0f, 0f);
         sliderRT.anchorMax = new Vector2(1f, 0f);
         sliderRT.pivot = new Vector2(0.5f, 0f);
-        sliderRT.anchoredPosition = new Vector2(0, 5);
-        sliderRT.sizeDelta = new Vector2(0, 20);
+        sliderRT.anchoredPosition = new Vector2(0, 15);
+        sliderRT.sizeDelta = new Vector2(0, 60);
 
         Slider slider = sliderGO.GetComponent<Slider>();
 
@@ -1169,7 +1169,7 @@ public class MainMenu : MonoBehaviour
         GameObject handleGO = new GameObject("Handle", typeof(RectTransform), typeof(Image));
         handleGO.transform.SetParent(handleAreaGO.transform, false);
         RectTransform handleRT = handleGO.GetComponent<RectTransform>();
-        handleRT.sizeDelta = new Vector2(15, 20);
+        handleRT.sizeDelta = new Vector2(45, 60);
         Image handleImg = handleGO.GetComponent<Image>();
         handleImg.color = Color.white;
 

@@ -505,15 +505,7 @@ public class DragDropManager : MonoBehaviour
 
             if (isCreative && slot.owner == SlotUI.Owner.Inventory)
             {
-                if (slotData != null && slotData.item != null)
-                {
-                    int amountToGet = isLeftClick ? (slotData.item.toolType == ToolType.None ? 64 : 1) : 1;
-                    heldItem = new InventorySlot(slotData.item, amountToGet);
-                }
-                else
-                {
-                    heldItem = null;
-                }
+                heldItem = null;
                 slot.Refresh();
                 UpdateGhostVisual();
                 return;

@@ -23,14 +23,43 @@ public class DevToolsUI : MonoBehaviour
     private string SavedBoatPath => System.IO.Path.Combine(Application.persistentDataPath, "SavedBoat.json");
     private string SavedSpotPath => System.IO.Path.Combine(Application.persistentDataPath, "SavedSpot.json");
 
+    private void OnEnable()
+    {
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private void OnDisable()
+    {
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
     private void Start()
     {
-        BuildUI();
-        UpdateMenuState();
+        OnSceneLoaded(UnityEngine.SceneManagement.SceneManager.GetActiveScene(), UnityEngine.SceneManagement.LoadSceneMode.Single);
+    }
+
+    private void OnSceneLoaded(UnityEngine.SceneManagement.Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode)
+    {
+        if (scene.name == "MainMenu")
+        {
+            if (_panel != null) _panel.SetActive(false);
+            if (_expandButtonGO != null) _expandButtonGO.SetActive(false);
+        }
+        else
+        {
+            if (_panel == null)
+            {
+                BuildUI();
+            }
+            UpdateMenuState();
+        }
     }
 
     private void Update()
     {
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenu")
+            return;
+
         var keyboard = UnityEngine.InputSystem.Keyboard.current;
         if (keyboard == null) return;
 
@@ -68,8 +97,8 @@ public class DevToolsUI : MonoBehaviour
 
     private void UpdateMenuState()
     {
-        _panel.SetActive(_isExpanded);
-        _expandButtonGO.SetActive(!_isExpanded);
+        if (_panel != null) _panel.SetActive(_isExpanded);
+        if (_expandButtonGO != null) _expandButtonGO.SetActive(!_isExpanded);
     }
 
     private void ToggleMenu()
@@ -173,115 +202,9 @@ public class DevToolsUI : MonoBehaviour
 
     private void BuildUI()
     {
-        Canvas canvas = FindFirstObjectByType<Canvas>();
-        if (canvas == null)
-        {
-            Debug.LogError("[DevToolsUI] No Canvas found in scene.");
-            return;
-        }
-
-        // ── Expand Button (for when panel is collapsed) ───────────────────────
-        _expandButtonGO = CreateUIObject("DevExpandButton", canvas.transform);
-        var expRT = _expandButtonGO.GetComponent<RectTransform>();
-        expRT.anchorMin = new Vector2(1f, 1f);
-        expRT.anchorMax = new Vector2(1f, 1f);
-        expRT.pivot     = new Vector2(1f, 1f);
-        expRT.sizeDelta = new Vector2(110f, 30f);
-        expRT.anchoredPosition = new Vector2(-10f, -10f);
-
-        var expImg = _expandButtonGO.AddComponent<Image>();
-        expImg.color = new Color(0.12f, 0.12f, 0.15f, 0.90f);
-        var expBtn = _expandButtonGO.AddComponent<Button>();
-        expBtn.onClick.AddListener(ToggleMenu);
-
-        var expTextGO = CreateUIObject("Label", _expandButtonGO.transform);
-        var expTextRT = expTextGO.GetComponent<RectTransform>();
-        expTextRT.anchorMin = Vector2.zero;
-        expTextRT.anchorMax = Vector2.one;
-        expTextRT.sizeDelta = Vector2.zero;
-        var expTmp = expTextGO.AddComponent<TextMeshProUGUI>();
-        expTmp.text = "⚙️ Dev Tools";
-        expTmp.fontSize = 12f;
-        expTmp.alignment = TextAlignmentOptions.Center;
-        expTmp.color = Color.yellow;
-
-        // ── Main Dev Panel ────────────────────────────────────────────────────
-        _panel = CreateUIObject("DevToolsPanel", canvas.transform);
-        var panelRT = _panel.GetComponent<RectTransform>();
-        panelRT.anchorMin = new Vector2(1f, 1f);
-        panelRT.anchorMax = new Vector2(1f, 1f);
-        panelRT.pivot     = new Vector2(1f, 1f);
-        panelRT.sizeDelta = new Vector2(210f, 225f);
-        panelRT.anchoredPosition = new Vector2(-10f, -10f);
-
-        var panelImg = _panel.AddComponent<Image>();
-        panelImg.color = new Color(0.08f, 0.08f, 0.10f, 0.95f);
-
-        var layout = _panel.AddComponent<VerticalLayoutGroup>();
-        layout.padding = new RectOffset(10, 10, 10, 10);
-        layout.spacing = 8f;
-        layout.childAlignment = TextAnchor.UpperCenter;
-        layout.childControlWidth = true;
-        layout.childControlHeight = true;
-        layout.childForceExpandWidth = true;
-        layout.childForceExpandHeight = false;
-
-        // ── Header Row (Title & Collapse button) ─────────────────────────────
-        var headerGO = CreateUIObject("HeaderRow", _panel.transform);
-        SetLayoutHeight(headerGO, 24f);
-        var headerLayout = headerGO.AddComponent<HorizontalLayoutGroup>();
-        headerLayout.childControlWidth = true;
-        headerLayout.childControlHeight = true;
-        headerLayout.childForceExpandWidth = true;
-        headerLayout.childForceExpandHeight = true;
-
-        var titleGO = CreateUIObject("Title", headerGO.transform);
-        var titleTmp = titleGO.AddComponent<TextMeshProUGUI>();
-        titleTmp.text = "⚙️ Dev Menu";
-        titleTmp.fontSize = 14f;
-        titleTmp.fontStyle = FontStyles.Bold;
-        titleTmp.color = Color.yellow;
-        titleTmp.alignment = TextAlignmentOptions.Left;
-
-        var colBtnGO = CreateUIObject("CollapseButton", headerGO.transform);
-        var colBtnImg = colBtnGO.AddComponent<Image>();
-        colBtnImg.color = new Color(0.3f, 0.3f, 0.3f, 0.4f);
-        var colBtn = colBtnGO.AddComponent<Button>();
-        colBtn.onClick.AddListener(ToggleMenu);
-        var colTextGO = CreateUIObject("Label", colBtnGO.transform);
-        var colTextRT = colTextGO.GetComponent<RectTransform>();
-        colTextRT.anchorMin = Vector2.zero;
-        colTextRT.anchorMax = Vector2.one;
-        colTextRT.sizeDelta = Vector2.zero;
-        var colTmp = colTextGO.AddComponent<TextMeshProUGUI>();
-        colTmp.text = "[x]";
-        colTmp.fontSize = 11f;
-        colTmp.alignment = TextAlignmentOptions.Center;
-        colTmp.color = Color.white;
-        SetLayoutWidth(colBtnGO, 24f);
-
-        // Divider
-        var divGO = CreateUIObject("Divider", _panel.transform);
-        SetLayoutHeight(divGO, 1f);
-        divGO.AddComponent<Image>().color = new Color(0.4f, 0.4f, 0.4f, 0.6f);
-
-        // Buttons
-        CreateDevButton("SaveSpotBtn",  "📍 Save This Spot (F8)",       SaveCurrentSpot);
-        CreateDevButton("SpawnHereBtn", "🚢 Spawn Boat Here (F9)",       SpawnBoatHere);
-        CreateDevButton("TeleportBtn",  "🌊 Teleport & Spawn (F10)",     TeleportToSavedSpot);
-
-
-
-        // Footer Hint Text
-        var hintGO = CreateUIObject("Hint", _panel.transform);
-        SetLayoutHeight(hintGO, 40f);
-        var hintTmp = hintGO.AddComponent<TextMeshProUGUI>();
-        hintTmp.text = "F8=Save Spot  F9=Spawn Here  F10=Teleport\n` (backtick) = unlock cursor";
-        hintTmp.fontSize = 9f;
-        hintTmp.color = new Color(0.7f, 0.7f, 0.7f);
-        hintTmp.alignment = TextAlignmentOptions.Center;
-        hintTmp.wordSpacing = -0.5f;
+        // Dev menu disabled — panel is intentionally not constructed.
     }
+
 
     private GameObject CreateDevButton(string name, string label, UnityEngine.Events.UnityAction callback)
     {

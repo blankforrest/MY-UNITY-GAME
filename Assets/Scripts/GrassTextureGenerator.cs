@@ -495,100 +495,25 @@ public static class GrassTextureGenerator
     /// <summary>Returns the 4 atlas UVs for a given face and block type.</summary>
     /// <param name="face">0=back,1=front,2=top,3=bottom,4=left,5=right</param>
     /// <param name="blockType">1=Wood, 2=Plank, 3=Stone, 4=Grass, 5=Dirt, 6=Grass Slab, 7=Water, 8=Sand, 9=Flower</param>
-    public static Vector2[] GetBlockUVs(int face, byte blockType, bool isLit = false)
+    public static Vector2[] GetBlockUVs(int face, byte blockType, bool isLit = false, int facing = -1)
     {
         int tile = -1;
 
         // Query the custom block registry first
-        if (BlockRegistry.GetDefinition(blockType) != null)
+        BlockDefinition def = BlockRegistry.GetDefinition(blockType);
+        if (def != null)
         {
-            tile = BlockRegistry.GetTileIndex(blockType, face);
+            tile = BlockRegistry.GetTileIndex(blockType, face, isLit, facing);
+            if (tile == -1)
+            {
+                Debug.LogWarning($"[GrassTextureGenerator] blockType {blockType} ({def.blockName}) is defined in BlockRegistry but returned tile == -1 for face {face}. Falling back to default.");
+            }
         }
 
         // If not a custom block (or not registered yet), use the hardcoded base game logic
         if (tile == -1)
         {
-            if (blockType == 1)      // Wood: top/bottom uses WoodTop, sides use WoodSide
-                tile = (face == 2 || face == 3) ? 4 : 5;
-            else if (blockType == 2) // Plank: all faces planks
-                tile = 6;
-            else if (blockType == 3) // Stone: all faces stone
-                tile = 3;
-            else if (blockType == 5) // Dirt: all faces dirt
-                tile = 2;
-            else if (blockType == 7) // Water: all faces water
-                tile = 7;
-            else if (blockType == 8 || blockType == 34) // Sand: all faces sand
-                tile = 8;
-            else if (blockType == 9) // Flower: all quads use flower tile
-                tile = 9;
-            else if (blockType == 10) // Dandelion: all quads use dandelion tile
-                tile = 10;
-            else if (blockType == 11) // Iris: all quads use iris tile
-                tile = 11;
-            else if (blockType == 12) // Leaves: all faces leaves
-                tile = 12;
-            else if (blockType == 13) // Short Grass: all faces short grass
-                tile = 27;
-            else if (blockType == 14) // Tall Grass: all faces tall grass
-                tile = 28;
-            else if (blockType == 20) // Small Wheel: sides are wheel side, others are tire tread
-                tile = (face == 4 || face == 5) ? 16 : 15;
-            else if (blockType == 21 || blockType == 23) // Large Wheel & Helper: sides are wheel side, others are tire tread
-                tile = (face == 4 || face == 5) ? 17 : 15;
-            else if (blockType == 22 || blockType == 26) // Propeller / Large Propeller Block: show propeller face on front/back, propeller side on sides
-                tile = (face == 0 || face == 1) ? 29 : 30;
-            else if (blockType == 24) // Virtual Propeller Side / Hub
-                tile = 30;
-            else if (blockType == 25) // Virtual Propeller Blade
-                tile = 31;
-            else if (blockType == 50) // Control Block: front is screen, others are striped sides
-                tile = (face == 1) ? 14 : 13;
-            else if (blockType == 30) // Coal Ore
-                tile = 18;
-            else if (blockType == 31) // Iron Ore
-                tile = 19;
-            else if (blockType == 32) // Gold Block
-                tile = 20;
-            else if (blockType == 33) // Iron Block
-                tile = 21;
-            else if (blockType == 35) // Glass
-                tile = 22;
-            else if (blockType == 36) // Crafting Table
-                tile = (face == 2) ? 23   // Top
-                     : (face == 3) ? 6    // Bottom (Plank)
-                     :               24;  // Sides
-            else if (blockType == 37) // Furnace
-                tile = (face == 2 || face == 3) ? 3                      // Top / Bottom (Stone)
-                     : (isLit ? 26 : 25);                                // Sides (Furnace Front)
-            else if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42) // Wooden Stairs
-                tile = 6;                                                // Plank texture
-            else if (blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45) // Stone Stairs
-                tile = 3;                                                // Stone texture
-            else if (blockType == 46) // Wooden Slab
-                tile = 6;                                                // Plank texture
-            else if (blockType == 47) // Stone Slab
-                tile = 3;                                                // Stone texture
-            else if (blockType == 48) // Bedrock
-                tile = 32;                                               // Bedrock texture
-            else if (blockType == 49) // Cactus
-                tile = 33;
-            else if (blockType == 51) // Birch Log
-                tile = (face == 2 || face == 3) ? 35 : 34;
-            else if (blockType == 52) // Birch Leaves
-                tile = 36;
-            else if (blockType == 53) // Spruce Log
-                tile = (face == 2 || face == 3) ? 38 : 37;
-            else if (blockType == 54) // Spruce Leaves
-                tile = 39;
-            else if (blockType == 55) // Diamond Ore
-                tile = 40;
-            else if (blockType == 56) // Gravel
-                tile = 3;
-            else                     // Grass (blockType == 4 or 6)
-                tile = (face == 2) ? 0   // top    → grass top
-                     : (face == 3) ? 2   // bottom → dirt
-                     :               1;  // sides  → grass side
+            tile = BlockRegistry.GetDefaultTileIndex(blockType, face, isLit, facing);
         }
 
         // Dynamically compute atlas divisions based on registered custom blocks

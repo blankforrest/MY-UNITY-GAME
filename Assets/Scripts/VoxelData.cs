@@ -41,4 +41,9 @@ public static class VoxelData
         new Vector2 (1.0f, 0.0f),
         new Vector2 (1.0f, 1.0f)
     };
+
+    public static int GetFlatIndex(int x, int y, int z)
+    {
+        return x * (ChunkHeight * ChunkWidth) + y * ChunkWidth + z;
+    }
 }

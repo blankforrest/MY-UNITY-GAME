@@ -95,6 +95,8 @@ public class BlockDatabase : ScriptableObject
                 if (existing.textureTop == null) existing.textureTop = def.textureTop;
                 if (existing.textureSide == null) existing.textureSide = def.textureSide;
                 if (existing.textureBottom == null) existing.textureBottom = def.textureBottom;
+                if (existing.textureFront == null) existing.textureFront = def.textureFront;
+                if (existing.textureFrontLit == null) existing.textureFrontLit = def.textureFrontLit;
                 if (existing.dropItem == null) existing.dropItem = def.dropItem;
                 if (existing.stepSound == null) existing.stepSound = def.stepSound;
                 if (existing.placeSound == null) existing.placeSound = def.placeSound;

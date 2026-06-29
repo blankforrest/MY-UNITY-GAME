@@ -9,7 +9,8 @@ public class WolfAI : MonoBehaviour
         Wandering,
         Chasing,
         Attacking,
-        Dead
+        Dead,
+        Fleeing
     }
 
     [Header("Stats")]
@@ -17,6 +18,7 @@ public class WolfAI : MonoBehaviour
     public float currentHealth = 20f;
     public float walkSpeed = 2.0f;
     public float chaseSpeed = 4.5f;
+    public float fleeSpeed = 4.5f;
     public float detectionRange = 14f;
     public float attackRange = 1.6f;
     public float attackDamage = 2.0f;
@@ -34,6 +36,10 @@ public class WolfAI : MonoBehaviour
     private float lastAttackTime = 0f;
     private float verticalVelocity = 0f;
     private Vector3 wanderDirection = Vector3.zero;
+    private Vector3 fleeDirection = Vector3.zero;
+
+    private float raycastTimer = 0f;
+    private const float raycastInterval = 0.1f;
 
     // Model Transforms
     private Transform modelRoot;
@@ -110,20 +116,45 @@ public class WolfAI : MonoBehaviour
         HandleDamageFlashing();
         ApplyGravity();
 
-        // Target check
+        // Target check (morning vs night)
         if (player != null && !player.isCreativeMode && !player.IsDead)
         {
             float distToPlayer = Vector3.Distance(transform.position, player.transform.position);
 
-            if (currentState != State.Chasing && currentState != State.Attacking && distToPlayer <= detectionRange)
+            if (DayNightCycle.IsNight)
             {
-                SwitchState(State.Chasing);
+                // Night behavior: attack the player
+                if (currentState == State.Fleeing)
+                {
+                    SwitchState(State.Idle);
+                }
+
+                if (currentState != State.Chasing && currentState != State.Attacking && distToPlayer <= detectionRange)
+                {
+                    SwitchState(State.Chasing);
+                }
+            }
+            else
+            {
+                // Morning/Day behavior: flee from player
+                if (currentState == State.Chasing || currentState == State.Attacking)
+                {
+                    SwitchState(State.Idle);
+                }
+
+                if (currentState != State.Fleeing && distToPlayer <= detectionRange)
+                {
+                    SwitchState(State.Fleeing);
+                }
             }
         }
-        else if (currentState == State.Chasing || currentState == State.Attacking)
+        else
         {
-            // Reset if player dies or enters creative mode
-            SwitchState(State.Idle);
+            // Reset if player dies, enters creative mode, or is null
+            if (currentState == State.Chasing || currentState == State.Attacking || currentState == State.Fleeing)
+            {
+                SwitchState(State.Idle);
+            }
         }
 
         // State machine processing
@@ -140,6 +171,9 @@ public class WolfAI : MonoBehaviour
                 break;
             case State.Attacking:
                 ProcessAttacking();
+                break;
+            case State.Fleeing:
+                ProcessFleeing();
                 break;
         }
 
@@ -242,15 +276,53 @@ public class WolfAI : MonoBehaviour
         return legRoot.transform;
     }
 
+    private bool IsInWater()
+    {
+        if (VoxelWorld.Instance == null) return false;
+        Vector3 pos = transform.position;
+        byte blockFeet = VoxelWorld.Instance.GetBlock(pos);
+        byte blockCenter = VoxelWorld.Instance.GetBlock(pos + Vector3.up * 0.4f);
+        return blockFeet == 7 || blockCenter == 7;
+    }
+
+    private float GetWaterSurfaceY(float x, float z)
+    {
+        if (VoxelWorld.Instance == null) return 0f;
+        int ix = Mathf.FloorToInt(x);
+        int iz = Mathf.FloorToInt(z);
+        for (int y = VoxelData.ChunkHeight - 1; y >= 0; y--)
+        {
+            byte block = VoxelWorld.Instance.GetBlock(new Vector3(ix, y, iz));
+            if (block == 7)
+            {
+                return y + 1f;
+            }
+        }
+        return 0f;
+    }
+
     private void ApplyGravity()
     {
-        if (cc.isGrounded)
+        if (IsInWater())
         {
-            verticalVelocity = -0.5f;
+            float surfaceY = GetWaterSurfaceY(transform.position.x, transform.position.z);
+            float bob = Mathf.Sin(Time.time * 2.5f) * 0.05f;
+            float targetY = surfaceY - 0.55f + bob; // float with belly submerged
+            
+            float diff = targetY - transform.position.y;
+            verticalVelocity = diff * 4.0f;
+            verticalVelocity = Mathf.Clamp(verticalVelocity, -2f, 2f);
         }
         else
         {
-            verticalVelocity += gravity * Time.deltaTime;
+            if (cc.isGrounded)
+            {
+                verticalVelocity = -0.5f;
+            }
+            else
+            {
+                verticalVelocity += gravity * Time.deltaTime;
+            }
         }
     }
 
@@ -267,6 +339,19 @@ public class WolfAI : MonoBehaviour
         {
             float randAngle = Random.Range(0f, 360f);
             wanderDirection = new Vector3(Mathf.Sin(randAngle), 0, Mathf.Cos(randAngle)).normalized;
+        }
+        else if (newState == State.Fleeing)
+        {
+            if (player != null)
+            {
+                Vector3 away = (transform.position - player.transform.position);
+                away.y = 0f;
+                fleeDirection = away.normalized;
+            }
+            else
+            {
+                fleeDirection = transform.forward;
+            }
         }
     }
 
@@ -291,14 +376,17 @@ public class WolfAI : MonoBehaviour
             return;
         }
 
-        // Stepping obstacles / jump trigger
-        CheckAndJumpIfBlocked();
-
-        // Turn around at steep cliffs/water
-        CheckCliffsAndWater();
+        raycastTimer -= Time.deltaTime;
+        if (raycastTimer <= 0f)
+        {
+            raycastTimer = raycastInterval;
+            CheckAndJumpIfBlocked();
+            CheckCliffsAndWater();
+        }
 
         // Move
-        Vector3 hMove = wanderDirection * walkSpeed;
+        float currentWalkSpeed = IsInWater() ? walkSpeed * 0.5f : walkSpeed;
+        Vector3 hMove = wanderDirection * currentWalkSpeed;
         Vector3 finalMove = new Vector3(hMove.x, verticalVelocity, hMove.z);
         cc.Move(finalMove * Time.deltaTime);
 
@@ -337,9 +425,15 @@ public class WolfAI : MonoBehaviour
         targetDir.y = 0f;
         targetDir.Normalize();
 
-        CheckAndJumpIfBlocked();
+        raycastTimer -= Time.deltaTime;
+        if (raycastTimer <= 0f)
+        {
+            raycastTimer = raycastInterval;
+            CheckAndJumpIfBlocked();
+        }
 
-        Vector3 hMove = targetDir * chaseSpeed;
+        float currentChaseSpeed = IsInWater() ? chaseSpeed * 0.5f : chaseSpeed;
+        Vector3 hMove = targetDir * currentChaseSpeed;
         Vector3 finalMove = new Vector3(hMove.x, verticalVelocity, hMove.z);
         cc.Move(finalMove * Time.deltaTime);
 
@@ -403,7 +497,7 @@ public class WolfAI : MonoBehaviour
             if (Physics.Raycast(rayStart, transform.forward, out hit, 0.65f))
             {
                 // Solid obstacle -> jump
-                if (!hit.collider.isTrigger)
+                if (!hit.collider.isTrigger && !hit.collider.name.Contains("Foliage"))
                 {
                     verticalVelocity = jumpForce;
                 }
@@ -413,6 +507,8 @@ public class WolfAI : MonoBehaviour
 
     private void CheckCliffsAndWater()
     {
+        if (IsInWater()) return;
+
         // Check 1 block in front, and 1.5 blocks down
         Vector3 checkPos = transform.position + transform.forward * 0.6f + Vector3.up * 0.1f;
         RaycastHit hit;
@@ -428,6 +524,65 @@ public class WolfAI : MonoBehaviour
         }
     }
 
+    private void ProcessFleeing()
+    {
+        stateTimer -= Time.deltaTime;
+        if (stateTimer <= 0f)
+        {
+            SwitchState(State.Idle);
+            return;
+        }
+
+        // Periodically update flee direction to push away from player
+        if (player != null)
+        {
+            Vector3 away = (transform.position - player.transform.position);
+            away.y = 0f;
+            if (away.sqrMagnitude > 0.01f)
+            {
+                fleeDirection = Vector3.Slerp(fleeDirection, away.normalized, Time.deltaTime * 3f);
+            }
+        }
+
+        raycastTimer -= Time.deltaTime;
+        if (raycastTimer <= 0f)
+        {
+            raycastTimer = raycastInterval;
+            CheckAndJumpIfBlocked();
+            CheckCliffsAndWaterFleeing();
+        }
+
+        float currentFleeSpeed = IsInWater() ? fleeSpeed * 0.5f : fleeSpeed;
+        Vector3 hMove = fleeDirection * currentFleeSpeed;
+        Vector3 finalMove = new Vector3(hMove.x, verticalVelocity, hMove.z);
+        cc.Move(finalMove * Time.deltaTime);
+
+        if (fleeDirection != Vector3.zero)
+        {
+            Quaternion targetRot = Quaternion.LookRotation(fleeDirection, Vector3.up);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * 10f);
+        }
+    }
+
+    private void CheckCliffsAndWaterFleeing()
+    {
+        if (IsInWater()) return;
+
+        Vector3 checkPos = transform.position + transform.forward * 0.6f + Vector3.up * 0.1f;
+        RaycastHit hit;
+        if (!Physics.Raycast(checkPos, Vector3.down, out hit, 2.0f))
+        {
+            // Pick a random side direction
+            float turn = Random.value < 0.5f ? 90f : -90f;
+            fleeDirection = Quaternion.Euler(0, turn, 0) * fleeDirection;
+        }
+        else if (hit.collider != null && hit.collider.name.Contains("Water"))
+        {
+            float turn = Random.value < 0.5f ? 90f : -90f;
+            fleeDirection = Quaternion.Euler(0, turn, 0) * fleeDirection;
+        }
+    }
+
     private void AnimateModelParts()
     {
         float speed = new Vector3(cc.velocity.x, 0, cc.velocity.z).magnitude;
@@ -435,7 +590,7 @@ public class WolfAI : MonoBehaviour
         if (speed > 0.1f)
         {
             // Walk legs swinging
-            float swingMult = currentState == State.Chasing ? 12f : 8f;
+            float swingMult = (currentState == State.Chasing || currentState == State.Fleeing) ? 12f : 8f;
             float swingAngle = Mathf.Sin(Time.time * swingMult) * 35f;
 
             frontLeftLeg.localRotation = Quaternion.Euler(swingAngle, 0f, 0f);
@@ -556,12 +711,12 @@ public class WolfAI : MonoBehaviour
             }
         }
 
-        // Spawn drops (Apples work as food out of the box!)
-        Item appleDrop = StarterItems.CreateItemInstance("Apple", 0, Color.red);
-        if (appleDrop != null)
+        // Spawn drops (Leather)
+        Item leatherDrop = StarterItems.CreateItemInstance("Leather", 0, Color.white);
+        if (leatherDrop != null)
         {
             int amount = Random.Range(1, 3);
-            DroppedItem.Spawn(appleDrop, amount, transform.position + Vector3.up * 0.4f);
+            DroppedItem.Spawn(leatherDrop, amount, transform.position + Vector3.up * 0.4f);
         }
     }
 

@@ -146,6 +146,14 @@ public class VehicleHUD : MonoBehaviour
     {
         if (!IsOpen || currentVC == null) return;
 
+        bool shouldShow = !PauseMenu.IsPaused;
+        if (hudContainer != null && hudContainer.transform.parent.gameObject.activeSelf != shouldShow)
+        {
+            hudContainer.transform.parent.gameObject.SetActive(shouldShow);
+        }
+
+        if (!shouldShow) return;
+
         // E key exit is now handled by VehicleController.Update() to avoid
         // race conditions with ControlBlock running in the same frame.
         // VehicleHUD only manages HUD visuals here.

@@ -111,10 +111,18 @@ public class PropellerBlock : MonoBehaviour
             strafeRight = Input.GetKey(KeyCode.F);
 #endif
 
-            // Identify orientation relative to vehicle's parent axes
+            // Get local axes based on vehicle's actual forward direction
+            Vector3 localFwd = Vector3.forward;
+            if (vehicleController != null)
+            {
+                localFwd = vehicleController.GetLocalForwardDirection();
+            }
+            Vector3 localRgt = Vector3.Cross(Vector3.up, localFwd);
+
+            // Project local axes to world space
             Vector3 vehicleUp = transform.parent != null ? transform.parent.up : Vector3.up;
-            Vector3 vehicleForward = transform.parent != null ? transform.parent.forward : Vector3.forward;
-            Vector3 vehicleRight = transform.parent != null ? transform.parent.right : Vector3.right;
+            Vector3 vehicleForward = transform.parent != null ? transform.parent.TransformDirection(localFwd) : Vector3.forward;
+            Vector3 vehicleRight = transform.parent != null ? transform.parent.TransformDirection(localRgt) : Vector3.right;
 
             // Project propeller's local thrust direction (-transform.forward) in parent space
             Vector3 localThrustDir = transform.parent != null 
@@ -122,8 +130,8 @@ public class PropellerBlock : MonoBehaviour
                 : -transform.forward;
 
             bool isLiftPropeller = Mathf.Abs(localThrustDir.y) > 0.8f;
-            bool isLateralPropeller = Mathf.Abs(localThrustDir.x) > 0.8f;
-            bool isLongitudinalPropeller = Mathf.Abs(localThrustDir.z) > 0.8f;
+            bool isLateralPropeller = Mathf.Abs(Vector3.Dot(localThrustDir, localRgt)) > 0.8f;
+            bool isLongitudinalPropeller = Mathf.Abs(Vector3.Dot(localThrustDir, localFwd)) > 0.8f;
 
             if (isLiftPropeller)
             {
@@ -205,8 +213,9 @@ public class PropellerBlock : MonoBehaviour
                 // 2. Yaw/Steering assistance
                 Vector3 localPos = transform.localPosition;
                 float zSign = 0f;
-                if (localPos.z > 0.2f) zSign = 1f;
-                else if (localPos.z < -0.2f) zSign = -1f;
+                float fwdPos = Vector3.Dot(localPos, localFwd);
+                if (fwdPos > 0.2f) zSign = 1f;
+                else if (fwdPos < -0.2f) zSign = -1f;
 
                 if (left)  targetForceX -= zSign * 1.0f;
                 if (right) targetForceX += zSign * 1.0f;

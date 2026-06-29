@@ -35,6 +35,7 @@ public class VehicleController : MonoBehaviour
     public float totalWheelForce = 0f;
     public int groundedWheelCount = 0;
     private bool wasGrounded = false;
+    private bool _isGroundedWithoutWheels = false;
 
     [Header("Step Climbing")]
     [Tooltip("Max step height the vehicle can climb (in world units). 1.05 = one full voxel block.")]
@@ -71,11 +72,16 @@ public class VehicleController : MonoBehaviour
     private const float StuckVelocityThreshold = 0.3f;
     private const float StuckTimeLimit = 1.5f;
 
-    // ── Camera-tilt fix: player position offset in vehicle-yaw-space ──────────
-    // We no longer parent the player to the vehicle. Instead we track where the
-    // player sat relative to the vehicle's yaw-only rotation, then resync every
-    // Update frame — so pitch/roll of the boat never propagates to the camera.
     private Vector3 _playerSeatOffset;
+    private float _lastVehicleYaw;
+
+    private float _lastPushedTime = -99f;
+    private float _lastControlledTime = -99f;
+
+    public void NotifyPushed()
+    {
+        _lastPushedTime = Time.time;
+    }
 
     // ── Buoyancy ──────────────────────────────────────────────────────────────
     [Header("Buoyancy")]
@@ -91,10 +97,17 @@ public class VehicleController : MonoBehaviour
     // Cached child block world-space positions (updated each FixedUpdate)
     private Transform[] _hullBlocks;
 
+    private Vector3 _localForward = Vector3.forward;
+    private bool _hasPropeller = false;
+
+    public Vector3 LocalForward => _localForward;
+    public bool HasPropeller => _hasPropeller;
+
     private void Awake()
     {
         _rb = GetComponent<Rigidbody>();
-        if (waterLevel <= 0f) waterLevel = 14f;
+        // Always derive from world constants — the serialised default 14 is wrong for a 128-high world
+        waterLevel = Mathf.Floor(VoxelData.ChunkHeight * 0.22f);
     }
 
 
@@ -146,12 +159,16 @@ public class VehicleController : MonoBehaviour
         }
 
         // Cache hull block transforms for buoyancy calculations.
-        // Every direct child that has a BoxCollider (i.e. a hull block) is a buoyancy point.
+        // Every child collider (excluding SphereCollider wheels) is a buoyancy point.
         var hullList = new System.Collections.Generic.List<Transform>();
-        foreach (Transform child in transform)
-            if (child.GetComponent<BoxCollider>() != null)
-                hullList.Add(child);
+        foreach (var col in allColliders)
+        {
+            if (col is SphereCollider) continue;
+            hullList.Add(col.transform);
+        }
         _hullBlocks = hullList.ToArray();
+
+        CacheVehicleSettings();
 
         // Heavy mech physics — Iron Giant feel
         _rb.mass             = Mathf.Max(50f, _rb.mass * 5f); // much heavier
@@ -235,16 +252,35 @@ public class VehicleController : MonoBehaviour
 
         if (_rb != null)
         {
-            _rb.isKinematic = false;
-            if (isRestoredFromSave)
+            // Re-cache hull and forward settings after instantiation completes
+            CacheVehicleSettings();
+
+            // Run a quick check for non-wheeled grounding
+            UpdateGroundedWithoutWheels();
+
+            bool isResting = _isInWater || wasGrounded || _isGroundedWithoutWheels;
+
+            if (isResting && !isRestoredFromSave)
             {
-                _rb.linearVelocity = savedLinearVelocity;
-                _rb.angularVelocity = savedAngularVelocity;
+                _rb.isKinematic = true;
+                _lastPushedTime = 0f;
+                _rb.linearVelocity = Vector3.zero;
+                _rb.angularVelocity = Vector3.zero;
             }
             else
             {
-                _rb.linearVelocity = Vector3.zero;
-                _rb.angularVelocity = Vector3.zero;
+                _rb.isKinematic = false;
+                _lastPushedTime = isRestoredFromSave ? Time.time + 0.5f : 0f;
+                if (isRestoredFromSave)
+                {
+                    _rb.linearVelocity = savedLinearVelocity;
+                    _rb.angularVelocity = savedAngularVelocity;
+                }
+                else
+                {
+                    _rb.linearVelocity = Vector3.zero;
+                    _rb.angularVelocity = Vector3.zero;
+                }
             }
         }
 
@@ -260,12 +296,14 @@ public class VehicleController : MonoBehaviour
 
     private void Update()
     {
+        bool justBoarded = false;
         // Detect control-state transitions
         if (isBeingControlled != _wasControlled)
         {
             CharacterController playerCC = GetPlayerCC();
             if (isBeingControlled)
             {
+                justBoarded = true;
                 SetPlayerCollision(false);
 
                 if (playerCC != null)
@@ -280,9 +318,38 @@ public class VehicleController : MonoBehaviour
                     // using only the vehicle's Y-axis rotation so the player follows
                     // turning but never inherits pitch or roll.
                     playerCC.enabled = false;
-                    Quaternion yawOnly = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
-                    _playerSeatOffset = Quaternion.Inverse(yawOnly) *
+
+                    // 1. Calculate the seat offset in the boat's INITIAL rotation space BEFORE snapping
+                    Quaternion initialYawOnly = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
+                    _playerSeatOffset = Quaternion.Inverse(initialYawOnly) *
                                         (playerCC.transform.position - transform.position);
+
+                    // 2. Snap the boat to face the camera's horizontal forward when boarding,
+                    // so W immediately drives in the direction the player is looking.
+                    if (registeredWheels.Count == 0 && _rb != null)
+                    {
+                        Camera cam = Camera.main;
+                        if (cam != null)
+                        {
+                            Vector3 cf = cam.transform.forward; cf.y = 0f;
+                            if (cf.sqrMagnitude > 0.001f)
+                            {
+                                cf.Normalize();
+                                float yaw = Mathf.Atan2(cf.x, cf.z) * Mathf.Rad2Deg;
+                                
+                                // Offset the vehicle's transform yaw so its actual local forward matches the camera
+                                Vector3 localFwd = GetLocalForwardDirection();
+                                float offsetAngle = Mathf.Atan2(localFwd.x, localFwd.z) * Mathf.Rad2Deg;
+                                
+                                transform.rotation = Quaternion.Euler(0f, yaw - offsetAngle, 0f);
+                                _rb.rotation = transform.rotation;
+                                _rb.angularVelocity = Vector3.zero;
+                                _rb.linearVelocity = Vector3.zero;
+                            }
+                        }
+                    }
+
+                    _lastVehicleYaw = transform.eulerAngles.y;
                 }
             }
             else
@@ -294,6 +361,7 @@ public class VehicleController : MonoBehaviour
                     playerCC.enabled = true;
                 }
                 StartCoroutine(RestorePlayerCollisionDelayed());
+                _lastControlledTime = Time.time;
             }
             _wasControlled = isBeingControlled;
         }
@@ -304,9 +372,23 @@ public class VehicleController : MonoBehaviour
             CharacterController playerCC = GetPlayerCC();
             if (playerCC != null)
             {
-                Quaternion yawOnly = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
+                float currentVehicleYaw = transform.eulerAngles.y;
+                if (_wasControlled && !justBoarded)
+                {
+                    float deltaYaw = Mathf.DeltaAngle(_lastVehicleYaw, currentVehicleYaw);
+                    playerCC.transform.Rotate(Vector3.up * deltaYaw);
+                }
+                _lastVehicleYaw = currentVehicleYaw;
+
+                Quaternion yawOnly = Quaternion.Euler(0f, currentVehicleYaw, 0f);
                 playerCC.transform.position = transform.position + yawOnly * _playerSeatOffset;
             }
+        }
+
+        if (_isInWater)
+        {
+            Vector3 euler = transform.eulerAngles;
+            transform.eulerAngles = new Vector3(0f, euler.y, 0f);
         }
     }
 
@@ -331,8 +413,11 @@ public class VehicleController : MonoBehaviour
         // upward force proportional to how deeply it is submerged. This makes any
         // voxel hull (including plank-only boats) float without needing a PropellerBlock.
         int submergedBlockCount = 0;
-        if (_hullBlocks != null)
+        if (_hullBlocks != null && _hullBlocks.Length > 0)
         {
+            // Scale buoyancy force dynamically based on Rigidbody mass to guarantee any vehicle floats
+            float forcePerBlock = Mathf.Max(buoyancyForcePerBlock, (_rb.mass * 15f) / _hullBlocks.Length);
+
             foreach (var block in _hullBlocks)
             {
                 if (block == null) continue;
@@ -340,34 +425,78 @@ public class VehicleController : MonoBehaviour
                 if (depth <= 0f) continue;
 
                 float ratio = Mathf.Clamp01(depth / 1.0f);
-                _rb.AddForceAtPosition(
-                    Vector3.up * buoyancyForcePerBlock * ratio,
-                    block.position,
-                    ForceMode.Force);
+                if (!_rb.isKinematic)
+                {
+                    _rb.AddForceAtPosition(
+                        Vector3.up * forcePerBlock * ratio,
+                        block.position,
+                        ForceMode.Force);
+                }
                 submergedBlockCount++;
             }
         }
         _isInWater = submergedBlockCount > 0;
 
-        // Adjust damping based on water vs land controlled state:
-        // When controlled: apply heavy damping on land, lighter damping in water.
-        // When parked/exited: reduce damping to a minimal value so it rolls down slopes naturally.
-        if (isBeingControlled)
+        // --- GROUNDED CHECK ---
+        int groundedNow = 0;
+        foreach (var w in registeredWheels)
+            if (w.isGrounded) groundedNow++;
+
+        groundedWheelCount = groundedNow;
+        wasGrounded = groundedWheelCount > 0;
+
+        UpdateGroundedWithoutWheels();
+
+        // --- KINEMATIC & STABILIZATION SYSTEM ---
+        bool isPushed = (Time.time - _lastPushedTime) < 0.2f;
+        bool isBeingDriven = isBeingControlled && IsInputActive();
+
+        bool canMove = _hasPropeller && isBeingDriven;
+        bool isResting = _isInWater || wasGrounded || _isGroundedWithoutWheels;
+
+        // If it's resting on land or water, and we are not actively driving it or pushing it, freeze instantly!
+        bool shouldBeDynamic = canMove || isPushed || !isResting;
+
+        if (shouldBeDynamic)
         {
-            _rb.linearDamping = _isInWater ? 0.3f : 1.0f;
-            _rb.angularDamping = _isInWater ? 0.8f : 3.5f;
+            _rb.isKinematic = false;
+            
+            // Adjust damping based on water vs land controlled state:
+            if (isBeingControlled)
+            {
+                _rb.linearDamping = _isInWater ? 0.3f : 1.0f;
+                _rb.angularDamping = _isInWater ? 0.8f : 3.5f;
+            }
+            else
+            {
+                // Normal unpiloted damping while moving/sliding/falling
+                _rb.linearDamping = _isInWater ? 0.3f : 0.05f;
+                _rb.angularDamping = _isInWater ? 0.8f : 0.05f;
+            }
         }
         else
         {
-            _rb.linearDamping = 0.05f;
-            _rb.angularDamping = 0.05f;
+            // Freeze completely instantly!
+            _rb.isKinematic = true;
+            _rb.linearVelocity = Vector3.zero;
+            _rb.angularVelocity = Vector3.zero;
         }
+
+        // If kinematic, skip applying forces (downforce, extra gravity, gyros, step climbing, driving)
+        if (_rb.isKinematic) return;
 
         // Water drag: damp motion when partially submerged so the boat doesn't oscillate
         if (_isInWater)
         {
             _rb.AddForce(-_rb.linearVelocity  * waterLinearDrag,  ForceMode.Acceleration);
             _rb.AddTorque(-_rb.angularVelocity * waterAngularDrag, ForceMode.Acceleration);
+
+            // Keep the boat perfectly level (0 tilt on X and Z)
+            Vector3 euler = transform.eulerAngles;
+            transform.eulerAngles = new Vector3(0f, euler.y, 0f);
+
+            Vector3 angVel = _rb.angularVelocity;
+            _rb.angularVelocity = new Vector3(0f, angVel.y, 0f);
         }
 
         // --- DOWNFORCE: keeps wheels on ground at speed (skip in water) ---
@@ -377,12 +506,8 @@ public class VehicleController : MonoBehaviour
                          ForceMode.Force);
 
         // --- EXTRA GRAVITY WHEN AIRBORNE (skip when floating — boat wheels never touch ground) ---
-        int groundedNow = 0;
-        foreach (var w in registeredWheels)
-            if (w.isGrounded) groundedNow++;
-
         // Only apply the heavy 3G stomping force when truly airborne over land, never in water or when flying/swimming (has propellers)
-        bool isFlying = GetComponentsInChildren<PropellerBlock>().Length > 0;
+        bool isFlying = _hasPropeller;
         if (registeredWheels.Count > 0 && groundedNow == 0 && !_isInWater && !isFlying)
             _rb.AddForce(Vector3.down * _rb.mass * 29.4f, ForceMode.Force);
 
@@ -394,17 +519,67 @@ public class VehicleController : MonoBehaviour
             _rb.AddTorque(cross * angle * _rb.mass * 3f);
         }
 
-        groundedWheelCount = groundedNow;
-        wasGrounded = groundedWheelCount > 0;
-
         // --- STEP CLIMBING ---
         TryClimbStep();
 
+        // Early-exit when no player is controlling — keeps the boat stationary at rest
         if (!isBeingControlled) return;
 
-        // Decouple land-based vehicle controller logic from watercraft:
-        // Skip land-based control forces if the vehicle is in the water.
-        if (_isInWater) return;
+        // ── WATERCRAFT DRIVING ────────────────────────────────────────────────
+        if (_isInWater)
+        {
+            // If there is no propeller, the boat must not move
+            if (!_hasPropeller) return;
+
+            bool fwd = false, bwd = false, lft = false, rgt = false;
+#if ENABLE_INPUT_SYSTEM
+            if (UnityEngine.InputSystem.Keyboard.current != null)
+            {
+                fwd = UnityEngine.InputSystem.Keyboard.current.wKey.isPressed || UnityEngine.InputSystem.Keyboard.current.upArrowKey.isPressed;
+                bwd = UnityEngine.InputSystem.Keyboard.current.sKey.isPressed || UnityEngine.InputSystem.Keyboard.current.downArrowKey.isPressed;
+                lft = UnityEngine.InputSystem.Keyboard.current.aKey.isPressed || UnityEngine.InputSystem.Keyboard.current.leftArrowKey.isPressed;
+                rgt = UnityEngine.InputSystem.Keyboard.current.dKey.isPressed || UnityEngine.InputSystem.Keyboard.current.rightArrowKey.isPressed;
+            }
+#else
+            fwd = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
+            bwd = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
+            lft = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow);
+            rgt = Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow);
+#endif
+            // Use the calculated vehicle local forward direction to support arbitrary build orientations
+            Vector3 localFwd = GetLocalForwardDirection();
+            Vector3 localRgt = Vector3.Cross(Vector3.up, localFwd);
+
+            Vector3 thrustDir = transform.TransformDirection(localFwd);
+            thrustDir.y = 0f;
+            if (thrustDir.sqrMagnitude > 0.001f) thrustDir.Normalize();
+
+            float fwdSpeed   = Vector3.Dot(_rb.linearVelocity, thrustDir);
+            float boatThrust = bruteStrengthForce * 0.55f;
+
+            if (fwd && fwdSpeed <  12f) _rb.AddForce( thrustDir * boatThrust, ForceMode.Force);
+            if (bwd && fwdSpeed > -6f)  _rb.AddForce(-thrustDir * boatThrust, ForceMode.Force);
+
+            // Yaw steering rotates the boat around the world Y axis
+            float boatTorque = bruteStrengthTorque * 0.45f;
+            if (lft) _rb.AddTorque(-Vector3.up * boatTorque, ForceMode.Force);
+            if (rgt) _rb.AddTorque( Vector3.up * boatTorque, ForceMode.Force);
+
+            // Lateral drag: cancel sideways slip relative to the boat's heading
+            Vector3 lateralDir = transform.TransformDirection(localRgt);
+            lateralDir.y = 0f;
+            if (lateralDir.sqrMagnitude > 0.001f) lateralDir.Normalize();
+            float lateralSpeed = Vector3.Dot(_rb.linearVelocity, lateralDir);
+            _rb.AddForce(-lateralDir * lateralSpeed * _rb.mass * 6f, ForceMode.Force);
+
+            // Clamp vertical velocity so the boat can't dive or rocket upward
+            Vector3 v = _rb.linearVelocity;
+            v.y = Mathf.Clamp(v.y, -2f, 2f);
+            _rb.linearVelocity = v;
+
+            return; // skip land-driving code below
+        }
+
 
         bool forward = false, backward = false, left = false, right = false;
 
@@ -485,57 +660,75 @@ public class VehicleController : MonoBehaviour
     {
         if (_isInWater) { _isClimbing = false; return; }
 
-        // Need some horizontal movement
+        // Need at least a tiny horizontal movement — lower threshold so a vehicle
+        // stalled against a block face (sqMag ~0) can still initiate a climb.
         Vector3 velFlat = new Vector3(_rb.linearVelocity.x, 0f, _rb.linearVelocity.z);
-        if (velFlat.sqrMagnitude < 0.04f) { _isClimbing = false; return; }
+        if (velFlat.sqrMagnitude < 0.01f && !isBeingControlled) { _isClimbing = false; return; }
 
-        // Determine direction based on the vehicle's heading/chassis direction
-        // instead of the raw velocity vector, which avoids sliding sideways when hitting walls at an angle.
+        // Determine climb direction from the vehicle's chassis heading, not raw velocity,
+        // to avoid the probe ray deflecting sideways when the vehicle hits a wall at an angle.
         float localFwdSpeed = Vector3.Dot(_rb.linearVelocity, transform.forward);
-        Vector3 climbPushDir = (localFwdSpeed >= 0f) ? transform.forward : -transform.forward;
+        // If the vehicle is being driven but has barely moved (stalled against the block),
+        // default to the chassis forward direction so we can still probe the step.
+        Vector3 climbPushDir;
+        if (Mathf.Abs(localFwdSpeed) > 0.05f)
+            climbPushDir = (localFwdSpeed >= 0f) ? transform.forward : -transform.forward;
+        else
+            climbPushDir = transform.forward; // default to forward when nearly stopped
         climbPushDir.y = 0f;
         if (climbPushDir.sqrMagnitude < 0.001f) { _isClimbing = false; return; }
         climbPushDir.Normalize();
 
-        // Lowest world-Y of all colliders (excluding any root-level triggers/components) = wheel contact plane.
+        // Ground contact plane: use the lowest registered wheel position (most reliable
+        // because wheel SphereColliders sit exactly on the terrain surface and their
+        // Transform.position doesn't shift when the vehicle tilts or rotates).
         float lowestY = float.MaxValue;
-        foreach (var col in GetComponentsInChildren<Collider>())
+        foreach (var wheel in registeredWheels)
         {
-            if (col.gameObject == gameObject) continue;
-            lowestY = Mathf.Min(lowestY, col.bounds.min.y);
+            if (wheel != null)
+                lowestY = Mathf.Min(lowestY, wheel.transform.position.y - 0.5f);
+        }
+        // Fallback: scan child collider bounds when no wheels are registered
+        if (lowestY == float.MaxValue)
+        {
+            foreach (var col in GetComponentsInChildren<Collider>())
+            {
+                if (col.gameObject == gameObject) continue;
+                lowestY = Mathf.Min(lowestY, col.bounds.min.y);
+            }
         }
         if (lowestY == float.MaxValue) lowestY = transform.position.y;
 
         // ── Multi-height wall probes ──────────────────────────────────────────
-        // Statically compute the bumper distance (half-length) along the vehicle's local Z axis.
-        float noseOffset = _localBounds.size.z * 0.5f;
+        float noseOffset    = _localBounds.size.z * 0.5f;
         float probeDistance = noseOffset + stepProbeDistance;
 
         bool       hitWall    = false;
         RaycastHit wallHit    = default;
         float      lowestHitY = float.MaxValue;
 
-        const int probes = 4;
+        // Use 6 probe heights for better coverage — finer increments catch narrow steps
+        const int probes = 6;
         for (int i = 0; i < probes; i++)
         {
-            float dy  = Mathf.Lerp(0.06f, maxStepHeight * 0.85f, (float)i / (probes - 1));
-            // Start from the vehicle center so the raycast travels outward and is guaranteed
-            // to cross the external wall's boundary, even if the vehicle is pressing against it.
+            float dy  = Mathf.Lerp(0.05f, maxStepHeight * 0.9f, (float)i / (probes - 1));
             Vector3 org = new Vector3(transform.position.x, lowestY + dy, transform.position.z);
 
             RaycastHit[] hits = Physics.RaycastAll(org, climbPushDir, probeDistance,
                                                    _stepLayerMask, QueryTriggerInteraction.Ignore);
-            
+
             RaycastHit closestValidHit = default;
             bool foundValid = false;
             foreach (var h in hits)
             {
-                // Skip hits on the vehicle's own colliders (root box + child blocks)
+                // Skip own colliders
                 if (h.transform == transform || h.transform.IsChildOf(transform))
                     continue;
-
-                // Skip foliage (flower) mesh colliders — they are not solid walls
+                // Skip foliage mesh colliders — not solid walls
                 if (h.collider != null && h.collider.gameObject.name.Contains("Foliage"))
+                    continue;
+                // Skip water mesh colliders
+                if (h.collider != null && h.collider.gameObject.name.Contains("Water"))
                     continue;
 
                 if (!foundValid || h.distance < closestValidHit.distance)
@@ -558,26 +751,22 @@ public class VehicleController : MonoBehaviour
         if (!hitWall) { _isClimbing = false; return; }
 
         // ── Step-top detection ────────────────────────────────────────────────
-        // Use RaycastAll so we can filter out the vehicle's own root BoxCollider.
-        // The root box encapsulates the whole vehicle, so a plain Raycast starting
-        // inside it exits through the bottom face (giving stepH≈0) and aborts the climb.
-        float   topOriginY = lowestY + maxStepHeight + 0.2f;
+        float   topOriginY = lowestY + maxStepHeight + 0.3f;
         Vector3 topOrg     = new Vector3(
-            wallHit.point.x + climbPushDir.x * 0.2f,
+            wallHit.point.x + climbPushDir.x * 0.25f,
             topOriginY,
-            wallHit.point.z + climbPushDir.z * 0.2f);
+            wallHit.point.z + climbPushDir.z * 0.25f);
 
         RaycastHit[] topCandidates = Physics.RaycastAll(topOrg, Vector3.down,
-                                     maxStepHeight + 0.4f, _stepLayerMask,
+                                     maxStepHeight + 0.5f, _stepLayerMask,
                                      QueryTriggerInteraction.Ignore);
         bool       foundTop = false;
         RaycastHit topHit   = default;
         foreach (var th in topCandidates)
         {
-            // Skip own colliders (root box + any child blocks)
             if (th.transform == transform || th.transform.IsChildOf(transform)) continue;
             if (th.collider != null && th.collider.gameObject.name.Contains("Foliage")) continue;
-            // We fire downward — take the highest Y surface (first thing hit from above)
+            if (th.collider != null && th.collider.gameObject.name.Contains("Water")) continue;
             if (!foundTop || th.point.y > topHit.point.y) { topHit = th; foundTop = true; }
         }
         if (!foundTop) { _isClimbing = false; return; }
@@ -585,18 +774,18 @@ public class VehicleController : MonoBehaviour
         float stepH = topHit.point.y - lowestY;
         if (stepH < 0.05f || stepH > maxStepHeight) { _isClimbing = false; return; }
 
-        // ── Climbing confirmed — lift via direct position ─────────────────────
-        // _rb.position bypasses the physics collision solver, so the root BoxCollider
-        // can never block the vehicle from rising. Capped per-frame so it looks smooth.
+        // ── Climbing confirmed ────────────────────────────────────────────────
         _isClimbing = true;
 
-        // 1. Upward: teleport up by up to stepClimbSpeed * dt per frame
+        // Lift: teleport up by up to stepClimbSpeed * dt per frame
         float liftThisFrame = Mathf.Min(stepH, stepClimbSpeed * Time.fixedDeltaTime);
         _rb.position += Vector3.up * liftThisFrame;
 
-        // 2. Forward: prevent horizontal momentum from dying on the block face
+        // Forward nudge: keep a modest minimum forward speed so the vehicle
+        // doesn't stall out on the step face. Reduced from 2.5 → 1.5 to avoid
+        // overshooting narrow ledges.
         float currentFwd       = Vector3.Dot(_rb.linearVelocity, climbPushDir);
-        float minFwdDuringClimb = 2.5f;
+        float minFwdDuringClimb = 1.5f;
         if (currentFwd < minFwdDuringClimb)
             _rb.AddForce(climbPushDir * (minFwdDuringClimb - currentFwd), ForceMode.VelocityChange);
     }
@@ -754,6 +943,50 @@ public class VehicleController : MonoBehaviour
     /// Returns true if the given world-space position falls inside this vehicle's
     /// local bounds. Used by Chunk.cs to suppress water mesh inside the hull.
     /// </summary>
+    public struct CachedVehicleData
+    {
+        public Vector3 position;
+        public Quaternion inverseRotation;
+        public List<Bounds> dryFilters;
+    }
+
+    public static List<CachedVehicleData> GetCachedVehicles()
+    {
+        var list = new List<CachedVehicleData>();
+        foreach (var vc in _activeVehicles)
+        {
+            if (vc == null) continue;
+            list.Add(new CachedVehicleData
+            {
+                position = vc.transform.position,
+                inverseRotation = Quaternion.Inverse(vc.transform.rotation),
+                dryFilters = vc.dryFilters != null ? new List<Bounds>(vc.dryFilters) : null
+            });
+        }
+        return list;
+    }
+
+    public static bool IsWorldPosInsideVehicleCached(Vector3 worldPos, List<CachedVehicleData> cachedVehicles)
+    {
+        if (cachedVehicles == null) return false;
+        for (int i = 0; i < cachedVehicles.Count; i++)
+        {
+            var cv = cachedVehicles[i];
+            // Transform world point to vehicle local space
+            Vector3 localPos = cv.inverseRotation * (worldPos - cv.position);
+            // Check if position is inside any dry filter
+            if (cv.dryFilters != null)
+            {
+                for (int j = 0; j < cv.dryFilters.Count; j++)
+                {
+                    if (cv.dryFilters[j].Contains(localPos))
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public static bool IsWorldPosInsideVehicle(Vector3 worldPos)
     {
         foreach (var vc in _activeVehicles)
@@ -1083,6 +1316,123 @@ public class VehicleController : MonoBehaviour
         Debug.Log($"[DryFilters] Generated {dryFilters.Count} dry filter box(es).");
         for (int i = 0; i < dryFilters.Count; i++)
             Debug.Log($"  Filter[{i}]: center={dryFilters[i].center}, size={dryFilters[i].size}");
+    }
+
+    public void CacheVehicleSettings()
+    {
+        // Re-cache hull block transforms to ensure grandparent colliders are captured
+        var hullList = new System.Collections.Generic.List<Transform>();
+        Collider[] allColliders = GetComponentsInChildren<Collider>();
+        foreach (var col in allColliders)
+        {
+            if (col is SphereCollider) continue;
+            hullList.Add(col.transform);
+        }
+        _hullBlocks = hullList.ToArray();
+
+        PropellerBlock[] props = GetComponentsInChildren<PropellerBlock>();
+        _hasPropeller = props != null && props.Length > 0;
+
+        if (_hasPropeller)
+        {
+            Vector3 thrustDirSum = Vector3.zero;
+            int count = 0;
+            foreach (var p in props)
+            {
+                Vector3 localThrustDir = transform.InverseTransformDirection(-p.transform.forward);
+                bool isLiftPropeller = Mathf.Abs(localThrustDir.y) > 0.8f;
+                if (!isLiftPropeller)
+                {
+                    thrustDirSum += localThrustDir;
+                    count++;
+                }
+            }
+
+            if (count > 0)
+            {
+                Vector3 avgThrustDir = thrustDirSum / count;
+                avgThrustDir.y = 0f;
+                if (avgThrustDir.sqrMagnitude > 0.01f)
+                {
+                    avgThrustDir.Normalize();
+                    if (Mathf.Abs(avgThrustDir.z) >= Mathf.Abs(avgThrustDir.x))
+                    {
+                        _localForward = avgThrustDir.z > 0f ? Vector3.forward : Vector3.back;
+                    }
+                    else
+                    {
+                        _localForward = avgThrustDir.x > 0f ? Vector3.right : Vector3.left;
+                    }
+                    Debug.Log($"[VehicleController] Cached local forward: {_localForward}");
+                    return;
+                }
+            }
+        }
+        _localForward = Vector3.forward;
+        Debug.Log($"[VehicleController] Cached default local forward: {_localForward}");
+    }
+
+    private void UpdateGroundedWithoutWheels()
+    {
+        _isGroundedWithoutWheels = false;
+        if (registeredWheels.Count == 0 && _hullBlocks != null && _hullBlocks.Length > 0)
+        {
+            float lowestY = float.MaxValue;
+            Transform lowestBlock = null;
+            foreach (var block in _hullBlocks)
+            {
+                if (block != null && block.position.y < lowestY)
+                {
+                    lowestY = block.position.y;
+                    lowestBlock = block;
+                }
+            }
+
+            if (lowestBlock != null)
+            {
+                Vector3 origin = lowestBlock.position;
+                if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 0.6f, _stepLayerMask, QueryTriggerInteraction.Ignore))
+                {
+                    _isGroundedWithoutWheels = true;
+                }
+            }
+        }
+    }
+
+
+
+    public Vector3 GetLocalForwardDirection()
+    {
+        return _localForward;
+    }
+
+    private bool IsInputActive()
+    {
+        bool fwd = false, bwd = false, lft = false, rgt = false;
+        bool climb = false, descend = false, strafeLeft = false, strafeRight = false;
+#if ENABLE_INPUT_SYSTEM
+        if (UnityEngine.InputSystem.Keyboard.current != null)
+        {
+            fwd = UnityEngine.InputSystem.Keyboard.current.wKey.isPressed || UnityEngine.InputSystem.Keyboard.current.upArrowKey.isPressed;
+            bwd = UnityEngine.InputSystem.Keyboard.current.sKey.isPressed || UnityEngine.InputSystem.Keyboard.current.downArrowKey.isPressed;
+            lft = UnityEngine.InputSystem.Keyboard.current.aKey.isPressed || UnityEngine.InputSystem.Keyboard.current.leftArrowKey.isPressed;
+            rgt = UnityEngine.InputSystem.Keyboard.current.dKey.isPressed || UnityEngine.InputSystem.Keyboard.current.rightArrowKey.isPressed;
+            climb = UnityEngine.InputSystem.Keyboard.current.spaceKey.isPressed;
+            descend = UnityEngine.InputSystem.Keyboard.current.leftShiftKey.isPressed;
+            strafeLeft = UnityEngine.InputSystem.Keyboard.current.qKey.isPressed;
+            strafeRight = UnityEngine.InputSystem.Keyboard.current.fKey.isPressed;
+        }
+#else
+        fwd = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
+        bwd = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
+        lft = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow);
+        rgt = Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow);
+        climb = Input.GetKey(KeyCode.Space);
+        descend = Input.GetKey(KeyCode.LeftShift);
+        strafeLeft = Input.GetKey(KeyCode.Q);
+        strafeRight = Input.GetKey(KeyCode.F);
+#endif
+        return fwd || bwd || lft || rgt || climb || descend || strafeLeft || strafeRight;
     }
 
     private void OnDrawGizmosSelected()

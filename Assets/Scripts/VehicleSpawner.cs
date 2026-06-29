@@ -546,8 +546,36 @@ public class VehicleSpawner : MonoBehaviour
 
         // ── d. Add VehicleController & HelicopterController if applicable ────
         vehicleGO.AddComponent<VehicleController>();
-        bool hasPropeller = blueprint.blocks.Exists(b => b.blockTypeID == 22 || b.blockTypeID == 26);
-        if (hasPropeller)
+        bool hasLiftPropeller = false;
+        foreach (var entry in blueprint.blocks)
+        {
+            if (entry.blockTypeID == 22 || entry.blockTypeID == 26)
+            {
+                // Check if it is a lift propeller based on neighbor connections
+                bool hasBottomNeighbor = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.down);
+                bool hasTopNeighbor    = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.up);
+                bool hasFrontNeighbor  = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.forward);
+                bool hasBackNeighbor   = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.back);
+                bool hasLeftNeighbor   = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.left);
+                bool hasRightNeighbor  = blueprint.blocks.Exists(b => b.blockTypeID != 23 && b.blockTypeID != 27 && b.localPosition == entry.localPosition + Vector3Int.right);
+
+                // Determine if it will be oriented vertically (UP or DOWN)
+                bool pointsVertical = false;
+                if (hasFrontNeighbor && !hasBackNeighbor) pointsVertical = false;
+                else if (hasBackNeighbor && !hasFrontNeighbor) pointsVertical = false;
+                else if (hasRightNeighbor && !hasLeftNeighbor) pointsVertical = false;
+                else if (hasLeftNeighbor && !hasRightNeighbor) pointsVertical = false;
+                else if (hasBottomNeighbor || hasTopNeighbor) pointsVertical = true;
+
+                if (pointsVertical)
+                {
+                    hasLiftPropeller = true;
+                    break;
+                }
+            }
+        }
+
+        if (hasLiftPropeller)
         {
             vehicleGO.AddComponent<HelicopterController>();
         }

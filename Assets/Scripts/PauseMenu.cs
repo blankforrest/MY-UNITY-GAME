@@ -110,28 +110,31 @@ public class PauseMenu : MonoBehaviour
 
         Sprite pauseSprite = null;
 #if UNITY_EDITOR
-        try
+        if (!Application.isPlaying)
         {
-            string spritesDir = System.IO.Path.Combine(Application.dataPath, "Sprites");
-            string resourcesDir = System.IO.Path.Combine(Application.dataPath, "Resources");
-            if (!System.IO.Directory.Exists(resourcesDir))
+            try
             {
-                System.IO.Directory.CreateDirectory(resourcesDir);
+                string spritesDir = System.IO.Path.Combine(Application.dataPath, "Sprites");
+                string resourcesDir = System.IO.Path.Combine(Application.dataPath, "Resources");
+                if (!System.IO.Directory.Exists(resourcesDir))
+                {
+                    System.IO.Directory.CreateDirectory(resourcesDir);
+                }
+                string genPath = @"C:\Users\HP\.gemini\antigravity\brain\2c52bc4a-ca8b-434c-a9dc-4801b06e2bfa\pause_icon_solid_1782267737022.png";
+                string spritePath = System.IO.Path.Combine(spritesDir, "pause_icon.png");
+                string destPath = System.IO.Path.Combine(resourcesDir, "pause_icon.png");
+                
+                if (System.IO.File.Exists(genPath))
+                {
+                    System.IO.File.Copy(genPath, spritePath, true);
+                    System.IO.File.Copy(genPath, destPath, true);
+                    UnityEditor.AssetDatabase.Refresh();
+                }
             }
-            string genPath = @"C:\Users\HP\.gemini\antigravity\brain\2c52bc4a-ca8b-434c-a9dc-4801b06e2bfa\pause_icon_solid_1782267737022.png";
-            string spritePath = System.IO.Path.Combine(spritesDir, "pause_icon.png");
-            string destPath = System.IO.Path.Combine(resourcesDir, "pause_icon.png");
-            
-            if (System.IO.File.Exists(genPath))
+            catch (System.Exception e)
             {
-                System.IO.File.Copy(genPath, spritePath, true);
-                System.IO.File.Copy(genPath, destPath, true);
-                UnityEditor.AssetDatabase.Refresh();
+                Debug.LogWarning("Failed to copy solid pause icon: " + e.Message);
             }
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogWarning("Failed to copy solid pause icon: " + e.Message);
         }
 #endif
 

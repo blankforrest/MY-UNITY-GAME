@@ -22,6 +22,17 @@ public class BlockDefinition
     public Texture2D textureSide;
     [Tooltip("Custom texture for the bottom face. If null, falls back to default design.")]
     public Texture2D textureBottom;
+    [Tooltip("Custom texture for the front face. If null, falls back to side texture.")]
+    public Texture2D textureFront;
+    [Tooltip("Custom texture for the front face when lit (e.g. active furnace).")]
+    public Texture2D textureFrontLit;
+
+    [System.NonSerialized] public int resolvedTopTile = -1;
+    [System.NonSerialized] public int resolvedSideTile = -1;
+    [System.NonSerialized] public int resolvedBottomTile = -1;
+    [System.NonSerialized] public int resolvedFrontTile = -1;
+    [System.NonSerialized] public int resolvedFrontLitTile = -1;
+
 
     [Header("Drops")]
     [Tooltip("Should this block drop itself or a custom item asset?")]

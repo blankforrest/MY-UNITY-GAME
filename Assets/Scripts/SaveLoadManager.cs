@@ -180,7 +180,7 @@ public class SaveLoadManager : MonoBehaviour
         worldModifications[gridPos] = blockID;
     }
 
-    public void ApplyChunkModifications(Vector2 chunkPos, byte[,,] voxelMap)
+    public void ApplyChunkModifications(Vector2 chunkPos, byte[] voxelMap)
     {
         int chunkWidth = VoxelData.ChunkWidth;
         int chunkHeight = VoxelData.ChunkHeight;
@@ -197,7 +197,8 @@ public class SaveLoadManager : MonoBehaviour
                     Vector3Int globalPos = new Vector3Int(startX + x, y, startZ + z);
                     if (worldModifications.TryGetValue(globalPos, out byte savedID))
                     {
-                        voxelMap[x, y, z] = savedID;
+                        int flatIndex = VoxelData.GetFlatIndex(x, y, z);
+                        voxelMap[flatIndex] = savedID;
 
                         // Re-register player-placed blocks (excluding air, water, and initial flowers)
                         if (savedID != 0 && savedID != 7 && savedID != 9 && savedID != 10 && savedID != 11)

@@ -79,17 +79,8 @@ public class GameSaveUI : MonoBehaviour
 
     private void BuildUI()
     {
-        // Clean up previous toolbar if any
-        if (toolbarPanel != null)
-        {
-            Destroy(toolbarPanel);
-        }
-
-        // Do not display the save/load toolbar in the Main Menu scene
-        if (SceneManager.GetActiveScene().name == "MainMenu")
-        {
-            return;
-        }
+        // Dev menu UI disabled as requested
+        return;
 
         Canvas canvas = FindFirstObjectByType<Canvas>();
         if (canvas == null)
