@@ -378,7 +378,9 @@ public class PlayerInteraction : MonoBehaviour
                     {
                         Vector3 center = new Vector3(pos.x + 0.5f, pos.y + 0.5f, pos.z + 0.5f);
                         byte existing = VoxelWorld.Instance.GetBlock(center);
-                        if (existing != 0 && existing != 7) // occupied by a solid block
+                        // Allow placing blocks over air (0), water (7), flowers (9, 10, 11), and grass (13, 14)
+                        bool isReplaceable = (existing == 0 || existing == 7 || existing == 9 || existing == 10 || existing == 11 || existing == 13 || existing == 14);
+                        if (!isReplaceable)
                         {
                             placementBlocked = true;
                             break;

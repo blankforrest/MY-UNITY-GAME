@@ -137,10 +137,10 @@ public class Inventory : MonoBehaviour
 
         // Recipe 1: 1 Wood -> 4 Planks (blockTypeID = 2)
         bool isWoodMatch = false;
-        if (i0?.itemName == "Wood" && i1 == null && i2 == null && i3 == null) isWoodMatch = true;
-        else if (i1?.itemName == "Wood" && i0 == null && i2 == null && i3 == null) isWoodMatch = true;
-        else if (i2?.itemName == "Wood" && i0 == null && i1 == null && i3 == null) isWoodMatch = true;
-        else if (i3?.itemName == "Wood" && i0 == null && i1 == null && i2 == null) isWoodMatch = true;
+        if ((i0?.itemName == "Wood" || i0?.itemName == "Birch Log" || i0?.itemName == "Spruce Log") && i1 == null && i2 == null && i3 == null) isWoodMatch = true;
+        else if ((i1?.itemName == "Wood" || i1?.itemName == "Birch Log" || i1?.itemName == "Spruce Log") && i0 == null && i2 == null && i3 == null) isWoodMatch = true;
+        else if ((i2?.itemName == "Wood" || i2?.itemName == "Birch Log" || i2?.itemName == "Spruce Log") && i0 == null && i1 == null && i3 == null) isWoodMatch = true;
+        else if ((i3?.itemName == "Wood" || i3?.itemName == "Birch Log" || i3?.itemName == "Spruce Log") && i0 == null && i1 == null && i2 == null) isWoodMatch = true;
 
         if (isWoodMatch)
         {
@@ -467,10 +467,10 @@ public class Inventory : MonoBehaviour
 
             // Recipe 1: 1 Wood -> 4 Planks
             bool isWoodMatch = false;
-            if (i0?.itemName == "Wood" && i1 == null && i2 == null && i3 == null) isWoodMatch = true;
-            else if (i1?.itemName == "Wood" && i0 == null && i2 == null && i3 == null) isWoodMatch = true;
-            else if (i2?.itemName == "Wood" && i0 == null && i1 == null && i3 == null) isWoodMatch = true;
-            else if (i3?.itemName == "Wood" && i0 == null && i1 == null && i2 == null) isWoodMatch = true;
+            if ((i0?.itemName == "Wood" || i0?.itemName == "Birch Log" || i0?.itemName == "Spruce Log") && i1 == null && i2 == null && i3 == null) isWoodMatch = true;
+            else if ((i1?.itemName == "Wood" || i1?.itemName == "Birch Log" || i1?.itemName == "Spruce Log") && i0 == null && i2 == null && i3 == null) isWoodMatch = true;
+            else if ((i2?.itemName == "Wood" || i2?.itemName == "Birch Log" || i2?.itemName == "Spruce Log") && i0 == null && i1 == null && i3 == null) isWoodMatch = true;
+            else if ((i3?.itemName == "Wood" || i3?.itemName == "Birch Log" || i3?.itemName == "Spruce Log") && i0 == null && i1 == null && i2 == null) isWoodMatch = true;
 
             if (isWoodMatch)
             {
