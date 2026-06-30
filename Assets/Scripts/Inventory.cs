@@ -293,6 +293,34 @@ public class Inventory : MonoBehaviour
             return;
         }
 
+        // Recipe: Gold Block (9 Gold Ingots)
+        bool isGoldBlock3x3 = true;
+        for (int i = 0; i < 9; i++)
+        {
+            var slot = tableCraftingSlots[i];
+            if (slot?.item?.itemName != "Gold Ingot") isGoldBlock3x3 = false;
+        }
+        if (isGoldBlock3x3)
+        {
+            int mult = GetTableCraftingMultiplier();
+            tableCraftingResultSlot = new InventorySlot(CreateItem("Gold Block", 32), 1 * mult);
+            return;
+        }
+
+        // Recipe: Iron Block (9 Iron Ingots)
+        bool isIronBlock3x3 = true;
+        for (int i = 0; i < 9; i++)
+        {
+            var slot = tableCraftingSlots[i];
+            if (slot?.item?.itemName != "Iron Ingot") isIronBlock3x3 = false;
+        }
+        if (isIronBlock3x3)
+        {
+            int mult = GetTableCraftingMultiplier();
+            tableCraftingResultSlot = new InventorySlot(CreateItem("Iron Block", 33), 1 * mult);
+            return;
+        }
+
         // Recipe: Furnace (8 Stone in a ring)
         bool isFurnace3x3 = true;
         for (int i = 0; i < 9; i++)
@@ -596,6 +624,24 @@ public class Inventory : MonoBehaviour
         item.blockTypeID = blockTypeID;
         item.itemID = 0;
 
+        ItemDefinition itemDef = ItemRegistry.GetDefinition(itemName);
+        if (itemDef != null)
+        {
+            item.itemID = itemDef.itemID;
+            if (itemDef.blockTypeID != 0)
+            {
+                item.blockTypeID = itemDef.blockTypeID;
+            }
+            item.toolType = itemDef.toolType;
+            item.toolTier = itemDef.toolTier;
+            if (itemDef.inventoryIcon != null)
+            {
+                item.icon = itemDef.inventoryIcon;
+                return item;
+            }
+        }
+
+
         if (itemName.Equals("Wrench", System.StringComparison.OrdinalIgnoreCase))
         {
             item.itemID = 99;
@@ -611,6 +657,10 @@ public class Inventory : MonoBehaviour
         else if (itemName.Equals("Iron Ingot", System.StringComparison.OrdinalIgnoreCase))
         {
             item.itemID = 96;
+        }
+        else if (itemName.Equals("Gold Ingot", System.StringComparison.OrdinalIgnoreCase))
+        {
+            item.itemID = 94;
         }
         else if (itemName.Equals("Sheep Spawn Egg", System.StringComparison.OrdinalIgnoreCase))
         {
@@ -744,6 +794,10 @@ public class Inventory : MonoBehaviour
             {
                 sprite = CreateIronIngotIcon();
             }
+            else if (itemName.Equals("Gold Ingot", System.StringComparison.OrdinalIgnoreCase))
+            {
+                sprite = CreateGoldIngotIcon();
+            }
             else if (itemName == "Iron")
                 sprite = StarterItems.MakeBlockIcon(new Color(0.85f, 0.85f, 0.85f));
             else if (blockTypeID != 0)
@@ -805,6 +859,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Coal Ore", 30, 64));
             items.Add(new CreativeItemData("Iron Ore", 31, 64));
             items.Add(new CreativeItemData("Diamond Ore", 55, 64));
+            items.Add(new CreativeItemData("Gold Ore", 57, 64));
             items.Add(new CreativeItemData("Crafting Table", 36, 64));
             items.Add(new CreativeItemData("Furnace", 37, 64));
             items.Add(new CreativeItemData("Wooden Stairs", 38, 64));
@@ -838,6 +893,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Sheep Spawn Egg", 0, 64));
             items.Add(new CreativeItemData("Coal Chunk", 0, 64));
             items.Add(new CreativeItemData("Iron Ingot", 0, 64));
+            items.Add(new CreativeItemData("Gold Ingot", 0, 64));
             items.Add(new CreativeItemData("Iron", 0, 64));
             items.Add(new CreativeItemData("Diamond", 0, 64));
             items.Add(new CreativeItemData("Stick", 0, 64));
@@ -882,6 +938,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Coal Ore", 30, 64));
             items.Add(new CreativeItemData("Iron Ore", 31, 64));
             items.Add(new CreativeItemData("Diamond Ore", 55, 64));
+            items.Add(new CreativeItemData("Gold Ore", 57, 64));
             items.Add(new CreativeItemData("Crafting Table", 36, 64));
             items.Add(new CreativeItemData("Furnace", 37, 64));
             items.Add(new CreativeItemData("Wooden Stairs", 38, 64));
@@ -946,10 +1003,35 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Iris", 11, 64));
             items.Add(new CreativeItemData("Apple", 0, 64));
         }
+        else if (category == "ITEMS")
+        {
+            items.Add(new CreativeItemData("Gold Ingot", 0, 64));
+            items.Add(new CreativeItemData("Iron Ingot", 0, 64));
+            items.Add(new CreativeItemData("Coal Chunk", 0, 64));
+            items.Add(new CreativeItemData("Diamond", 0, 64));
+            items.Add(new CreativeItemData("Stick", 0, 64));
+            items.Add(new CreativeItemData("Wool", 0, 64));
+            items.Add(new CreativeItemData("Mutton", 0, 64));
+            items.Add(new CreativeItemData("Leather", 0, 64));
+            items.Add(new CreativeItemData("Apple", 0, 64));
+        }
         else if (category == "SPAWNERS")
         {
             items.Add(new CreativeItemData("Wolf Spawn Egg", 0, 64));
             items.Add(new CreativeItemData("Sheep Spawn Egg", 0, 64));
+        }
+
+        // Dynamically add items registered in the ItemRegistry if they match the category
+        foreach (var itemDef in ItemRegistry.RegisteredItems)
+        {
+            if (itemDef == null) continue;
+            if (category == "ALL" || string.Equals(itemDef.creativeBag, category, System.StringComparison.OrdinalIgnoreCase))
+            {
+                if (!items.Exists(it => string.Equals(it.name, itemDef.itemName, System.StringComparison.OrdinalIgnoreCase)))
+                {
+                    items.Add(new CreativeItemData(itemDef.itemName, itemDef.blockTypeID, itemDef.isStackable ? itemDef.maxStackSize : 1));
+                }
+            }
         }
 
         // Dynamically size the slots array to match the populated items list size (indefinite slots)
@@ -1066,6 +1148,47 @@ public class Inventory : MonoBehaviour
         Color shadow = new Color(0.65f, 0.65f, 0.67f, 1f);
         Color highlight = new Color(0.98f, 0.98f, 1.0f, 1f);
         Color outline = new Color(0.35f, 0.35f, 0.37f, 1f);
+
+        for (int y = 20; y <= 44; y++)
+        {
+            int offset = (y - 20) / 2;
+            int startX = 20 - offset;
+            int width = 28;
+            for (int x = startX; x < startX + width; x++)
+            {
+                if (x == startX || x == startX + width - 1 || y == 20 || y == 44)
+                {
+                    px[y * SZ + x] = outline;
+                }
+                else
+                {
+                    if (y >= 40 || x >= startX + width - 3)
+                        px[y * SZ + x] = shadow;
+                    else if (y <= 24 || x <= startX + 2)
+                        px[y * SZ + x] = highlight;
+                    else
+                        px[y * SZ + x] = metal;
+                }
+            }
+        }
+
+        Texture2D tex = new Texture2D(SZ, SZ, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.SetPixels(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, SZ, SZ), new Vector2(0.5f, 0.5f), 100f);
+    }
+
+    private static Sprite CreateGoldIngotIcon()
+    {
+        const int SZ = 64;
+        Color[] px = new Color[SZ * SZ];
+        for (int i = 0; i < px.Length; i++) px[i] = Color.clear;
+
+        Color metal = new Color(0.95f, 0.75f, 0.15f, 1f); // Gold yellow
+        Color shadow = new Color(0.75f, 0.55f, 0.05f, 1f);
+        Color highlight = new Color(1.0f, 0.95f, 0.6f, 1f);
+        Color outline = new Color(0.45f, 0.35f, 0.05f, 1f);
 
         for (int y = 20; y <= 44; y++)
         {

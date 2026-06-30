@@ -35,6 +35,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Plank
     blockID: 2
     inventoryIcon: {fileID: 21300000, guid: e0007bdfd094d10469bde5cfaa61f27d, type: 3}
@@ -57,6 +58,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Stone
     blockID: 3
     inventoryIcon: {fileID: 21300000, guid: 602b488793b66cc459d169abe39b19ed, type: 3}
@@ -79,6 +81,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Grass Block
     blockID: 4
     inventoryIcon: {fileID: 21300000, guid: d3c1df4b92570d44489314f4ca54e4f2, type: 3}
@@ -101,6 +104,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Dirt
     blockID: 5
     inventoryIcon: {fileID: 21300000, guid: 34711e80b44d04545825552f5b03a01f, type: 3}
@@ -123,6 +127,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Grass Slab
     blockID: 6
     inventoryIcon: {fileID: 0}
@@ -145,6 +150,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Water
     blockID: 7
     inventoryIcon: {fileID: 0}
@@ -167,6 +173,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Sand
     blockID: 8
     inventoryIcon: {fileID: 21300000, guid: e62c826779dd2e844a76bb0ea30ef18f, type: 3}
@@ -189,6 +196,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Rose
     blockID: 9
     inventoryIcon: {fileID: 0}
@@ -211,6 +219,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Dandelion
     blockID: 10
     inventoryIcon: {fileID: 0}
@@ -233,6 +242,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Iris
     blockID: 11
     inventoryIcon: {fileID: 0}
@@ -255,6 +265,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Leaves
     blockID: 12
     inventoryIcon: {fileID: 21300000, guid: 1c605dd242eb1b94c9671db2c86ea67a, type: 3}
@@ -277,6 +288,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Short Grass
     blockID: 13
     inventoryIcon: {fileID: 0}
@@ -299,6 +311,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Tall Grass
     blockID: 14
     inventoryIcon: {fileID: 0}
@@ -321,6 +334,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Small Wheel
     blockID: 20
     inventoryIcon: {fileID: 0}
@@ -343,6 +357,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 1
     vehiclePartType: Wheel
+    customMesh: {fileID: 0}
   - blockName: Large Wheel Anchor
     blockID: 21
     inventoryIcon: {fileID: 0}
@@ -365,6 +380,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 1
     vehiclePartType: Wheel
+    customMesh: {fileID: 0}
   - blockName: Propeller
     blockID: 22
     inventoryIcon: {fileID: 0}
@@ -387,6 +403,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 1
     vehiclePartType: Propeller
+    customMesh: {fileID: 0}
   - blockName: Large Wheel Helper
     blockID: 23
     inventoryIcon: {fileID: 0}
@@ -409,6 +426,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 1
     vehiclePartType: Wheel
+    customMesh: {fileID: 0}
   - blockName: Propeller Casing
     blockID: 24
     inventoryIcon: {fileID: 0}
@@ -431,6 +449,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 1
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Propeller Blade
     blockID: 25
     inventoryIcon: {fileID: 0}
@@ -453,6 +472,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 1
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Large Propeller Anchor
     blockID: 26
     inventoryIcon: {fileID: 0}
@@ -475,6 +495,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 1
     vehiclePartType: Propeller
+    customMesh: {fileID: 0}
   - blockName: Large Propeller Helper
     blockID: 27
     inventoryIcon: {fileID: 0}
@@ -497,6 +518,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 1
     vehiclePartType: Propeller
+    customMesh: {fileID: 0}
   - blockName: Coal Ore
     blockID: 30
     inventoryIcon: {fileID: 21300000, guid: 4832635e74143134f88dc1c095b97c42, type: 3}
@@ -519,6 +541,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Iron Ore
     blockID: 31
     inventoryIcon: {fileID: 21300000, guid: 539f5aee3e2747c47ac76b1a0ec0add0, type: 3}
@@ -541,12 +564,13 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Gold Block
     blockID: 32
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: c64b1fa0b5ab0904da7041d60f281bd5, type: 3}
+    textureTop: {fileID: 2800000, guid: bdb9b1c9e5c0af24baddd974f10e3a7f, type: 3}
+    textureSide: {fileID: 2800000, guid: bdb9b1c9e5c0af24baddd974f10e3a7f, type: 3}
+    textureBottom: {fileID: 2800000, guid: bdb9b1c9e5c0af24baddd974f10e3a7f, type: 3}
     textureFront: {fileID: 0}
     textureFrontLit: {fileID: 0}
     dropRule: 0
@@ -563,12 +587,13 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Iron Block
     blockID: 33
-    inventoryIcon: {fileID: 0}
-    textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
-    textureBottom: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 9867032f6e5d39144ace14d94516120d, type: 3}
+    textureTop: {fileID: 2800000, guid: eba0c20244bc58749bbd066b5c3742a8, type: 3}
+    textureSide: {fileID: 2800000, guid: eba0c20244bc58749bbd066b5c3742a8, type: 3}
+    textureBottom: {fileID: 2800000, guid: eba0c20244bc58749bbd066b5c3742a8, type: 3}
     textureFront: {fileID: 0}
     textureFrontLit: {fileID: 0}
     dropRule: 0
@@ -585,6 +610,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Sand (Unused ID)
     blockID: 34
     inventoryIcon: {fileID: 21300000, guid: e62c826779dd2e844a76bb0ea30ef18f, type: 3}
@@ -607,6 +633,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Glass
     blockID: 35
     inventoryIcon: {fileID: 21300000, guid: 1684032d7137a014e9c60775851c52b3, type: 3}
@@ -629,6 +656,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Crafting Table
     blockID: 36
     inventoryIcon: {fileID: 21300000, guid: 6cf347db5270c724baed158652c443ef, type: 3}
@@ -651,6 +679,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Furnace
     blockID: 37
     inventoryIcon: {fileID: 21300000, guid: 3bf9501b256cac947a019bd805016a41, type: 3}
@@ -673,11 +702,12 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Wooden Stairs
     blockID: 38
-    inventoryIcon: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 46469c61a7e9e0740ac45786e36b9d6a, type: 3}
     textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
+    textureSide: {fileID: 2800000, guid: 2c5a8a18ed106d348a8b5efcd7b0524d, type: 3}
     textureBottom: {fileID: 0}
     textureFront: {fileID: 0}
     textureFrontLit: {fileID: 0}
@@ -695,11 +725,12 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: -8670151273213183110, guid: 4495c1a580b98154d8faf85766041cab, type: 3}
   - blockName: Stone Stairs
     blockID: 39
-    inventoryIcon: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: eaa84a9a9a270ff4b8abfa302ac90837, type: 3}
     textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
+    textureSide: {fileID: 2800000, guid: 12fff6a9907e5884597b2faf75e48333, type: 3}
     textureBottom: {fileID: 0}
     textureFront: {fileID: 0}
     textureFrontLit: {fileID: 0}
@@ -717,11 +748,12 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: -8670151273213183110, guid: 24beb2ea4d1b31645a342ec1b358d6ec, type: 3}
   - blockName: Wooden Slab
     blockID: 46
-    inventoryIcon: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 705220388d0137b42a023f4c7f3e2d12, type: 3}
     textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
+    textureSide: {fileID: 2800000, guid: 2c5a8a18ed106d348a8b5efcd7b0524d, type: 3}
     textureBottom: {fileID: 0}
     textureFront: {fileID: 0}
     textureFrontLit: {fileID: 0}
@@ -739,11 +771,12 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: -8670151273213183110, guid: 23897a73b98e97d43b7e344dc424f0e5, type: 3}
   - blockName: Stone Slab
     blockID: 47
-    inventoryIcon: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 391977b4a802fe44688bd6ce5a962513, type: 3}
     textureTop: {fileID: 0}
-    textureSide: {fileID: 0}
+    textureSide: {fileID: 2800000, guid: 12fff6a9907e5884597b2faf75e48333, type: 3}
     textureBottom: {fileID: 0}
     textureFront: {fileID: 0}
     textureFrontLit: {fileID: 0}
@@ -761,6 +794,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: -8670151273213183110, guid: d37cc30f67a99a4469194ea14aed9794, type: 3}
   - blockName: Bedrock
     blockID: 48
     inventoryIcon: {fileID: 21300000, guid: eb782551a12b8e643a0302b89aa5af96, type: 3}
@@ -783,6 +817,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Cactus
     blockID: 49
     inventoryIcon: {fileID: 21300000, guid: 04391fc9fd4b455458b860af4bf27d30, type: 3}
@@ -805,6 +840,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Control Block
     blockID: 50
     inventoryIcon: {fileID: 0}
@@ -827,6 +863,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 1
     vehiclePartType: ControlBlock
+    customMesh: {fileID: 0}
   - blockName: Birch Log
     blockID: 51
     inventoryIcon: {fileID: 21300000, guid: 90d0775375258dd418b3f1981ca6f735, type: 3}
@@ -849,6 +886,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Birch Leaves
     blockID: 52
     inventoryIcon: {fileID: 21300000, guid: 01059a8b348fe224aac05ac2dbbfa23b, type: 3}
@@ -871,6 +909,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Spruce Log
     blockID: 53
     inventoryIcon: {fileID: 21300000, guid: 90949315344393642b7d4de8feabe2d9, type: 3}
@@ -893,6 +932,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Spruce Leaves
     blockID: 54
     inventoryIcon: {fileID: 21300000, guid: afa8ed2ae48cb8049a1ac81090ebaf96, type: 3}
@@ -915,6 +955,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Diamond Ore
     blockID: 55
     inventoryIcon: {fileID: 21300000, guid: 2df3252923d6d864082fe29e7d73e387, type: 3}
@@ -937,6 +978,7 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
   - blockName: Gravel
     blockID: 56
     inventoryIcon: {fileID: 21300000, guid: 238c750355e418d47955144c4cec7ada, type: 3}
@@ -959,3 +1001,27 @@ MonoBehaviour:
     breakSound: {fileID: 0}
     isVehicleBlock: 0
     vehiclePartType: None
+    customMesh: {fileID: 0}
+  - blockName: Gold Ore
+    blockID: 57
+    inventoryIcon: {fileID: 0}
+    textureTop: {fileID: 0}
+    textureSide: {fileID: 0}
+    textureBottom: {fileID: 0}
+    textureFront: {fileID: 0}
+    textureFrontLit: {fileID: 0}
+    dropRule: 0
+    dropItem: {fileID: 0}
+    dropAmount: 1
+    hardness: 3
+    preferredTool: 1
+    isSolid: 1
+    isTransparent: 0
+    emitsLight: 0
+    lightLevel: 8
+    stepSound: {fileID: 0}
+    placeSound: {fileID: 0}
+    breakSound: {fileID: 0}
+    isVehicleBlock: 0
+    vehiclePartType: None
+    customMesh: {fileID: 0}

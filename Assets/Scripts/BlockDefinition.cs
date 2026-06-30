@@ -60,4 +60,12 @@ public class BlockDefinition
     public bool isVehicleBlock = false;
     [Tooltip("Type of vehicle component (e.g., None, Wheel, Propeller, ControlBlock).")]
     public string vehiclePartType = "None";
+
+    [Header("Custom 3D Model")]
+    [Tooltip("If assigned, this custom 3D model (Mesh) is used to render the block instead of the standard voxel cube.")]
+    public Mesh customMesh;
+
+    [System.NonSerialized] public Vector3[] cachedMeshVertices;
+    [System.NonSerialized] public int[] cachedMeshTriangles;
+    [System.NonSerialized] public Vector2[] cachedMeshUVs;
 }

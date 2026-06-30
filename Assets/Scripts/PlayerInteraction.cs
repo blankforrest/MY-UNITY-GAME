@@ -276,7 +276,7 @@ public class PlayerInteraction : MonoBehaviour
 
             foreach (var h in hits)
             {
-                if (h.collider != null && !h.collider.name.Contains("Foliage"))
+                if (h.collider != null && (!h.collider.name.Contains("Foliage") || h.collider.name == "FoliageSolid"))
                 {
                     hit = h;
                     foundSolid = true;

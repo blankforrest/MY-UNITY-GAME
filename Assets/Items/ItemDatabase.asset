@@ -1,0 +1,431 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7821d9352080bb48a0516875a986d2b, type: 3}
+  m_Name: ItemDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::ItemDatabase
+  items:
+  - itemName: Apple
+    itemID: 88
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: ITEMS
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 1
+    maxStackSize: 64
+    description: A delicious red apple. Restores health.
+    burnDuration: 0
+    healAmount: 2
+  - itemName: Mutton
+    itemID: 89
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: ITEMS
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 1
+    maxStackSize: 64
+    description: Raw mutton meat. Restores health.
+    burnDuration: 0
+    healAmount: 4
+  - itemName: Leather
+    itemID: 90
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: ITEMS
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 1
+    maxStackSize: 64
+    description: Tough animal leather.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Wool
+    itemID: 91
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: ITEMS
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 1
+    maxStackSize: 64
+    description: Soft wool gathered from sheep.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Stick
+    itemID: 92
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: ITEMS
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 1
+    maxStackSize: 64
+    description: A simple wooden stick.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Diamond
+    itemID: 93
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: ITEMS
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 1
+    maxStackSize: 64
+    description: A rare and precious diamond.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Gold Ingot
+    itemID: 94
+    inventoryIcon: {fileID: 21300000, guid: 6b5dd606b149ba545b71361feb7e9197, type: 3}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: ITEMS
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 1
+    maxStackSize: 64
+    description: A shiny gold ingot.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Sheep Spawn Egg
+    itemID: 95
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: SPAWNERS
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 1
+    maxStackSize: 64
+    description: Spawns a fluffy sheep.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Iron Ingot
+    itemID: 96
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: ITEMS
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 1
+    maxStackSize: 64
+    description: A refined iron ingot.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Coal Chunk
+    itemID: 97
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: ITEMS
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 1
+    maxStackSize: 64
+    description: A chunk of coal. Can be used as fuel.
+    burnDuration: 8
+    healAmount: 0
+  - itemName: Wolf Spawn Egg
+    itemID: 98
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: SPAWNERS
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 1
+    maxStackSize: 64
+    description: Spawns a friendly wolf.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Wrench
+    itemID: 99
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: VEHICLES
+    blockTypeID: 0
+    toolType: 0
+    toolTier: 0
+    isStackable: 0
+    maxStackSize: 1
+    description: A tool for modifying and rotating vehicles.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Diamond Pickaxe
+    itemID: 101
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 1
+    toolTier: 4
+    isStackable: 0
+    maxStackSize: 1
+    description: A high-durability diamond pickaxe.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Diamond Axe
+    itemID: 102
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 2
+    toolTier: 4
+    isStackable: 0
+    maxStackSize: 1
+    description: A high-durability diamond axe.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Diamond Shovel
+    itemID: 103
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 3
+    toolTier: 4
+    isStackable: 0
+    maxStackSize: 1
+    description: A high-durability diamond shovel.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Diamond Sword
+    itemID: 104
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 5
+    toolTier: 4
+    isStackable: 0
+    maxStackSize: 1
+    description: A high-damage diamond sword.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Diamond Rake
+    itemID: 105
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 4
+    toolTier: 4
+    isStackable: 0
+    maxStackSize: 1
+    description: A diamond rake.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Iron Pickaxe
+    itemID: 111
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 1
+    toolTier: 3
+    isStackable: 0
+    maxStackSize: 1
+    description: An iron pickaxe.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Iron Axe
+    itemID: 112
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 2
+    toolTier: 3
+    isStackable: 0
+    maxStackSize: 1
+    description: An iron axe.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Iron Shovel
+    itemID: 113
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 3
+    toolTier: 3
+    isStackable: 0
+    maxStackSize: 1
+    description: An iron shovel.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Iron Sword
+    itemID: 114
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 5
+    toolTier: 3
+    isStackable: 0
+    maxStackSize: 1
+    description: An iron sword.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Iron Rake
+    itemID: 115
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 4
+    toolTier: 3
+    isStackable: 0
+    maxStackSize: 1
+    description: An iron rake.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Stone Pickaxe
+    itemID: 121
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 1
+    toolTier: 2
+    isStackable: 0
+    maxStackSize: 1
+    description: A stone pickaxe.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Stone Axe
+    itemID: 122
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 2
+    toolTier: 2
+    isStackable: 0
+    maxStackSize: 1
+    description: A stone axe.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Stone Shovel
+    itemID: 123
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 3
+    toolTier: 2
+    isStackable: 0
+    maxStackSize: 1
+    description: A stone shovel.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Stone Sword
+    itemID: 124
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 5
+    toolTier: 2
+    isStackable: 0
+    maxStackSize: 1
+    description: A stone sword.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Stone Rake
+    itemID: 125
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 4
+    toolTier: 2
+    isStackable: 0
+    maxStackSize: 1
+    description: A stone rake.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Wooden Pickaxe
+    itemID: 131
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 1
+    toolTier: 1
+    isStackable: 0
+    maxStackSize: 1
+    description: A fragile wooden pickaxe.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Wooden Axe
+    itemID: 132
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 2
+    toolTier: 1
+    isStackable: 0
+    maxStackSize: 1
+    description: A fragile wooden axe.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Wooden Shovel
+    itemID: 133
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 3
+    toolTier: 1
+    isStackable: 0
+    maxStackSize: 1
+    description: A fragile wooden shovel.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Wooden Sword
+    itemID: 134
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 5
+    toolTier: 1
+    isStackable: 0
+    maxStackSize: 1
+    description: A fragile wooden sword.
+    burnDuration: 0
+    healAmount: 0
+  - itemName: Wooden Rake
+    itemID: 135
+    inventoryIcon: {fileID: 0}
+    droppedItemSprite: {fileID: 0}
+    creativeBag: TOOLS
+    blockTypeID: 0
+    toolType: 4
+    toolTier: 1
+    isStackable: 0
+    maxStackSize: 1
+    description: A fragile wooden rake.
+    burnDuration: 0
+    healAmount: 0

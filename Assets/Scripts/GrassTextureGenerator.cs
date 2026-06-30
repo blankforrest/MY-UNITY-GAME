@@ -8,7 +8,7 @@ using UnityEngine;
 public static class GrassTextureGenerator
 {
     public const int TILE_SIZE  = 16;
-    public const int TILE_COUNT = 41; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side, furnace front unlit, furnace front lit, short grass, tall grass, propeller face, propeller side, propeller blade brass, bedrock, cactus, birch log side, birch log top, birch leaves, spruce log side, spruce log top, spruce leaves, diamond ore
+    public const int TILE_COUNT = 42; // grass top, grass side, dirt, stone, wood top, wood side, plank, water, sand, flower, dandelion, iris, leaves, CB side, CB front, tread, small wheel, large wheel, coal ore, iron ore, gold block, iron block, glass, crafting table top, crafting table side, furnace front unlit, furnace front lit, short grass, tall grass, propeller face, propeller side, propeller blade brass, bedrock, cactus, birch log side, birch log top, birch leaves, spruce log side, spruce log top, spruce leaves, diamond ore, gold ore
 
     public static Texture2D Create()
     {
@@ -789,6 +789,7 @@ public static class GrassTextureGenerator
             case 38: return SpruceLogTop(lx, ly);
             case 39: return SpruceLeaves(lx, ly);
             case 40: return DiamondOre(lx, ly);
+            case 41: return GoldOre(lx, ly);
             default: return Color.clear;
         }
     }
@@ -1077,6 +1078,18 @@ public static class GrassTextureGenerator
         if (isDiamond)
         {
             return new Color(0.20f, 0.85f, 0.88f); // diamond cyan
+        }
+        return baseCol;
+    }
+
+    static Color GoldOre(int x, int y)
+    {
+        Color baseCol = Stone(x, y);
+        float n = Mathf.PerlinNoise(x * 1.5f + 230f, y * 1.5f + 240f);
+        bool isGold = n > 0.65f && (x + y) % 3 != 0;
+        if (isGold)
+        {
+            return new Color(0.95f, 0.75f, 0.15f); // gold yellow
         }
         return baseCol;
     }

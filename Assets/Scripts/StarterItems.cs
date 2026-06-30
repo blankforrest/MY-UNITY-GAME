@@ -222,6 +222,24 @@ public class StarterItems : MonoBehaviour
         item.itemName    = itemName;
         item.itemID      = 0;
 
+        ItemDefinition itemDef = ItemRegistry.GetDefinition(itemName);
+        if (itemDef != null)
+        {
+            item.itemID = itemDef.itemID;
+            if (itemDef.blockTypeID != 0)
+            {
+                item.blockTypeID = itemDef.blockTypeID;
+            }
+            item.toolType = itemDef.toolType;
+            item.toolTier = itemDef.toolTier;
+            if (itemDef.inventoryIcon != null)
+            {
+                item.icon = itemDef.inventoryIcon;
+                return item;
+            }
+        }
+
+
         ToolType tType;
         ToolTier tTier;
         Inventory.ParseToolName(itemName, out tType, out tTier);

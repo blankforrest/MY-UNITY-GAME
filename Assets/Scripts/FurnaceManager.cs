@@ -172,12 +172,12 @@ public class FurnaceManager : MonoBehaviour
 
     private bool CanSmelt(FurnaceState state)
     {
-        // Must have Sand or Iron Ore in the input slot
+        // Must have Sand, Iron Ore, or Gold Ore in the input slot
         if (state.inputSlot == null || state.inputSlot.item == null || state.inputSlot.amount <= 0)
             return false;
 
         string inputName = state.inputSlot.item.itemName;
-        if (inputName != "Sand" && inputName != "Iron Ore")
+        if (inputName != "Sand" && inputName != "Iron Ore" && inputName != "Gold Ore")
             return false;
 
         // Output slot checks: must be empty, or matching result and have room (max stack 64)
@@ -189,6 +189,9 @@ public class FurnaceManager : MonoBehaviour
             return true;
 
         if (inputName == "Iron Ore" && outputName == "Iron Ingot" && state.outputSlot.amount < 64)
+            return true;
+
+        if (inputName == "Gold Ore" && outputName == "Gold Ingot" && state.outputSlot.amount < 64)
             return true;
 
         return false;
@@ -207,8 +210,10 @@ public class FurnaceManager : MonoBehaviour
             state.inputSlot = null;
         }
 
-        string resultName = (inputName == "Sand") ? "Glass" : "Iron Ingot";
-        int resultTypeID = (inputName == "Sand") ? 35 : 0;
+        string resultName = "Glass";
+        int resultTypeID = 35;
+        if (inputName == "Iron Ore") { resultName = "Iron Ingot"; resultTypeID = 0; }
+        else if (inputName == "Gold Ore") { resultName = "Gold Ingot"; resultTypeID = 0; }
 
         // Add 1 output
         if (state.outputSlot == null || state.outputSlot.item == null)

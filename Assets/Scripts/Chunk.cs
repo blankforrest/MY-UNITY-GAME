@@ -82,6 +82,12 @@ public class Chunk : MonoBehaviour
     private MeshRenderer foliageMeshRenderer;
     private MeshCollider foliageMeshCollider;
 
+    // Foliage solid (leaves, solid custom blocks) collider lists
+    private List<Vector3> foliageSolidVertices = new List<Vector3>(1024);
+    private List<int>     foliageSolidTriangles = new List<int>(1536);
+    private int           foliageSolidVertexIndex = 0;
+    private MeshCollider  foliageSolidCollider;
+
     // Glass rendering lists — separate child mesh, ZWrite On + CullBack to fix back-face bleed
     private List<Vector3> glassVertices  = new List<Vector3>(1024);
     private List<int>     glassTriangles = new List<int>(1536);
@@ -1008,6 +1014,10 @@ public class Chunk : MonoBehaviour
         foliageUvs         = new List<Vector2>(2048);
         foliageColors      = new List<Color>(2048);
 
+        foliageSolidVertexIndex = 0;
+        foliageSolidVertices    = new List<Vector3>(1024);
+        foliageSolidTriangles   = new List<int>(1536);
+
         glassVertexIndex = 0;
         glassVertices    = new List<Vector3>(1024);
         glassTriangles   = new List<int>(1536);
@@ -1078,41 +1088,110 @@ public class Chunk : MonoBehaviour
         foliageMeshCollider.isTrigger  = false;
     }
 
-    /// <summary>Ignores physics collision between the foliage MeshCollider and all provided colliders.</summary>
+    /// <summary>Ignores physics collision between the foliage MeshColliders and all provided colliders.</summary>
     public void IgnoreFoliageCollisionWith(Collider[] others)
     {
-        if (foliageMeshCollider == null) return;
-        foreach (var col in others)
-            if (col != null) Physics.IgnoreCollision(col, foliageMeshCollider, true);
+        if (foliageMeshCollider != null)
+        {
+            foreach (var col in others)
+                if (col != null) Physics.IgnoreCollision(col, foliageMeshCollider, true);
+        }
+        if (foliageSolidCollider != null)
+        {
+            foreach (var col in others)
+                if (col != null) Physics.IgnoreCollision(col, foliageSolidCollider, true);
+        }
     }
 
     public void IgnorePlayerCollision()
     {
-        if (foliageMeshCollider == null) return;
+        // 1. Trigger foliage collider (flowers, tall grass) - player and vehicles always ignore this
+        if (foliageMeshCollider != null)
+        {
+            if (VoxelWorld.Instance != null && VoxelWorld.Instance.playerTransform != null)
+            {
+                var cc = VoxelWorld.Instance.playerTransform.GetComponent<CharacterController>();
+                if (cc != null)
+                    Physics.IgnoreCollision(cc, foliageMeshCollider, true);
+            }
 
-        // Player CharacterController
+            foreach (var vc in Object.FindObjectsByType<VehicleController>(FindObjectsSortMode.None))
+                IgnoreFoliageCollisionWith(vc.GetComponentsInChildren<Collider>());
+
+            foreach (var sheep in Object.FindObjectsByType<SheepAI>(FindObjectsSortMode.None))
+            {
+                var animalCC = sheep.GetComponent<CharacterController>();
+                if (animalCC != null) Physics.IgnoreCollision(animalCC, foliageMeshCollider, true);
+            }
+            foreach (var wolf in Object.FindObjectsByType<WolfAI>(FindObjectsSortMode.None))
+            {
+                var animalCC = wolf.GetComponent<CharacterController>();
+                if (animalCC != null) Physics.IgnoreCollision(animalCC, foliageMeshCollider, true);
+            }
+        }
+
+        // 2. Solid foliage collider (leaves, custom solid models) - vehicles always ignore it.
+        // Player only ignores it when riding a vehicle!
+        if (foliageSolidCollider != null)
+        {
+            foreach (var vc in Object.FindObjectsByType<VehicleController>(FindObjectsSortMode.None))
+            {
+                var colliders = vc.GetComponentsInChildren<Collider>();
+                foreach (var col in colliders)
+                    if (col != null) Physics.IgnoreCollision(col, foliageSolidCollider, true);
+            }
+
+            bool playerIsRiding = (VehicleHUD.Instance != null && VehicleHUD.Instance.IsOpen);
+            if (VoxelWorld.Instance != null && VoxelWorld.Instance.playerTransform != null)
+            {
+                var cc = VoxelWorld.Instance.playerTransform.GetComponent<CharacterController>();
+                if (cc != null)
+                    Physics.IgnoreCollision(cc, foliageSolidCollider, playerIsRiding);
+            }
+
+            // Animals do NOT ignore solid foliage (they can walk on leaves!)
+            foreach (var sheep in Object.FindObjectsByType<SheepAI>(FindObjectsSortMode.None))
+            {
+                var animalCC = sheep.GetComponent<CharacterController>();
+                if (animalCC != null) Physics.IgnoreCollision(animalCC, foliageSolidCollider, false);
+            }
+            foreach (var wolf in Object.FindObjectsByType<WolfAI>(FindObjectsSortMode.None))
+            {
+                var animalCC = wolf.GetComponent<CharacterController>();
+                if (animalCC != null) Physics.IgnoreCollision(animalCC, foliageSolidCollider, false);
+            }
+        }
+    }
+
+    public void UpdatePlayerFoliageSolidCollision(bool ignore)
+    {
+        if (foliageSolidCollider == null) return;
         if (VoxelWorld.Instance != null && VoxelWorld.Instance.playerTransform != null)
         {
             var cc = VoxelWorld.Instance.playerTransform.GetComponent<CharacterController>();
             if (cc != null)
-                Physics.IgnoreCollision(cc, foliageMeshCollider, true);
+                Physics.IgnoreCollision(cc, foliageSolidCollider, ignore);
+        }
+    }
+
+    void EnsureFoliageSolidChild()
+    {
+        Transform t = transform.Find("FoliageSolid");
+        GameObject go;
+        if (t == null)
+        {
+            go = new GameObject("FoliageSolid");
+            go.transform.SetParent(transform, false);
+        }
+        else
+        {
+            go = t.gameObject;
         }
 
-        // Any active vehicle
-        foreach (var vc in Object.FindObjectsByType<VehicleController>(FindObjectsSortMode.None))
-            IgnoreFoliageCollisionWith(vc.GetComponentsInChildren<Collider>());
-
-        // Any active animals (Sheep and Wolves)
-        foreach (var sheep in Object.FindObjectsByType<SheepAI>(FindObjectsSortMode.None))
-        {
-            var animalCC = sheep.GetComponent<CharacterController>();
-            if (animalCC != null) Physics.IgnoreCollision(animalCC, foliageMeshCollider, true);
-        }
-        foreach (var wolf in Object.FindObjectsByType<WolfAI>(FindObjectsSortMode.None))
-        {
-            var animalCC = wolf.GetComponent<CharacterController>();
-            if (animalCC != null) Physics.IgnoreCollision(animalCC, foliageMeshCollider, true);
-        }
+        foliageSolidCollider = go.GetComponent<MeshCollider>();
+        if (foliageSolidCollider == null) foliageSolidCollider = go.AddComponent<MeshCollider>();
+        foliageSolidCollider.convex = false;
+        foliageSolidCollider.isTrigger = false;
     }
 
     int GetWaterDepth(int x, int y, int z)
@@ -1136,6 +1215,46 @@ public class Chunk : MonoBehaviour
 
     void UpdateVoxelMeshData(Vector3 pos, byte blockType)
     {
+        byte baseStairID = 0;
+        if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42)
+        {
+            baseStairID = 38;
+        }
+        else if (blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45)
+        {
+            baseStairID = 39;
+        }
+
+        BlockDefinition def = null;
+        if (baseStairID != 0)
+        {
+            def = BlockRegistry.GetDefinition(baseStairID);
+        }
+        else
+        {
+            def = BlockRegistry.GetDefinition(blockType);
+        }
+
+
+
+        if (blockType == 38 || blockType == 46)
+        {
+            Debug.Log($"[Chunk] UpdateVoxelMeshData: blockType={blockType}, def={(def != null ? def.blockName : "null")}, customMesh={(def != null && def.customMesh != null ? "assigned" : "null")}");
+        }
+
+        if (def != null && def.customMesh != null)
+        {
+            if (baseStairID != 0)
+            {
+                AddCustomStairMeshBlock(pos, def, blockType);
+            }
+            else
+            {
+                AddCustomMeshBlock(pos, def);
+            }
+            return;
+        }
+
         // ── Flower: render as two crossed quads (X-billboard) ──────────────────
         if (blockType == 9 || blockType == 10 || blockType == 11 || blockType == 13 || blockType == 14)
         {
@@ -1407,7 +1526,9 @@ public class Chunk : MonoBehaviour
 
             for (int i = 0; i < 4; i++)
             {
-                foliageVertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, i]]);
+                Vector3 vert = pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, i]];
+                foliageVertices.Add(vert);
+                foliageSolidVertices.Add(vert);
                 foliageColors.Add(Color.white);
             }
             foliageUvs.AddRange(faceUVs);
@@ -1419,8 +1540,202 @@ public class Chunk : MonoBehaviour
             foliageTriangles.Add(foliageVertexIndex + 1);
             foliageTriangles.Add(foliageVertexIndex + 3);
             foliageVertexIndex += 4;
-            // Leaves use only the foliage MeshCollider (already excluded for player + vehicles).
-            // No invisible geometry is emitted into the solid mesh, so leaves are passable.
+
+            foliageSolidTriangles.Add(foliageSolidVertexIndex);
+            foliageSolidTriangles.Add(foliageSolidVertexIndex + 1);
+            foliageSolidTriangles.Add(foliageSolidVertexIndex + 2);
+            foliageSolidTriangles.Add(foliageSolidVertexIndex + 2);
+            foliageSolidTriangles.Add(foliageSolidVertexIndex + 1);
+            foliageSolidTriangles.Add(foliageSolidVertexIndex + 3);
+            foliageSolidVertexIndex += 4;
+        }
+    }
+
+    void AddCustomStairMeshBlock(Vector3 pos, BlockDefinition def, byte blockType)
+    {
+        if (def.cachedMeshVertices == null || def.cachedMeshTriangles == null) return;
+
+        // Determine rotation angle based on blockType orientation
+        float angle = 0f;
+        if (blockType == 40 || blockType == 43)      // North: 180 degrees
+            angle = 180f;
+        else if (blockType == 41 || blockType == 44) // West: 90 degrees
+            angle = 90f;
+        else if (blockType == 42 || blockType == 45) // East: 270 degrees
+            angle = 270f;
+
+        Quaternion rot = Quaternion.Euler(0f, angle, 0f);
+        Vector3 pivot = new Vector3(0.5f, 0f, 0.5f);
+
+        // Resolve the UV offset/scaling for the block's tile in the texture atlas
+        int tile = -1;
+        if (def.resolvedSideTile != -1) tile = def.resolvedSideTile;
+        else if (def.resolvedTopTile != -1) tile = def.resolvedTopTile;
+        else if (def.resolvedBottomTile != -1) tile = def.resolvedBottomTile;
+        else if (def.resolvedFrontTile != -1) tile = def.resolvedFrontTile;
+        
+        if (tile == -1)
+        {
+            tile = BlockRegistry.GetDefaultTileIndex(def.blockID, 1);
+        }
+        int totalCount = BlockRegistry.TotalTilesCount;
+        float u0 = tile / (float)totalCount;
+        float u1 = (tile + 1f) / (float)totalCount;
+
+        // Custom meshes can be added to solid or transparent/foliage mesh based on def.isTransparent
+        if (def.isTransparent)
+        {
+            int startVert = foliageVertexIndex;
+            for (int i = 0; i < def.cachedMeshVertices.Length; i++)
+            {
+                Vector3 localVert = def.cachedMeshVertices[i];
+                Vector3 rotatedVert = rot * (localVert - pivot) + pivot;
+                foliageVertices.Add(pos + rotatedVert);
+
+                if (def.cachedMeshUVs != null && def.cachedMeshUVs.Length > i)
+                {
+                    Vector2 origUV = def.cachedMeshUVs[i];
+                    float u = Mathf.Lerp(u0, u1, origUV.x);
+                    foliageUvs.Add(new Vector2(u, origUV.y));
+                }
+                else
+                {
+                    foliageUvs.Add(new Vector2(u0, 0f));
+                }
+                foliageColors.Add(Color.white);
+            }
+            for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
+            {
+                foliageTriangles.Add(startVert + def.cachedMeshTriangles[i]);
+            }
+            foliageVertexIndex += def.cachedMeshVertices.Length;
+
+            // If it is transparent but solid, also add to the solid foliage collider
+            if (def.isSolid)
+            {
+                int startSolidVert = foliageSolidVertexIndex;
+                for (int i = 0; i < def.cachedMeshVertices.Length; i++)
+                {
+                    Vector3 localVert = def.cachedMeshVertices[i];
+                    Vector3 rotatedVert = rot * (localVert - pivot) + pivot;
+                    foliageSolidVertices.Add(pos + rotatedVert);
+                }
+                for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
+                {
+                    foliageSolidTriangles.Add(startSolidVert + def.cachedMeshTriangles[i]);
+                }
+                foliageSolidVertexIndex += def.cachedMeshVertices.Length;
+            }
+        }
+        else
+        {
+            int startVert = vertexIndex;
+            for (int i = 0; i < def.cachedMeshVertices.Length; i++)
+            {
+                Vector3 localVert = def.cachedMeshVertices[i];
+                Vector3 rotatedVert = rot * (localVert - pivot) + pivot;
+                vertices.Add(pos + rotatedVert);
+
+                if (def.cachedMeshUVs != null && def.cachedMeshUVs.Length > i)
+                {
+                    Vector2 origUV = def.cachedMeshUVs[i];
+                    float u = Mathf.Lerp(u0, u1, origUV.x);
+                    uvs.Add(new Vector2(u, origUV.y));
+                }
+                else
+                {
+                    uvs.Add(new Vector2(u0, 0f));
+                }
+            }
+            for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
+            {
+                triangles.Add(startVert + def.cachedMeshTriangles[i]);
+            }
+            vertexIndex += def.cachedMeshVertices.Length;
+        }
+    }
+
+    void AddCustomMeshBlock(Vector3 pos, BlockDefinition def)
+    {
+        if (def.cachedMeshVertices == null || def.cachedMeshTriangles == null) return;
+
+        // Resolve the UV offset/scaling for the block's tile in the texture atlas
+        int tile = -1;
+        if (def.resolvedSideTile != -1) tile = def.resolvedSideTile;
+        else if (def.resolvedTopTile != -1) tile = def.resolvedTopTile;
+        else if (def.resolvedBottomTile != -1) tile = def.resolvedBottomTile;
+        else if (def.resolvedFrontTile != -1) tile = def.resolvedFrontTile;
+        
+        if (tile == -1)
+        {
+            tile = BlockRegistry.GetDefaultTileIndex(def.blockID, 1);
+        }
+        int totalCount = BlockRegistry.TotalTilesCount;
+        float u0 = tile / (float)totalCount;
+        float u1 = (tile + 1f) / (float)totalCount;
+
+        // Custom meshes can be added to solid or transparent/foliage mesh based on def.isTransparent
+        if (def.isTransparent)
+        {
+            int startVert = foliageVertexIndex;
+            for (int i = 0; i < def.cachedMeshVertices.Length; i++)
+            {
+                foliageVertices.Add(pos + def.cachedMeshVertices[i]);
+                if (def.cachedMeshUVs != null && def.cachedMeshUVs.Length > i)
+                {
+                    Vector2 origUV = def.cachedMeshUVs[i];
+                    float u = Mathf.Lerp(u0, u1, origUV.x);
+                    foliageUvs.Add(new Vector2(u, origUV.y));
+                }
+                else
+                {
+                    foliageUvs.Add(new Vector2(u0, 0f));
+                }
+                foliageColors.Add(Color.white);
+            }
+            for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
+            {
+                foliageTriangles.Add(startVert + def.cachedMeshTriangles[i]);
+            }
+            foliageVertexIndex += def.cachedMeshVertices.Length;
+
+            // If it is transparent but solid, also add to the solid foliage collider
+            if (def.isSolid)
+            {
+                int startSolidVert = foliageSolidVertexIndex;
+                for (int i = 0; i < def.cachedMeshVertices.Length; i++)
+                {
+                    foliageSolidVertices.Add(pos + def.cachedMeshVertices[i]);
+                }
+                for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
+                {
+                    foliageSolidTriangles.Add(startSolidVert + def.cachedMeshTriangles[i]);
+                }
+                foliageSolidVertexIndex += def.cachedMeshVertices.Length;
+            }
+        }
+        else
+        {
+            int startVert = vertexIndex;
+            for (int i = 0; i < def.cachedMeshVertices.Length; i++)
+            {
+                vertices.Add(pos + def.cachedMeshVertices[i]);
+                if (def.cachedMeshUVs != null && def.cachedMeshUVs.Length > i)
+                {
+                    Vector2 origUV = def.cachedMeshUVs[i];
+                    float u = Mathf.Lerp(u0, u1, origUV.x);
+                    uvs.Add(new Vector2(u, origUV.y));
+                }
+                else
+                {
+                    uvs.Add(new Vector2(u0, 0f));
+                }
+            }
+            for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
+            {
+                triangles.Add(startVert + def.cachedMeshTriangles[i]);
+            }
+            vertexIndex += def.cachedMeshVertices.Length;
         }
     }
 
@@ -1928,13 +2243,45 @@ public class Chunk : MonoBehaviour
 
             foliageMeshCollider.sharedMesh = null;
             foliageMeshCollider.sharedMesh = foliageMesh; // allows raycast hits on flowers
-            IgnorePlayerCollision(); // Ignore player physics collision so player walks through them
+
+            // Build the solid foliage collider if we have solid foliage geometry
+            if (foliageSolidVertices.Count > 0)
+            {
+                EnsureFoliageSolidChild();
+                Mesh foliageSolidMesh = foliageSolidCollider.sharedMesh;
+                if (foliageSolidMesh == null)
+                {
+                    foliageSolidMesh = new Mesh();
+                    foliageSolidMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                    foliageSolidCollider.sharedMesh = foliageSolidMesh;
+                }
+                else
+                {
+                    foliageSolidMesh.Clear();
+                }
+                foliageSolidMesh.SetVertices(foliageSolidVertices);
+                foliageSolidMesh.SetTriangles(foliageSolidTriangles, 0);
+                foliageSolidMesh.RecalculateNormals();
+
+                foliageSolidCollider.sharedMesh = null;
+                foliageSolidCollider.sharedMesh = foliageSolidMesh;
+                foliageSolidCollider.gameObject.SetActive(true);
+            }
+            else
+            {
+                if (foliageSolidCollider != null)
+                    foliageSolidCollider.gameObject.SetActive(false);
+            }
+
+            IgnorePlayerCollision(); // Set up proper collision and ignore behaviors for player, vehicles, and animals
             foliageMeshRenderer.gameObject.SetActive(true);
         }
         else
         {
             if (foliageMeshRenderer != null)
                 foliageMeshRenderer.gameObject.SetActive(false);
+            if (foliageSolidCollider != null)
+                foliageSolidCollider.gameObject.SetActive(false);
         }
 
         // ── Glass mesh (ZWrite On + CullBack to prevent back-face border bleed) ─

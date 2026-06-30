@@ -123,6 +123,8 @@ public class VehicleHUD : MonoBehaviour
         justOpenedFrame = Time.frameCount; // don't close on the same frame we opened
         hudContainer.transform.parent.gameObject.SetActive(true);
 
+        UpdateFoliageSolidColliders(true);
+
         Debug.Log("Vehicle control started");
     }
 
@@ -139,7 +141,17 @@ public class VehicleHUD : MonoBehaviour
         if (hudContainer != null)
             hudContainer.transform.parent.gameObject.SetActive(false);
 
+        UpdateFoliageSolidColliders(false);
+
         Debug.Log("Vehicle control ended");
+    }
+
+    private void UpdateFoliageSolidColliders(bool ignore)
+    {
+        foreach (var chunk in Object.FindObjectsByType<Chunk>(FindObjectsSortMode.None))
+        {
+            chunk.UpdatePlayerFoliageSolidCollision(ignore);
+        }
     }
 
     private void Update()

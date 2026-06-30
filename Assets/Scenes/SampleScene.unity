@@ -1165,7 +1165,7 @@ GameObject:
   - component: {fileID: 1554017425}
   - component: {fileID: 1554017427}
   m_Layer: 0
-  m_Name: World
+  m_Name: VoxelWorld
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1193,6 +1193,7 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 11400000, guid: 3784277fbc7423247bcf336160403848, type: 2}
   blockDatabase: {fileID: 11400000, guid: fd1aa8dc2c397cb4bbb607896cf75b2c, type: 2}
+  itemDatabase: {fileID: 11400000, guid: 40c680c5c158c7549babd58a7c2e961c, type: 2}
 --- !u!4 &1554017426
 Transform:
   m_ObjectHideFlags: 0

@@ -32,6 +32,11 @@ public class VoxelWorld : MonoBehaviour
     [Tooltip("Centralized database asset for configuring all blocks (default and custom).")]
     public BlockDatabase blockDatabase;
 
+    [Header("Item Database")]
+    [Tooltip("Centralized database asset for configuring all items (default and custom).")]
+    public ItemDatabase itemDatabase;
+
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     void Awake()
@@ -62,11 +67,18 @@ public class VoxelWorld : MonoBehaviour
             }
             BlockRegistry.Initialize(blockDatabase.blocks);
         }
+        // 1b. Initialize the custom item definitions registry
+        if (itemDatabase != null && itemDatabase.items != null)
+        {
+            Debug.Log($"[VoxelWorld] Loading Item Database with {itemDatabase.items.Count} items.");
+            ItemRegistry.Initialize(itemDatabase.items);
+        }
         else
         {
-            Debug.LogError("[VoxelWorld] blockDatabase is null! Please assign a BlockDatabase asset in the Inspector.");
-            BlockRegistry.Initialize(new List<BlockDefinition>());
+            Debug.LogError("[VoxelWorld] itemDatabase is null! Please assign an ItemDatabase asset in the Inspector.");
+            ItemRegistry.Initialize(new List<ItemDefinition>());
         }
+
 
         // 2. Apply procedurally generated grass texture atlas
         Texture2D grassAtlas = GrassTextureGenerator.Create();

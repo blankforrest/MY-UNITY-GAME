@@ -467,6 +467,8 @@ public class PauseMenu : MonoBehaviour
         {
             SaveLoadManager.Instance.SaveGame();
         }
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
         SceneManager.LoadScene(0);
     }
 

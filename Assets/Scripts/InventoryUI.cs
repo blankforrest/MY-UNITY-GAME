@@ -38,8 +38,8 @@ public class InventoryUI : MonoBehaviour
     private bool subscribed = false;
     private GameObject  tabsContainer;
     private string      activeCategory = "ALL";
-    private Image[]     tabImages = new Image[6];
-    private string[]    categories = new string[] { "ALL", "BLOCKS", "TOOLS", "VEHICLES", "FOLIAGE", "SPAWNERS" };
+    private Image[]     tabImages;
+    private string[]    categories = new string[] { "ALL", "BLOCKS", "TOOLS", "VEHICLES", "ITEMS", "FOLIAGE", "SPAWNERS" };
     private RectTransform contentRT;
 
     void Awake()
@@ -168,6 +168,7 @@ public class InventoryUI : MonoBehaviour
         tabLayout.childForceExpandWidth = true;
         tabLayout.childForceExpandHeight = true;
 
+        tabImages = new Image[categories.Length];
         for (int i = 0; i < categories.Length; i++)
         {
             string cat = categories[i];
@@ -973,6 +974,7 @@ public class InventoryUI : MonoBehaviour
             case "BLOCKS": return 17;
             case "TOOLS": return 24;
             case "VEHICLES": return 5;
+            case "ITEMS": return 9;
             case "FOLIAGE": return 4;
             case "SPAWNERS": return 1;
             default: return 35;

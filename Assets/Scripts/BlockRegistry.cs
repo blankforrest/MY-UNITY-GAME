@@ -48,7 +48,7 @@ public static class BlockRegistry
     {
         if (VoxelWorld.Instance == null || VoxelWorld.Instance.blockDatabase == null) return;
 
-        int baseTilesCount = 41; // GrassTextureGenerator.TILE_COUNT
+        int baseTilesCount = 42; // GrassTextureGenerator.TILE_COUNT
         BlockRegistry.TotalTilesCount = baseTilesCount;
 
         List<Texture2D> texturesToAppend = new List<Texture2D>();
@@ -151,6 +151,63 @@ public static class BlockRegistry
                 byID[def.blockID] = def;
                 byName[def.blockName] = def;
                 _registeredBlocks.Add(def);
+
+                // Cache custom mesh arrays on the main thread
+                if (def.customMesh != null)
+                {
+                    try
+                    {
+                        Debug.Log($"[BlockRegistry] Caching custom mesh for block {def.blockName} (ID: {def.blockID}) - vertices: {def.customMesh.vertexCount}");
+                        Vector3[] sourceVerts = def.customMesh.vertices;
+                        Vector3[] offsetVerts = new Vector3[sourceVerts.Length];
+                        if (sourceVerts.Length > 0)
+                        {
+                            Vector3 min = sourceVerts[0];
+                            Vector3 max = sourceVerts[0];
+                            for (int v = 1; v < sourceVerts.Length; v++)
+                            {
+                                min = Vector3.Min(min, sourceVerts[v]);
+                                max = Vector3.Max(max, sourceVerts[v]);
+                            }
+
+                            float scale = 1f;
+                            if (max.x - min.x > 2f || max.z - min.z > 2f)
+                            {
+                                scale = 0.0625f;
+                            }
+
+                            float width = (max.x - min.x) * scale;
+                            float length = (max.z - min.z) * scale;
+                            float offsetX = (1f - width) / 2f;
+                            float offsetZ = (1f - length) / 2f;
+
+                            for (int v = 0; v < sourceVerts.Length; v++)
+                            {
+                                float px = (sourceVerts[v].x - min.x) * scale + offsetX;
+                                float py = (sourceVerts[v].y - min.y) * scale;
+                                float pz = (sourceVerts[v].z - min.z) * scale + offsetZ;
+                                offsetVerts[v] = new Vector3(px, py, pz);
+                            }
+                        }
+                        def.cachedMeshVertices = offsetVerts;
+                        def.cachedMeshTriangles = def.customMesh.triangles;
+                        def.cachedMeshUVs = def.customMesh.uv;
+                    }
+                    catch (System.Exception ex)
+                    {
+                        Debug.LogError($"[BlockRegistry] Failed to cache custom mesh for block '{def.blockName}' (ID: {def.blockID}): {ex.Message}. Please make sure Read/Write is enabled on the model's import settings.");
+                        def.cachedMeshVertices = null;
+                        def.cachedMeshTriangles = null;
+                        def.cachedMeshUVs = null;
+                    }
+                }
+                else
+                {
+                    if (def.blockID == 38 || def.blockID == 46)
+                    {
+                        Debug.LogWarning($"[BlockRegistry] Block {def.blockName} (ID: {def.blockID}) has NULL customMesh!");
+                    }
+                }
 
                 // Auto-configure the associated Item SO if present (DropsCustomItem) or generate one dynamically (DropsSelf)
                 if (def.dropRule == DropRule.DropsSelf)
@@ -319,6 +376,8 @@ public static class BlockRegistry
             return 39;
         if (blockID == 55)     // Diamond Ore
             return 40;
+        if (blockID == 57)     // Gold Ore
+            return 41;
         if (blockID == 56)     // Gravel
             return 3;
         

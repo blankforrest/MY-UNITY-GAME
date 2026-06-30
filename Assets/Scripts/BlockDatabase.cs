@@ -65,6 +65,7 @@ public class BlockDatabase : ScriptableObject
         defaults.Add(CreateDef(54, "Spruce Leaves", 0.2f, ToolType.Sword, true, true));
         defaults.Add(CreateDef(55, "Diamond Ore", 3.0f, ToolType.Pickaxe, true, false));
         defaults.Add(CreateDef(56, "Gravel", 1.0f, ToolType.Shovel, true, false));
+        defaults.Add(CreateDef(57, "Gold Ore", 3.0f, ToolType.Pickaxe, true, false));
 
         if (blocks == null)
         {
@@ -101,6 +102,7 @@ public class BlockDatabase : ScriptableObject
                 if (existing.stepSound == null) existing.stepSound = def.stepSound;
                 if (existing.placeSound == null) existing.placeSound = def.placeSound;
                 if (existing.breakSound == null) existing.breakSound = def.breakSound;
+                if (existing.customMesh == null) existing.customMesh = def.customMesh;
             }
             else
             {

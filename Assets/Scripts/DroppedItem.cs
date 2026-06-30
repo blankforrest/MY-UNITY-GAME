@@ -83,6 +83,23 @@ public class DroppedItem : MonoBehaviour
         visual.transform.localPosition = Vector3.zero;
         visual.transform.localScale    = Vector3.one;
 
+        // Try to retrieve custom sprite from registry
+        ItemDefinition itemDef = ItemRegistry.GetDefinition(item != null ? item.itemName : "");
+        if (itemDef != null && (itemDef.droppedItemSprite != null || itemDef.inventoryIcon != null))
+        {
+            Sprite spriteToUse = itemDef.droppedItemSprite != null ? itemDef.droppedItemSprite : itemDef.inventoryIcon;
+            SpriteRenderer sr = visual.AddComponent<SpriteRenderer>();
+            sr.sprite = spriteToUse;
+            
+            // Set scale to fit nicely in the world
+            visual.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
+            
+            Shader s = Shader.Find("Sprites/Default") ?? Shader.Find("Universal Render Pipeline/Unlit");
+            Material mat = new Material(s);
+            sr.material = mat;
+            return;
+        }
+
         MeshFilter   mf = visual.AddComponent<MeshFilter>();
         MeshRenderer mr = visual.AddComponent<MeshRenderer>();
 

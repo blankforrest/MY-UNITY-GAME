@@ -30,8 +30,22 @@ public class MainMenu : MonoBehaviour
 
     void Start()
     {
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
         AudioListener.volume = PlayerPrefs.GetFloat("MasterVolume", 1.0f);
         CreateMainMenuUI();
+    }
+
+    void Update()
+    {
+        if (Cursor.lockState != CursorLockMode.None)
+        {
+            Cursor.lockState = CursorLockMode.None;
+        }
+        if (!Cursor.visible)
+        {
+            Cursor.visible = true;
+        }
     }
 
     private void CreateMainMenuUI()
@@ -640,10 +654,10 @@ public class MainMenu : MonoBehaviour
         GameObject titleGO = new GameObject("Title", typeof(RectTransform), typeof(TextMeshProUGUI));
         titleGO.transform.SetParent(createWorldPanel.transform, false);
         RectTransform titleRT = titleGO.GetComponent<RectTransform>();
-        titleRT.anchorMin = new Vector2(0.5f, 0.88f);
-        titleRT.anchorMax = new Vector2(0.5f, 0.88f);
+        titleRT.anchorMin = new Vector2(0.5f, 0.90f);
+        titleRT.anchorMax = new Vector2(0.5f, 0.90f);
         titleRT.pivot = new Vector2(0.5f, 0.5f);
-        titleRT.sizeDelta = new Vector2(1200, 200);
+        titleRT.sizeDelta = new Vector2(1200, 100);
         titleRT.anchoredPosition = new Vector2(0, -30);
 
         TextMeshProUGUI titleText = titleGO.GetComponent<TextMeshProUGUI>();
@@ -657,10 +671,10 @@ public class MainMenu : MonoBehaviour
         GameObject modeContainer = new GameObject("ModeContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         modeContainer.transform.SetParent(createWorldPanel.transform, false);
         RectTransform modeRT = modeContainer.GetComponent<RectTransform>();
-        modeRT.anchorMin = new Vector2(0.5f, 0.72f);
-        modeRT.anchorMax = new Vector2(0.5f, 0.72f);
+        modeRT.anchorMin = new Vector2(0.5f, 0.77f);
+        modeRT.anchorMax = new Vector2(0.5f, 0.77f);
         modeRT.pivot = new Vector2(0.5f, 0.5f);
-        modeRT.sizeDelta = new Vector2(1200, 120);
+        modeRT.sizeDelta = new Vector2(1200, 110);
         modeRT.anchoredPosition = Vector2.zero;
 
         HorizontalLayoutGroup hlg = modeContainer.GetComponent<HorizontalLayoutGroup>();
@@ -715,10 +729,10 @@ public class MainMenu : MonoBehaviour
         GameObject nameContainer = new GameObject("NameContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         nameContainer.transform.SetParent(createWorldPanel.transform, false);
         RectTransform nameRT = nameContainer.GetComponent<RectTransform>();
-        nameRT.anchorMin = new Vector2(0.5f, 0.55f);
-        nameRT.anchorMax = new Vector2(0.5f, 0.55f);
+        nameRT.anchorMin = new Vector2(0.5f, 0.61f);
+        nameRT.anchorMax = new Vector2(0.5f, 0.61f);
         nameRT.pivot = new Vector2(0.5f, 0.5f);
-        nameRT.sizeDelta = new Vector2(1200, 135);
+        nameRT.sizeDelta = new Vector2(1200, 110);
         nameRT.anchoredPosition = Vector2.zero;
 
         HorizontalLayoutGroup nameHlg = nameContainer.GetComponent<HorizontalLayoutGroup>();
@@ -733,10 +747,10 @@ public class MainMenu : MonoBehaviour
         GameObject nameLabelGO = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
         nameLabelGO.transform.SetParent(nameContainer.transform, false);
         var nameLabelRT = nameLabelGO.GetComponent<RectTransform>();
-        nameLabelRT.sizeDelta = new Vector2(300, 135);
+        nameLabelRT.sizeDelta = new Vector2(300, 110);
         var nameLabelTxt = nameLabelGO.GetComponent<TextMeshProUGUI>();
         nameLabelTxt.text = "World Name:";
-        nameLabelTxt.fontSize = 48;
+        nameLabelTxt.fontSize = 36;
         nameLabelTxt.fontStyle = FontStyles.Bold;
         nameLabelTxt.alignment = TextAlignmentOptions.Left;
         nameLabelTxt.color = Color.white;
@@ -745,16 +759,16 @@ public class MainMenu : MonoBehaviour
         GameObject nameInputGO;
         worldNameInputField = CreateInputField(nameContainer.transform, "My Awesome World", out nameInputGO);
         var nameInputRT = nameInputGO.GetComponent<RectTransform>();
-        nameInputRT.sizeDelta = new Vector2(855, 135);
+        nameInputRT.sizeDelta = new Vector2(855, 110);
 
         // Seed Container (Horizontal)
         GameObject seedContainer = new GameObject("SeedContainer", typeof(RectTransform), typeof(HorizontalLayoutGroup));
         seedContainer.transform.SetParent(createWorldPanel.transform, false);
         RectTransform seedRT = seedContainer.GetComponent<RectTransform>();
-        seedRT.anchorMin = new Vector2(0.5f, 0.38f);
-        seedRT.anchorMax = new Vector2(0.5f, 0.38f);
+        seedRT.anchorMin = new Vector2(0.5f, 0.45f);
+        seedRT.anchorMax = new Vector2(0.5f, 0.45f);
         seedRT.pivot = new Vector2(0.5f, 0.5f);
-        seedRT.sizeDelta = new Vector2(1200, 135);
+        seedRT.sizeDelta = new Vector2(1200, 110);
         seedRT.anchoredPosition = Vector2.zero;
 
         HorizontalLayoutGroup seedHlg = seedContainer.GetComponent<HorizontalLayoutGroup>();
@@ -769,10 +783,10 @@ public class MainMenu : MonoBehaviour
         GameObject seedLabelGO = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
         seedLabelGO.transform.SetParent(seedContainer.transform, false);
         var labelRT = seedLabelGO.GetComponent<RectTransform>();
-        labelRT.sizeDelta = new Vector2(300, 135);
+        labelRT.sizeDelta = new Vector2(300, 110);
         var labelTxt = seedLabelGO.GetComponent<TextMeshProUGUI>();
         labelTxt.text = "World Seed:";
-        labelTxt.fontSize = 48;
+        labelTxt.fontSize = 36;
         labelTxt.fontStyle = FontStyles.Bold;
         labelTxt.alignment = TextAlignmentOptions.Left;
         labelTxt.color = Color.white;
@@ -781,20 +795,20 @@ public class MainMenu : MonoBehaviour
         GameObject seedInputGO;
         seedInputField = CreateInputField(seedContainer.transform, "Random Seed...", out seedInputGO);
         var inputRT = seedInputGO.GetComponent<RectTransform>();
-        inputRT.sizeDelta = new Vector2(855, 135);
+        inputRT.sizeDelta = new Vector2(855, 110);
 
         // Description
         GameObject descGO = new GameObject("Description", typeof(RectTransform), typeof(TextMeshProUGUI));
         descGO.transform.SetParent(createWorldPanel.transform, false);
         RectTransform descRT = descGO.GetComponent<RectTransform>();
-        descRT.anchorMin = new Vector2(0.5f, 0.22f);
-        descRT.anchorMax = new Vector2(0.5f, 0.22f);
+        descRT.anchorMin = new Vector2(0.5f, 0.27f);
+        descRT.anchorMax = new Vector2(0.5f, 0.27f);
         descRT.pivot = new Vector2(0.5f, 0.5f);
-        descRT.sizeDelta = new Vector2(1200, 150);
+        descRT.sizeDelta = new Vector2(1200, 180);
         descRT.anchoredPosition = Vector2.zero;
 
         modeDescriptionText = descGO.GetComponent<TextMeshProUGUI>();
-        modeDescriptionText.fontSize = 42;
+        modeDescriptionText.fontSize = 26;
         modeDescriptionText.alignment = TextAlignmentOptions.Center;
         modeDescriptionText.color = new Color(0.85f, 0.85f, 0.85f, 1f);
 
@@ -805,7 +819,7 @@ public class MainMenu : MonoBehaviour
         actionRT.anchorMin = new Vector2(0.5f, 0.10f);
         actionRT.anchorMax = new Vector2(0.5f, 0.10f);
         actionRT.pivot = new Vector2(0.5f, 0.5f);
-        actionRT.sizeDelta = new Vector2(1200, 120);
+        actionRT.sizeDelta = new Vector2(1200, 110);
         actionRT.anchoredPosition = Vector2.zero;
 
         HorizontalLayoutGroup alg = actionContainer.GetComponent<HorizontalLayoutGroup>();
@@ -1078,7 +1092,7 @@ public class MainMenu : MonoBehaviour
         
         var placeholderTmp = placeholderGO.GetComponent<TextMeshProUGUI>();
         placeholderTmp.text = placeholderText;
-        placeholderTmp.fontSize = 48;
+        placeholderTmp.fontSize = 36;
         placeholderTmp.fontStyle = FontStyles.Italic;
         placeholderTmp.alignment = TextAlignmentOptions.Left;
         placeholderTmp.color = new Color(0.6f, 0.6f, 0.6f, 0.8f);
@@ -1091,7 +1105,7 @@ public class MainMenu : MonoBehaviour
         textRT.sizeDelta = Vector2.zero;
         
         var textTmp = textGO.GetComponent<TextMeshProUGUI>();
-        textTmp.fontSize = 48;
+        textTmp.fontSize = 36;
         textTmp.alignment = TextAlignmentOptions.Left;
         textTmp.color = Color.white;
 
