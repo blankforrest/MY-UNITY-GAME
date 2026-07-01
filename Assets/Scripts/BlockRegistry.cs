@@ -24,6 +24,41 @@ public static class BlockRegistry
     // Tracking active point lights for light-emitting blocks
     private static Dictionary<Vector3Int, GameObject> activeLights = new Dictionary<Vector3Int, GameObject>();
 
+    // Native/Blittable representations for Jobs
+    private static Unity.Collections.NativeArray<BlittableBlockDefinition> _nativeDefinitions;
+    private static Unity.Collections.NativeArray<Vector3> _customMeshVertices;
+    private static Unity.Collections.NativeArray<int> _customMeshIndices;
+    private static Unity.Collections.NativeArray<Vector2> _customMeshUVs;
+    private static Unity.Collections.NativeArray<Vector3> _voxelVerts;
+    private static Unity.Collections.NativeArray<int> _voxelTris;
+    private static Unity.Collections.NativeArray<Vector3> _faceChecks;
+
+    public static Unity.Collections.NativeArray<BlittableBlockDefinition> NativeDefinitions => _nativeDefinitions;
+    public static Unity.Collections.NativeArray<Vector3> CustomMeshVertices => _customMeshVertices;
+    public static Unity.Collections.NativeArray<int> CustomMeshIndices => _customMeshIndices;
+    public static Unity.Collections.NativeArray<Vector2> CustomMeshUVs => _customMeshUVs;
+    public static Unity.Collections.NativeArray<Vector3> VoxelVerts => _voxelVerts;
+    public static Unity.Collections.NativeArray<int> VoxelTris => _voxelTris;
+    public static Unity.Collections.NativeArray<Vector3> FaceChecks => _faceChecks;
+
+    public static int GetTileIndexNative(byte blockID, int face, bool isLit = false, int facing = -1)
+    {
+        if (_nativeDefinitions.IsCreated && blockID < _nativeDefinitions.Length)
+        {
+            var def = _nativeDefinitions[blockID];
+            if (face == 2) return def.tileTop;
+            if (face == 3) return def.tileBottom;
+
+            bool isFront = (facing != -1) ? (face == facing) : (blockID == 37 ? face == 0 : face == 1);
+            if (isFront)
+            {
+                return isLit ? def.tileFrontLit : def.tileFront;
+            }
+            return def.tileLeft;
+        }
+        return GetDefaultTileIndex(blockID, face, isLit, facing);
+    }
+
     private static bool _isInitializing = false;
     private static void CheckAndEnsureInitialized()
     {
@@ -120,6 +155,7 @@ public static class BlockRegistry
         }
         
         Debug.Log($"[BlockRegistry] Rebuilt face tile mappings. TotalTilesCount: {BlockRegistry.TotalTilesCount}");
+        RebuildBlittableDefinitions();
     }
 
     public static void Initialize(List<BlockDefinition> customDefs)
@@ -233,6 +269,8 @@ public static class BlockRegistry
                 Debug.LogWarning($"[BlockRegistry] Duplicate block ID detected: {def.blockID} for '{def.blockName}'");
             }
         }
+
+        RebuildBlittableDefinitions();
     }
 
     private static bool IsReservedID(byte id)
@@ -444,5 +482,144 @@ public static class BlockRegistry
             if (lightGO != null) Object.Destroy(lightGO);
         }
         activeLights.Clear();
+    }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticState()
+    {
+        DisposeNativeContainers();
+        _registeredBlocks.Clear();
+        byID.Clear();
+        byName.Clear();
+        faceTiles.Clear();
+        activeLights.Clear();
+    }
+
+    public static void DisposeNativeContainers()
+    {
+        if (_nativeDefinitions.IsCreated) _nativeDefinitions.Dispose();
+        if (_customMeshVertices.IsCreated) _customMeshVertices.Dispose();
+        if (_customMeshIndices.IsCreated) _customMeshIndices.Dispose();
+        if (_customMeshUVs.IsCreated) _customMeshUVs.Dispose();
+        if (_voxelVerts.IsCreated) _voxelVerts.Dispose();
+        if (_voxelTris.IsCreated) _voxelTris.Dispose();
+        if (_faceChecks.IsCreated) _faceChecks.Dispose();
+    }
+
+    public static void RebuildBlittableDefinitions()
+    {
+        DisposeNativeContainers();
+
+        _nativeDefinitions = new Unity.Collections.NativeArray<BlittableBlockDefinition>(256, Unity.Collections.Allocator.Persistent);
+
+        // Initialize voxelVerts, voxelTris, faceChecks native arrays
+        _voxelVerts = new Unity.Collections.NativeArray<Vector3>(8, Unity.Collections.Allocator.Persistent);
+        for (int i = 0; i < 8; i++) _voxelVerts[i] = VoxelData.voxelVerts[i];
+
+        _voxelTris = new Unity.Collections.NativeArray<int>(24, Unity.Collections.Allocator.Persistent);
+        for (int f = 0; f < 6; f++)
+        {
+            for (int v = 0; v < 4; v++)
+            {
+                _voxelTris[f * 4 + v] = VoxelData.voxelTris[f, v];
+            }
+        }
+
+        _faceChecks = new Unity.Collections.NativeArray<Vector3>(6, Unity.Collections.Allocator.Persistent);
+        for (int i = 0; i < 6; i++) _faceChecks[i] = VoxelData.faceChecks[i];
+
+        // Initialize with default air block definitions
+        for (int i = 0; i < 256; i++)
+        {
+            _nativeDefinitions[i] = new BlittableBlockDefinition
+            {
+                blockID = (byte)i,
+                isSolid = false,
+                isTransparent = true,
+                emitsLight = false,
+                lightLevel = 0,
+                isVehicleBlock = false,
+                tileBack = -1,
+                tileFront = -1,
+                tileFrontLit = -1,
+                tileTop = -1,
+                tileBottom = -1,
+                tileLeft = -1,
+                tileRight = -1,
+                hasCustomMesh = false
+            };
+        }
+
+        // Count total vertices and indices for custom meshes
+        int totalVertices = 0;
+        int totalIndices = 0;
+        foreach (var def in _registeredBlocks)
+        {
+            if (def != null && def.customMesh != null && def.cachedMeshVertices != null)
+            {
+                totalVertices += def.cachedMeshVertices.Length;
+                totalIndices += def.cachedMeshTriangles.Length;
+            }
+        }
+
+        _customMeshVertices = new Unity.Collections.NativeArray<Vector3>(totalVertices, Unity.Collections.Allocator.Persistent);
+        _customMeshIndices = new Unity.Collections.NativeArray<int>(totalIndices, Unity.Collections.Allocator.Persistent);
+        _customMeshUVs = new Unity.Collections.NativeArray<Vector2>(totalVertices, Unity.Collections.Allocator.Persistent);
+
+        int currentVertexStart = 0;
+        int currentIndexStart = 0;
+
+        foreach (var def in _registeredBlocks)
+        {
+            if (def == null) continue;
+            byte id = def.blockID;
+
+            BlittableBlockDefinition blittable = new BlittableBlockDefinition
+            {
+                blockID = id,
+                isSolid = def.isSolid,
+                isTransparent = def.isTransparent,
+                emitsLight = def.emitsLight,
+                lightLevel = def.lightLevel,
+                isVehicleBlock = def.isVehicleBlock,
+
+                tileBack = GetTileIndex(id, 0, false, -1),
+                tileFront = GetTileIndex(id, 1, false, -1),
+                tileFrontLit = GetTileIndex(id, 1, true, -1),
+                tileTop = GetTileIndex(id, 2, false, -1),
+                tileBottom = GetTileIndex(id, 3, false, -1),
+                tileLeft = GetTileIndex(id, 4, false, -1),
+                tileRight = GetTileIndex(id, 5, false, -1),
+
+                hasCustomMesh = false
+            };
+
+            if (def.customMesh != null && def.cachedMeshVertices != null)
+            {
+                blittable.hasCustomMesh = true;
+                blittable.customMeshVertexStart = currentVertexStart;
+                blittable.customMeshVertexCount = def.cachedMeshVertices.Length;
+                blittable.customMeshIndexStart = currentIndexStart;
+                blittable.customMeshIndexCount = def.cachedMeshTriangles.Length;
+
+                for (int v = 0; v < def.cachedMeshVertices.Length; v++)
+                {
+                    _customMeshVertices[currentVertexStart + v] = def.cachedMeshVertices[v];
+                    _customMeshUVs[currentVertexStart + v] = def.cachedMeshUVs[v];
+                }
+
+                for (int t = 0; t < def.cachedMeshTriangles.Length; t++)
+                {
+                    _customMeshIndices[currentIndexStart + t] = def.cachedMeshTriangles[t];
+                }
+
+                currentVertexStart += def.cachedMeshVertices.Length;
+                currentIndexStart += def.cachedMeshTriangles.Length;
+            }
+
+            _nativeDefinitions[id] = blittable;
+        }
+
+        Debug.Log($"[BlockRegistry] Rebuilt native block definitions. Custom mesh vertices: {totalVertices}, indices: {totalIndices}");
     }
 }

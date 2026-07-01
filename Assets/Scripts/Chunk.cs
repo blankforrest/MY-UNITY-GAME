@@ -12,7 +12,8 @@ public class Chunk : MonoBehaviour
     private MeshCollider meshCollider;
     private MeshRenderer meshRenderer;
 
-    public byte[] voxelMap { get; private set; }
+    private NativeArray<byte> _voxelMap;
+    public NativeArray<byte> voxelMap => _voxelMap;
     public Vector2 chunkPos { get; private set; }
     private bool renderersEnabled = true;
 
@@ -41,58 +42,55 @@ public class Chunk : MonoBehaviour
     private Chunk neighborEast;
     private Chunk neighborWest;
 
-    // Thread safety variables to hold cloned maps & data for mesh generation
-    private byte[] threadVoxelMap;
-    private byte[] threadWestMap;
-    private byte[] threadEastMap;
-    private byte[] threadSouthMap;
-    private byte[] threadNorthMap;
     private Vector3 chunkWorldPos;
-    private List<VehicleController.CachedVehicleData> cachedVehicles;
-    private HashSet<Vector3Int> cachedBurningFurnaces;
-    private Dictionary<Vector3Int, int> cachedFurnaceFacings;
+
+    public static bool enableProfilingLogs = true;
+    private float _updateStartTime;
     private bool isUpdating = false;
     private bool needsReupdate = false;
     private int currentUpdateVersion = 0;
-    private System.Threading.Tasks.Task activeTask;
+    private JobHandle _meshJobHandle;
 
-    int vertexIndex = 0;
-    List<Vector3> vertices = new List<Vector3>(4096);
-    List<int> triangles = new List<int>(6144);
-    List<Vector2> uvs = new List<Vector2>(4096);
+
+    // Vertex index counters â€” track how many vertices have been written to each NativeList
+    private int vertexIndex = 0;
+    private int waterVertexIndex = 0;
+    private int foliageVertexIndex = 0;
+    private int foliageSolidVertexIndex = 0;
+    private int glassVertexIndex = 0;
+
+    private NativeList<Vector3> vertices;
+    private NativeList<int> triangles;
+    private NativeList<Vector2> uvs;
 
     // Water rendering lists
-    private List<Vector3> waterVertices = new List<Vector3>(2048);
-    private List<int> waterTriangles = new List<int>(3072);
-    private List<Vector2> waterUvs = new List<Vector2>(2048);
-    private List<Color> waterColors = new List<Color>(2048);
-    private int waterVertexIndex = 0;
+    private NativeList<Vector3> waterVertices;
+    private NativeList<int> waterTriangles;
+    private NativeList<Vector2> waterUvs;
+    private NativeList<Color> waterColors;
 
     private MeshFilter waterMeshFilter;
     private MeshRenderer waterMeshRenderer;
 
-    // Foliage (flowers, etc.) rendering lists — separate child mesh, alpha-cutout
-    private List<Vector3> foliageVertices  = new List<Vector3>(2048);
-    private List<int>     foliageTriangles = new List<int>(3072);
-    private List<Vector2> foliageUvs       = new List<Vector2>(2048);
-    private List<Color>   foliageColors    = new List<Color>(2048);
-    private int foliageVertexIndex = 0;
+    // Foliage (flowers, etc.) rendering lists â€” separate child mesh, alpha-cutout
+    private NativeList<Vector3> foliageVertices;
+    private NativeList<int>     foliageTriangles;
+    private NativeList<Vector2> foliageUvs;
+    private NativeList<Color>   foliageColors;
 
     private MeshFilter   foliageMeshFilter;
     private MeshRenderer foliageMeshRenderer;
     private MeshCollider foliageMeshCollider;
 
     // Foliage solid (leaves, solid custom blocks) collider lists
-    private List<Vector3> foliageSolidVertices = new List<Vector3>(1024);
-    private List<int>     foliageSolidTriangles = new List<int>(1536);
-    private int           foliageSolidVertexIndex = 0;
+    private NativeList<Vector3> foliageSolidVertices;
+    private NativeList<int>     foliageSolidTriangles;
     private MeshCollider  foliageSolidCollider;
 
-    // Glass rendering lists — separate child mesh, ZWrite On + CullBack to fix back-face bleed
-    private List<Vector3> glassVertices  = new List<Vector3>(1024);
-    private List<int>     glassTriangles = new List<int>(1536);
-    private List<Vector2> glassUvs       = new List<Vector2>(1024);
-    private int glassVertexIndex = 0;
+    // Glass rendering lists â€” separate child mesh, ZWrite On + CullBack to fix back-face bleed
+    private NativeList<Vector3> glassVertices;
+    private NativeList<int>     glassTriangles;
+    private NativeList<Vector2> glassUvs;
 
     private MeshFilter   glassMeshFilter;
     private MeshRenderer glassMeshRenderer;
@@ -105,6 +103,8 @@ public class Chunk : MonoBehaviour
         meshCollider = GetComponent<MeshCollider>();
         meshRenderer = GetComponent<MeshRenderer>();
         meshRenderer.material = mat;
+
+        EnsureNativeListsCreated();
 
         PopulateVoxelMap();
 
@@ -133,6 +133,65 @@ public class Chunk : MonoBehaviour
         }
 
         ClearNeighborReferences();
+
+        // Wait for any in-flight mesh job to finish before disposing native memory
+        if (isUpdating)
+        {
+            _meshJobHandle.Complete();
+        }
+
+
+        if (voxelMap.IsCreated) voxelMap.Dispose();
+
+        DisposeNativeLists();
+    }
+
+    private void EnsureNativeListsCreated()
+    {
+        if (!vertices.IsCreated) vertices = new NativeList<Vector3>(4096, Allocator.Persistent);
+        if (!triangles.IsCreated) triangles = new NativeList<int>(6144, Allocator.Persistent);
+        if (!uvs.IsCreated) uvs = new NativeList<Vector2>(4096, Allocator.Persistent);
+
+        if (!waterVertices.IsCreated) waterVertices = new NativeList<Vector3>(2048, Allocator.Persistent);
+        if (!waterTriangles.IsCreated) waterTriangles = new NativeList<int>(3072, Allocator.Persistent);
+        if (!waterUvs.IsCreated) waterUvs = new NativeList<Vector2>(2048, Allocator.Persistent);
+        if (!waterColors.IsCreated) waterColors = new NativeList<Color>(2048, Allocator.Persistent);
+
+        if (!foliageVertices.IsCreated) foliageVertices = new NativeList<Vector3>(2048, Allocator.Persistent);
+        if (!foliageTriangles.IsCreated) foliageTriangles = new NativeList<int>(3072, Allocator.Persistent);
+        if (!foliageUvs.IsCreated) foliageUvs = new NativeList<Vector2>(2048, Allocator.Persistent);
+        if (!foliageColors.IsCreated) foliageColors = new NativeList<Color>(2048, Allocator.Persistent);
+
+        if (!foliageSolidVertices.IsCreated) foliageSolidVertices = new NativeList<Vector3>(1024, Allocator.Persistent);
+        if (!foliageSolidTriangles.IsCreated) foliageSolidTriangles = new NativeList<int>(1536, Allocator.Persistent);
+
+        if (!glassVertices.IsCreated) glassVertices = new NativeList<Vector3>(1024, Allocator.Persistent);
+        if (!glassTriangles.IsCreated) glassTriangles = new NativeList<int>(1536, Allocator.Persistent);
+        if (!glassUvs.IsCreated) glassUvs = new NativeList<Vector2>(1024, Allocator.Persistent);
+    }
+
+    private void DisposeNativeLists()
+    {
+        if (vertices.IsCreated) vertices.Dispose();
+        if (triangles.IsCreated) triangles.Dispose();
+        if (uvs.IsCreated) uvs.Dispose();
+
+        if (waterVertices.IsCreated) waterVertices.Dispose();
+        if (waterTriangles.IsCreated) waterTriangles.Dispose();
+        if (waterUvs.IsCreated) waterUvs.Dispose();
+        if (waterColors.IsCreated) waterColors.Dispose();
+
+        if (foliageVertices.IsCreated) foliageVertices.Dispose();
+        if (foliageTriangles.IsCreated) foliageTriangles.Dispose();
+        if (foliageUvs.IsCreated) foliageUvs.Dispose();
+        if (foliageColors.IsCreated) foliageColors.Dispose();
+
+        if (foliageSolidVertices.IsCreated) foliageSolidVertices.Dispose();
+        if (foliageSolidTriangles.IsCreated) foliageSolidTriangles.Dispose();
+
+        if (glassVertices.IsCreated) glassVertices.Dispose();
+        if (glassTriangles.IsCreated) glassTriangles.Dispose();
+        if (glassUvs.IsCreated) glassUvs.Dispose();
     }
 
     private void ResolveNeighbors()
@@ -176,54 +235,6 @@ public class Chunk : MonoBehaviour
                 }
             }
         }
-    }
-
-    private byte GetVoxelFromNeighborOrWorld(int x, int y, int z)
-    {
-        byte[] currentMap = (threadVoxelMap != null) ? threadVoxelMap : voxelMap;
-
-        if (x >= 0 && x < VoxelData.ChunkWidth && y >= 0 && y < VoxelData.ChunkHeight && z >= 0 && z < VoxelData.ChunkWidth)
-        {
-            return currentMap[VoxelData.GetFlatIndex(x, y, z)];
-        }
-
-        if (y < 0 || y >= VoxelData.ChunkHeight)
-        {
-            return 0;
-        }
-
-        byte[] targetMap = currentMap;
-        int targetX = x;
-        int targetZ = z;
-
-        if (x < 0)
-        {
-            targetMap = (threadWestMap != null) ? threadWestMap : (neighborWest != null ? neighborWest.voxelMap : null);
-            targetX += VoxelData.ChunkWidth;
-        }
-        else if (x >= VoxelData.ChunkWidth)
-        {
-            targetMap = (threadEastMap != null) ? threadEastMap : (neighborEast != null ? neighborEast.voxelMap : null);
-            targetX -= VoxelData.ChunkWidth;
-        }
-
-        if (z < 0)
-        {
-            targetMap = (threadSouthMap != null) ? threadSouthMap : (neighborSouth != null ? neighborSouth.voxelMap : null);
-            targetZ += VoxelData.ChunkWidth;
-        }
-        else if (z >= VoxelData.ChunkWidth)
-        {
-            targetMap = (threadNorthMap != null) ? threadNorthMap : (neighborNorth != null ? neighborNorth.voxelMap : null);
-            targetZ -= VoxelData.ChunkWidth;
-        }
-
-        if (targetMap != null)
-        {
-            return targetMap[VoxelData.GetFlatIndex(targetX, y, targetZ)];
-        }
-
-        return 0;
     }
 
     public void SetRenderersEnabled(bool enabled)
@@ -323,9 +334,7 @@ public class Chunk : MonoBehaviour
     void PopulateVoxelMap()
     {
         int elementCount = VoxelData.ChunkWidth * VoxelData.ChunkHeight * VoxelData.ChunkWidth;
-        voxelMap = new byte[elementCount];
-
-        NativeArray<byte> flatVoxelMap = new NativeArray<byte>(elementCount, Allocator.TempJob);
+        _voxelMap = new NativeArray<byte>(elementCount, Allocator.Persistent);
 
         PopulateVoxelMapJob job = new PopulateVoxelMapJob
         {
@@ -334,22 +343,11 @@ public class Chunk : MonoBehaviour
             WorldSeedOffsetZ = SaveLoadManager.worldSeedOffsetZ,
             ChunkWidth = VoxelData.ChunkWidth,
             ChunkHeight = VoxelData.ChunkHeight,
-            VoxelMapOut = flatVoxelMap
+            VoxelMapOut = _voxelMap,
+            Modifications = SaveLoadManager.Instance != null ? SaveLoadManager.Instance.NativeModifications : default
         };
 
-        JobHandle handle = job.Schedule();
-        handle.Complete();
-
-        // Copy back to managed voxelMap array in a single blit
-        flatVoxelMap.CopyTo(voxelMap);
-
-        flatVoxelMap.Dispose();
-
-        if (SaveLoadManager.Instance != null)
-        {
-            SaveLoadManager.Instance.ApplyChunkModifications(chunkPos, voxelMap);
-        }
-
+        job.Run();
         RecalculateMaxVoxelHeight();
     }
 
@@ -363,6 +361,8 @@ public class Chunk : MonoBehaviour
         public int ChunkHeight;
 
         public NativeArray<byte> VoxelMapOut;
+        [Unity.Collections.ReadOnly]
+        public Unity.Collections.NativeParallelHashMap<Vector3Int, byte> Modifications;
 
         private float Noise2D(float x, float y)
         {
@@ -866,6 +866,29 @@ public class Chunk : MonoBehaviour
                         VoxelMapOut[GetFlatIndex(x, surfaceY + 1, z)] = (byte)logID;
                 }
             }
+
+            // Apply loaded/recorded modifications
+            if (Modifications.IsCreated)
+            {
+                int startX = (int)math.floor(ChunkPos.x * ChunkWidth);
+                int startZ = (int)math.floor(ChunkPos.y * ChunkWidth);
+
+                for (int x = 0; x < ChunkWidth; x++)
+                {
+                    for (int z = 0; z < ChunkWidth; z++)
+                    {
+                        for (int y = 0; y < ChunkHeight; y++)
+                        {
+                            Vector3Int globalPos = new Vector3Int(startX + x, y, startZ + z);
+                            if (Modifications.TryGetValue(globalPos, out byte savedID))
+                            {
+                                int flatIndex = GetFlatIndex(x, y, z);
+                                VoxelMapOut[flatIndex] = savedID;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -874,7 +897,7 @@ public class Chunk : MonoBehaviour
         if (IsVoxelInChunk(x, y, z))
         {
             int flatIndex = VoxelData.GetFlatIndex(x, y, z);
-            voxelMap[flatIndex] = newID;
+            _voxelMap[flatIndex] = newID;
             RecalculateMaxVoxelHeight();
             UpdateChunk();
         }
@@ -905,123 +928,425 @@ public class Chunk : MonoBehaviour
     }
 
 
+    private void Update()
+    {
+        if (isUpdating && _meshJobHandle.IsCompleted)
+        {
+            float jobEndTime = Time.realtimeSinceStartup;
+            float jobDurationMs = (jobEndTime - _updateStartTime) * 1000f;
+
+            _meshJobHandle.Complete();
+            RecalculateMaxVoxelHeight();
+
+            float mainThreadStartTime = Time.realtimeSinceStartup;
+            CreateMesh();
+            float mainThreadEndTime = Time.realtimeSinceStartup;
+            float mainThreadDurationMs = (mainThreadEndTime - mainThreadStartTime) * 1000f;
+
+            isUpdating = false;
+
+            if (enableProfilingLogs)
+            {
+                Debug.Log($"[Profiler] Async Chunk ({chunkPos.x}, {chunkPos.y}) Rebuilt. Job Duration: {jobDurationMs:F2} ms, Main-Thread CreateMesh: {mainThreadDurationMs:F2} ms.");
+            }
+
+            if (needsReupdate)
+            {
+                UpdateChunk();
+            }
+        }
+    }
+
     public void UpdateChunk()
     {
         if (isUpdating) { needsReupdate = true; return; }
 
+        _updateStartTime = Time.realtimeSinceStartup;
         isUpdating    = true;
         needsReupdate = false;
         currentUpdateVersion++;
-        int myVersion = currentUpdateVersion;
 
         chunkWorldPos = transform.position;
-        cachedVehicles = VehicleController.GetCachedVehicles();
-        cachedBurningFurnaces = FurnaceManager.Instance != null ? FurnaceManager.GetBurningFurnaces() : null;
-        cachedFurnaceFacings = FurnaceManager.Instance != null ? FurnaceManager.GetFurnaceFacings() : null;
-
-        threadVoxelMap = (byte[])voxelMap.Clone();
-        threadWestMap  = neighborWest  != null ? neighborWest.voxelMap  : null;
-        threadEastMap  = neighborEast  != null ? neighborEast.voxelMap  : null;
-        threadSouthMap = neighborSouth != null ? neighborSouth.voxelMap : null;
-        threadNorthMap = neighborNorth != null ? neighborNorth.voxelMap : null;
-        int currentMaxHeight = maxVoxelHeight;
         _isDirty = false;
 
-        // ClearMeshData allocates FRESH list objects, so the background thread
-        // writes to its own private collections — no shared-list race condition.
+        // Reset mesh list capacities and clear them
         ClearMeshData();
 
-        activeTask = System.Threading.Tasks.Task.Run(() =>
+        // Gather furnaces in this chunk
+        var activeFurnaces = new List<UnmanagedFurnaceData>();
+        var burning = FurnaceManager.Instance != null ? FurnaceManager.GetBurningFurnaces() : null;
+        var facings = FurnaceManager.Instance != null ? FurnaceManager.GetFurnaceFacings() : null;
+        
+        if (burning != null)
         {
-            try
+            foreach (var worldPos in burning)
             {
-                int scanHeight = Mathf.Min(VoxelData.ChunkHeight, currentMaxHeight + 1);
-                for (int y = 0; y < scanHeight; y++)
-                for (int x = 0; x < VoxelData.ChunkWidth; x++)
-                for (int z = 0; z < VoxelData.ChunkWidth; z++)
+                Vector3Int localPos = worldPos - Vector3Int.FloorToInt(chunkWorldPos);
+                if (localPos.x >= 0 && localPos.x < VoxelData.ChunkWidth &&
+                    localPos.y >= 0 && localPos.y < VoxelData.ChunkHeight &&
+                    localPos.z >= 0 && localPos.z < VoxelData.ChunkWidth)
                 {
-                    byte val = threadVoxelMap[VoxelData.GetFlatIndex(x, y, z)];
-                    if (val != 0) UpdateVoxelMeshData(new Vector3(x, y, z), val);
+                    int facing = -1;
+                    if (facings != null) facings.TryGetValue(worldPos, out facing);
+                    activeFurnaces.Add(new UnmanagedFurnaceData
+                    {
+                        localPos = new int3(localPos.x, localPos.y, localPos.z),
+                        isLit = true,
+                        facing = facing
+                    });
                 }
             }
-            catch (System.Exception ex) { Debug.LogError($"[Chunk] UpdateChunk thread failed: {ex}"); }
-        });
-
-        activeTask.ContinueWith(t =>
+        }
+        if (facings != null)
         {
-            if (this == null) return;
-            if (myVersion != currentUpdateVersion) { isUpdating = false; return; }
+            foreach (var kvp in facings)
+            {
+                var worldPos = kvp.Key;
+                Vector3Int localPos = worldPos - Vector3Int.FloorToInt(chunkWorldPos);
+                if (localPos.x >= 0 && localPos.x < VoxelData.ChunkWidth &&
+                    localPos.y >= 0 && localPos.y < VoxelData.ChunkHeight &&
+                    localPos.z >= 0 && localPos.z < VoxelData.ChunkWidth)
+                {
+                    bool alreadyAdded = false;
+                    for (int i = 0; i < activeFurnaces.Count; i++)
+                    {
+                        if (activeFurnaces[i].localPos.x == localPos.x &&
+                            activeFurnaces[i].localPos.y == localPos.y &&
+                            activeFurnaces[i].localPos.z == localPos.z)
+                        {
+                            alreadyAdded = true;
+                            break;
+                        }
+                    }
+                    if (!alreadyAdded)
+                    {
+                        activeFurnaces.Add(new UnmanagedFurnaceData
+                        {
+                            localPos = new int3(localPos.x, localPos.y, localPos.z),
+                            isLit = false,
+                            facing = kvp.Value
+                        });
+                    }
+                }
+            }
+        }
 
-            threadVoxelMap = null; threadWestMap = null; threadEastMap = null;
-            threadSouthMap = null; threadNorthMap = null;
-            cachedVehicles = null; cachedBurningFurnaces = null; cachedFurnaceFacings = null;
+        var furnaceDataArray = new NativeArray<UnmanagedFurnaceData>(activeFurnaces.Count, Allocator.TempJob);
+        for (int i = 0; i < activeFurnaces.Count; i++) furnaceDataArray[i] = activeFurnaces[i];
 
-            CreateMesh();
-            isUpdating = false;
-            if (needsReupdate) UpdateChunk();
-        }, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
+        // Gather vehicles for water suppression
+        var activeVehicles = VehicleController.GetCachedVehicles();
+        int totalBounds = 0;
+        for (int i = 0; i < activeVehicles.Count; i++)
+        {
+            if (activeVehicles[i].dryFilters != null)
+                totalBounds += activeVehicles[i].dryFilters.Count;
+        }
+
+        var vehicleFilters = new NativeArray<Bounds>(totalBounds, Allocator.TempJob);
+        var unmanagedVehicles = new NativeArray<UnmanagedVehicleData>(activeVehicles.Count, Allocator.TempJob);
+
+        int boundIndex = 0;
+        for (int i = 0; i < activeVehicles.Count; i++)
+        {
+            var av = activeVehicles[i];
+            int start = boundIndex;
+            int count = 0;
+            if (av.dryFilters != null)
+            {
+                for (int j = 0; j < av.dryFilters.Count; j++)
+                {
+                    vehicleFilters[boundIndex++] = av.dryFilters[j];
+                    count++;
+                }
+            }
+            unmanagedVehicles[i] = new UnmanagedVehicleData
+            {
+                position = av.position,
+                inverseRotation = av.inverseRotation,
+                filterStart = start,
+                filterCount = count
+            };
+        }
+
+        var emptyMap = new NativeArray<byte>(0, Allocator.TempJob);
+
+        var job = new MeshGenerationJob
+        {
+            chunkWorldPos = chunkWorldPos,
+            scanHeight = VoxelData.ChunkHeight,
+            totalTilesCount = BlockRegistry.TotalTilesCount,
+            waterOnly = false,
+
+            VoxelMap = voxelMap,
+            WestMap = (neighborWest != null && neighborWest.voxelMap.IsCreated) ? neighborWest.voxelMap : emptyMap,
+            EastMap = (neighborEast != null && neighborEast.voxelMap.IsCreated) ? neighborEast.voxelMap : emptyMap,
+            SouthMap = (neighborSouth != null && neighborSouth.voxelMap.IsCreated) ? neighborSouth.voxelMap : emptyMap,
+            NorthMap = (neighborNorth != null && neighborNorth.voxelMap.IsCreated) ? neighborNorth.voxelMap : emptyMap,
+
+            NativeDefinitions = BlockRegistry.NativeDefinitions,
+            CustomMeshVertices = BlockRegistry.CustomMeshVertices,
+            CustomMeshIndices = BlockRegistry.CustomMeshIndices,
+            CustomMeshUVs = BlockRegistry.CustomMeshUVs,
+
+            VoxelVerts = BlockRegistry.VoxelVerts,
+            VoxelTris = BlockRegistry.VoxelTris,
+            FaceChecks = BlockRegistry.FaceChecks,
+
+            Furnaces = furnaceDataArray,
+            Vehicles = unmanagedVehicles,
+            VehicleFilters = vehicleFilters,
+
+            vertices = vertices,
+            triangles = triangles,
+            uvs = uvs,
+
+            waterVertices = waterVertices,
+            waterTriangles = waterTriangles,
+            waterUvs = waterUvs,
+            waterColors = waterColors,
+
+            foliageVertices = foliageVertices,
+            foliageTriangles = foliageTriangles,
+            foliageUvs = foliageUvs,
+            foliageColors = foliageColors,
+
+            foliageSolidVertices = foliageSolidVertices,
+            foliageSolidTriangles = foliageSolidTriangles,
+
+            glassVertices = glassVertices,
+            glassTriangles = glassTriangles,
+            glassUvs = glassUvs
+        };
+
+        _meshJobHandle = job.Schedule();
+
+        // Schedule NativeArray disposals automatically when job completes
+        furnaceDataArray.Dispose(_meshJobHandle);
+        unmanagedVehicles.Dispose(_meshJobHandle);
+        vehicleFilters.Dispose(_meshJobHandle);
+        emptyMap.Dispose(_meshJobHandle);
     }
 
     public void UpdateChunkSync()
     {
+        float syncStartTime = Time.realtimeSinceStartup;
         currentUpdateVersion++;
-        if (activeTask != null && !activeTask.IsCompleted)
+        if (isUpdating)
         {
-            try { activeTask.Wait(); }
-            catch { /* failure already logged */ }
+            _meshJobHandle.Complete();
+            isUpdating = false;
         }
 
-        isUpdating = false; needsReupdate = false;
-        chunkWorldPos = transform.position;
-        threadVoxelMap = null; threadWestMap = null; threadEastMap = null;
-        threadSouthMap = null; threadNorthMap = null;
-        cachedVehicles = null; cachedBurningFurnaces = null; cachedFurnaceFacings = null;
 
-        // Fresh lists — no shared state with any previous async task
+
+        isUpdating = false;
+        needsReupdate = false;
+        chunkWorldPos = transform.position;
+
         ClearMeshData();
 
-        int scanHeight = Mathf.Min(VoxelData.ChunkHeight, maxVoxelHeight + 1);
-        for (int y = 0; y < scanHeight; y++)
-        for (int x = 0; x < VoxelData.ChunkWidth; x++)
-        for (int z = 0; z < VoxelData.ChunkWidth; z++)
+        // Gather furnaces in this chunk
+        var activeFurnaces = new List<UnmanagedFurnaceData>();
+        var burning = FurnaceManager.Instance != null ? FurnaceManager.GetBurningFurnaces() : null;
+        var facings = FurnaceManager.Instance != null ? FurnaceManager.GetFurnaceFacings() : null;
+        
+        if (burning != null)
         {
-            byte val = voxelMap[VoxelData.GetFlatIndex(x, y, z)];
-            if (val != 0) UpdateVoxelMeshData(new Vector3(x, y, z), val);
+            foreach (var worldPos in burning)
+            {
+                Vector3Int localPos = worldPos - Vector3Int.FloorToInt(chunkWorldPos);
+                if (localPos.x >= 0 && localPos.x < VoxelData.ChunkWidth &&
+                    localPos.y >= 0 && localPos.y < VoxelData.ChunkHeight &&
+                    localPos.z >= 0 && localPos.z < VoxelData.ChunkWidth)
+                {
+                    int facing = -1;
+                    if (facings != null) facings.TryGetValue(worldPos, out facing);
+                    activeFurnaces.Add(new UnmanagedFurnaceData
+                    {
+                        localPos = new int3(localPos.x, localPos.y, localPos.z),
+                        isLit = true,
+                        facing = facing
+                    });
+                }
+            }
+        }
+        if (facings != null)
+        {
+            foreach (var kvp in facings)
+            {
+                var worldPos = kvp.Key;
+                Vector3Int localPos = worldPos - Vector3Int.FloorToInt(chunkWorldPos);
+                if (localPos.x >= 0 && localPos.x < VoxelData.ChunkWidth &&
+                    localPos.y >= 0 && localPos.y < VoxelData.ChunkHeight &&
+                    localPos.z >= 0 && localPos.z < VoxelData.ChunkWidth)
+                {
+                    bool alreadyAdded = false;
+                    for (int i = 0; i < activeFurnaces.Count; i++)
+                    {
+                        if (activeFurnaces[i].localPos.x == localPos.x &&
+                            activeFurnaces[i].localPos.y == localPos.y &&
+                            activeFurnaces[i].localPos.z == localPos.z)
+                        {
+                            alreadyAdded = true;
+                            break;
+                        }
+                    }
+                    if (!alreadyAdded)
+                    {
+                        activeFurnaces.Add(new UnmanagedFurnaceData
+                        {
+                            localPos = new int3(localPos.x, localPos.y, localPos.z),
+                            isLit = false,
+                            facing = kvp.Value
+                        });
+                    }
+                }
+            }
         }
 
+        var furnaceDataArray = new NativeArray<UnmanagedFurnaceData>(activeFurnaces.Count, Allocator.TempJob);
+        for (int i = 0; i < activeFurnaces.Count; i++) furnaceDataArray[i] = activeFurnaces[i];
+
+        // Gather vehicles
+        var activeVehicles = VehicleController.GetCachedVehicles();
+        int totalBounds = 0;
+        for (int i = 0; i < activeVehicles.Count; i++)
+        {
+            if (activeVehicles[i].dryFilters != null)
+                totalBounds += activeVehicles[i].dryFilters.Count;
+        }
+
+        var vehicleFilters = new NativeArray<Bounds>(totalBounds, Allocator.TempJob);
+        var unmanagedVehicles = new NativeArray<UnmanagedVehicleData>(activeVehicles.Count, Allocator.TempJob);
+
+        int boundIndex = 0;
+        for (int i = 0; i < activeVehicles.Count; i++)
+        {
+            var av = activeVehicles[i];
+            int start = boundIndex;
+            int count = 0;
+            if (av.dryFilters != null)
+            {
+                for (int j = 0; j < av.dryFilters.Count; j++)
+                {
+                    vehicleFilters[boundIndex++] = av.dryFilters[j];
+                    count++;
+                }
+            }
+            unmanagedVehicles[i] = new UnmanagedVehicleData
+            {
+                position = av.position,
+                inverseRotation = av.inverseRotation,
+                filterStart = start,
+                filterCount = count
+            };
+        }
+
+        var emptyMap = new NativeArray<byte>(0, Allocator.TempJob);
+
+        var job = new MeshGenerationJob
+        {
+            chunkWorldPos = chunkWorldPos,
+            scanHeight = VoxelData.ChunkHeight,
+            totalTilesCount = BlockRegistry.TotalTilesCount,
+            waterOnly = false,
+
+            VoxelMap = voxelMap,
+            WestMap = (neighborWest != null && neighborWest.voxelMap.IsCreated) ? neighborWest.voxelMap : emptyMap,
+            EastMap = (neighborEast != null && neighborEast.voxelMap.IsCreated) ? neighborEast.voxelMap : emptyMap,
+            SouthMap = (neighborSouth != null && neighborSouth.voxelMap.IsCreated) ? neighborSouth.voxelMap : emptyMap,
+            NorthMap = (neighborNorth != null && neighborNorth.voxelMap.IsCreated) ? neighborNorth.voxelMap : emptyMap,
+
+            NativeDefinitions = BlockRegistry.NativeDefinitions,
+            CustomMeshVertices = BlockRegistry.CustomMeshVertices,
+            CustomMeshIndices = BlockRegistry.CustomMeshIndices,
+            CustomMeshUVs = BlockRegistry.CustomMeshUVs,
+
+            VoxelVerts = BlockRegistry.VoxelVerts,
+            VoxelTris = BlockRegistry.VoxelTris,
+            FaceChecks = BlockRegistry.FaceChecks,
+
+            Furnaces = furnaceDataArray,
+            Vehicles = unmanagedVehicles,
+            VehicleFilters = vehicleFilters,
+
+            vertices = vertices,
+            triangles = triangles,
+            uvs = uvs,
+
+            waterVertices = waterVertices,
+            waterTriangles = waterTriangles,
+            waterUvs = waterUvs,
+            waterColors = waterColors,
+
+            foliageVertices = foliageVertices,
+            foliageTriangles = foliageTriangles,
+            foliageUvs = foliageUvs,
+            foliageColors = foliageColors,
+
+            foliageSolidVertices = foliageSolidVertices,
+            foliageSolidTriangles = foliageSolidTriangles,
+
+            glassVertices = glassVertices,
+            glassTriangles = glassTriangles,
+            glassUvs = glassUvs
+        };
+
+        float jobRunStartTime = Time.realtimeSinceStartup;
+        // Run synchronously
+        job.Run();
+        float jobRunEndTime = Time.realtimeSinceStartup;
+
+        furnaceDataArray.Dispose();
+        unmanagedVehicles.Dispose();
+        vehicleFilters.Dispose();
+        emptyMap.Dispose();
+
+        RecalculateMaxVoxelHeight();
+
+        float mainThreadStartTime = Time.realtimeSinceStartup;
         CreateMesh();
-        _isDirty = false;
+        float mainThreadEndTime = Time.realtimeSinceStartup;
+
+        if (enableProfilingLogs)
+        {
+            float totalDurationMs = (mainThreadEndTime - syncStartTime) * 1000f;
+            float jobDurationMs = (jobRunEndTime - jobRunStartTime) * 1000f;
+            float meshDurationMs = (mainThreadEndTime - mainThreadStartTime) * 1000f;
+            Debug.Log($"[Profiler] Sync Chunk ({chunkPos.x}, {chunkPos.y}) Rebuilt. Total time: {totalDurationMs:F2} ms (Job: {jobDurationMs:F2} ms, CreateMesh: {meshDurationMs:F2} ms).");
+        }
     }
 
     void ClearMeshData()
     {
-        // Allocate NEW list objects each time so async builds always write
-        // to their own private collections — eliminates cross-thread list corruption.
+        // Clear NativeLists â€” retains their allocated capacity, avoiding per-build GC pressure.
+        // EnsureNativeListsCreated() is called in Initialize(), so lists are always valid here.
         vertexIndex  = 0;
-        vertices     = new List<Vector3>(4096);
-        triangles    = new List<int>(6144);
-        uvs          = new List<Vector2>(4096);
+        vertices.Clear();
+        triangles.Clear();
+        uvs.Clear();
 
         waterVertexIndex = 0;
-        waterVertices    = new List<Vector3>(2048);
-        waterTriangles   = new List<int>(3072);
-        waterUvs         = new List<Vector2>(2048);
-        waterColors      = new List<Color>(2048);
+        waterVertices.Clear();
+        waterTriangles.Clear();
+        waterUvs.Clear();
+        waterColors.Clear();
 
         foliageVertexIndex = 0;
-        foliageVertices    = new List<Vector3>(2048);
-        foliageTriangles   = new List<int>(3072);
-        foliageUvs         = new List<Vector2>(2048);
-        foliageColors      = new List<Color>(2048);
+        foliageVertices.Clear();
+        foliageTriangles.Clear();
+        foliageUvs.Clear();
+        foliageColors.Clear();
 
         foliageSolidVertexIndex = 0;
-        foliageSolidVertices    = new List<Vector3>(1024);
-        foliageSolidTriangles   = new List<int>(1536);
+        foliageSolidVertices.Clear();
+        foliageSolidTriangles.Clear();
 
         glassVertexIndex = 0;
-        glassVertices    = new List<Vector3>(1024);
-        glassTriangles   = new List<int>(1536);
-        glassUvs         = new List<Vector2>(1024);
+        glassVertices.Clear();
+        glassTriangles.Clear();
+        glassUvs.Clear();
     }
 
     void EnsureWaterChild()
@@ -1194,852 +1519,6 @@ public class Chunk : MonoBehaviour
         foliageSolidCollider.isTrigger = false;
     }
 
-    int GetWaterDepth(int x, int y, int z)
-    {
-        byte[] currentMap = (threadVoxelMap != null) ? threadVoxelMap : voxelMap;
-        int depth = 0;
-        for (int dy = y; dy >= 0; dy--)
-        {
-            byte block = currentMap[VoxelData.GetFlatIndex(x, dy, z)];
-            if (block == 7) // Water
-            {
-                depth++;
-            }
-            else if (block != 0) // Solid block
-            {
-                break;
-            }
-        }
-        return Mathf.Max(1, depth);
-    }
-
-    void UpdateVoxelMeshData(Vector3 pos, byte blockType)
-    {
-        byte baseStairID = 0;
-        if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42)
-        {
-            baseStairID = 38;
-        }
-        else if (blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45)
-        {
-            baseStairID = 39;
-        }
-
-        BlockDefinition def = null;
-        if (baseStairID != 0)
-        {
-            def = BlockRegistry.GetDefinition(baseStairID);
-        }
-        else
-        {
-            def = BlockRegistry.GetDefinition(blockType);
-        }
-
-
-
-        if (blockType == 38 || blockType == 46)
-        {
-            Debug.Log($"[Chunk] UpdateVoxelMeshData: blockType={blockType}, def={(def != null ? def.blockName : "null")}, customMesh={(def != null && def.customMesh != null ? "assigned" : "null")}");
-        }
-
-        if (def != null && def.customMesh != null)
-        {
-            if (baseStairID != 0)
-            {
-                AddCustomStairMeshBlock(pos, def, blockType);
-            }
-            else
-            {
-                AddCustomMeshBlock(pos, def);
-            }
-            return;
-        }
-
-        // ── Flower: render as two crossed quads (X-billboard) ──────────────────
-        if (blockType == 9 || blockType == 10 || blockType == 11 || blockType == 13 || blockType == 14)
-        {
-            AddFlowerQuads(pos, blockType);
-            return;
-        }
-
-        // ── Leaves: render as solid faces but on the foliage (alpha-cutout) mesh ─
-        if (blockType == 12 || blockType == 52 || blockType == 54)
-        {
-            AddLeavesBlock(pos, blockType);
-            return;
-        }
-
-        // ── Glass (ID 35): render in the solid mesh with face-culling (has collider, player can't pass through) ─
-        if (blockType == 35)
-        {
-            AddGlassToSolidMesh(pos);
-            return;
-        }
-
-        // ── Propeller (ID 22) ──────────────────
-        if (blockType == 22)
-        {
-            AddPropellerBlock(pos);
-            return;
-        }
-
-        // ── Large Propeller (ID 26) ──────────────────
-        if (blockType == 26)
-        {
-            AddLargePropellerBlock(pos);
-            return;
-        }
-
-        // ── Large Propeller Helper (ID 27) ──────────────────
-        if (blockType == 27)
-        {
-            return;
-        }
-
-        // ── Wooden Stairs (IDs 38, 40, 41, 42) & Stone Stairs (IDs 39, 43, 44, 45) ──────────────────
-        if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42 ||
-            blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45)
-        {
-            AddStairsBlock(pos, blockType);
-            return;
-        }
-
-        // ── Wooden Slab (ID 46) & Stone Slab (ID 47) ──────────────────
-        if (blockType == 46 || blockType == 47)
-        {
-            AddSlabBlock(pos, blockType);
-            return;
-        }
-
-        bool isWater = (blockType == 7);
-        byte uvBlockType = blockType;
-
-        // ── Dry interior: skip water mesh if this voxel sits inside any active vehicle hull ──
-        if (isWater)
-        {
-            // Convert chunk-local voxel position to world space (centre of the voxel)
-            Vector3 center = chunkWorldPos + pos + new Vector3(0.5f, 0.5f, 0.5f);
-            // Check center and the 4 horizontal corners of the water block.
-            // If any of these points are inside a vehicle's dry zone, suppress the voxel.
-            bool insideVehicle = false;
-            if (threadVoxelMap != null)
-            {
-                insideVehicle = VehicleController.IsWorldPosInsideVehicleCached(center, cachedVehicles) ||
-                                VehicleController.IsWorldPosInsideVehicleCached(center + new Vector3(-0.45f, 0f, -0.45f), cachedVehicles) ||
-                                VehicleController.IsWorldPosInsideVehicleCached(center + new Vector3(0.45f, 0f, -0.45f), cachedVehicles) ||
-                                VehicleController.IsWorldPosInsideVehicleCached(center + new Vector3(-0.45f, 0f, 0.45f), cachedVehicles) ||
-                                VehicleController.IsWorldPosInsideVehicleCached(center + new Vector3(0.45f, 0f, 0.45f), cachedVehicles);
-            }
-            else
-            {
-                insideVehicle = VehicleController.IsWorldPosInsideVehicle(center) ||
-                                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(-0.45f, 0f, -0.45f)) ||
-                                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(0.45f, 0f, -0.45f)) ||
-                                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(-0.45f, 0f, 0.45f)) ||
-                                VehicleController.IsWorldPosInsideVehicle(center + new Vector3(0.45f, 0f, 0.45f));
-            }
-
-            if (insideVehicle)
-            {
-                return;
-            }
-        }
-
-        int depth = 1;
-        bool isWaterSurface = false;
-        if (isWater)
-        {
-            depth = GetWaterDepth(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y), Mathf.FloorToInt(pos.z));
-            byte blockAbove = GetVoxelFromNeighborOrWorld(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y) + 1, Mathf.FloorToInt(pos.z));
-            isWaterSurface = (blockAbove != 7);
-        }
-
-        for (int p = 0; p < 6; p++)
-        {
-            if (!CheckVoxelFace(pos, p, blockType))
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    Vector3 vert = VoxelData.voxelVerts[VoxelData.voxelTris[p, i]];
-                    
-                    // Squash the top vertices down if this is the water surface
-                    if (isWater && isWaterSurface && vert.y > 0.5f)
-                    {
-                        vert.y = 0.85f; // Water surface is slightly lower
-                    }
-                    
-                    if (isWater)
-                    {
-                        waterVertices.Add(pos + vert);
-                        // Shallow water (depth 1) is transparent (low alpha); deeper water is opaque/reflective
-                        float alpha;
-                        if (depth == 1) alpha = 0.85f;
-                        else if (depth == 2) alpha = 0.92f;
-                        else if (depth == 3) alpha = 0.96f;
-                        else alpha = 0.99f;
-
-                        waterColors.Add(new Color(1f, 1f, 1f, alpha));
-                    }
-                    else
-                    {
-                        vertices.Add(pos + vert);
-                    }
-                }
-
-                // Per-face atlas UVs based on block type
-                bool isFurnaceLit = false;
-                int furnaceFacing = -1;
-                if (uvBlockType == 37)
-                {
-                    Vector3Int worldPos = new Vector3Int(
-                        Mathf.FloorToInt(chunkWorldPos.x + pos.x),
-                        Mathf.FloorToInt(chunkWorldPos.y + pos.y),
-                        Mathf.FloorToInt(chunkWorldPos.z + pos.z)
-                    );
-                    if (threadVoxelMap != null)
-                    {
-                        isFurnaceLit = cachedBurningFurnaces != null && cachedBurningFurnaces.Contains(worldPos);
-                        if (cachedFurnaceFacings != null && cachedFurnaceFacings.TryGetValue(worldPos, out int f))
-                        {
-                            furnaceFacing = f;
-                        }
-                    }
-                    else if (FurnaceManager.Instance != null)
-                    {
-                        isFurnaceLit = FurnaceManager.Instance.IsFurnaceBurning(worldPos);
-                        var fState = FurnaceManager.Instance.GetOrCreateFurnace(worldPos);
-                        if (fState != null)
-                        {
-                            furnaceFacing = fState.facingDirection;
-                        }
-                    }
-                }
-                Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, uvBlockType, isFurnaceLit, furnaceFacing);
-                if (isWater)
-                {
-                    waterUvs.AddRange(faceUVs);
-
-                    waterTriangles.Add(waterVertexIndex);
-                    waterTriangles.Add(waterVertexIndex + 1);
-                    waterTriangles.Add(waterVertexIndex + 2);
-                    waterTriangles.Add(waterVertexIndex + 2);
-                    waterTriangles.Add(waterVertexIndex + 1);
-                    waterTriangles.Add(waterVertexIndex + 3);
-
-                    waterVertexIndex += 4;
-                }
-                else
-                {
-                    uvs.AddRange(faceUVs);
-
-                    triangles.Add(vertexIndex);
-                    triangles.Add(vertexIndex + 1);
-                    triangles.Add(vertexIndex + 2);
-                    triangles.Add(vertexIndex + 2);
-                    triangles.Add(vertexIndex + 1);
-                    triangles.Add(vertexIndex + 3);
-
-                    vertexIndex += 4;
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Emits two crossed quads into the foliage mesh lists for a flower at <paramref name="pos"/>.
-    /// Each quad spans the full block cell. Two quads at 90° give the classic SurvivalCraft X look.
-    /// </summary>
-    void AddFlowerQuads(Vector3 pos, byte blockType)
-    {
-        Vector2[] uvs9 = GrassTextureGenerator.GetBlockUVs(0, blockType); // flower tile UVs
-
-        // Two diagonal crossed quads — SurvivalCraft X-billboard style
-        Vector3[][] quads = new Vector3[2][];
-        quads[0] = new Vector3[]
-        {
-            pos + new Vector3(0.05f, 0f, 0.05f),
-            pos + new Vector3(0.05f, 1f, 0.05f),
-            pos + new Vector3(0.95f, 0f, 0.95f),
-            pos + new Vector3(0.95f, 1f, 0.95f),
-        };
-        quads[1] = new Vector3[]
-        {
-            pos + new Vector3(0.95f, 0f, 0.05f),
-            pos + new Vector3(0.95f, 1f, 0.05f),
-            pos + new Vector3(0.05f, 0f, 0.95f),
-            pos + new Vector3(0.05f, 1f, 0.95f),
-        };
-
-        foreach (var quad in quads)
-        {
-            // Front winding
-            foliageVertices.AddRange(quad);
-            foliageUvs.AddRange(uvs9);
-            for (int i = 0; i < 4; i++)
-            {
-                foliageColors.Add(Color.white);
-            }
-            foliageTriangles.Add(foliageVertexIndex);
-            foliageTriangles.Add(foliageVertexIndex + 1);
-            foliageTriangles.Add(foliageVertexIndex + 2);
-            foliageTriangles.Add(foliageVertexIndex + 2);
-            foliageTriangles.Add(foliageVertexIndex + 1);
-            foliageTriangles.Add(foliageVertexIndex + 3);
-
-            // Back winding for double-sided collision and rendering
-            foliageTriangles.Add(foliageVertexIndex + 2);
-            foliageTriangles.Add(foliageVertexIndex + 1);
-            foliageTriangles.Add(foliageVertexIndex);
-            foliageTriangles.Add(foliageVertexIndex + 3);
-            foliageTriangles.Add(foliageVertexIndex + 1);
-            foliageTriangles.Add(foliageVertexIndex + 2);
-
-            foliageVertexIndex += 4;
-        }
-    }
-
-    /// <summary>
-    /// Emits standard solid cube faces for a leaves block into the foliage
-    /// (alpha-cutout) mesh so the chunky leaf texture renders with the gap pixels
-    /// clipped out rather than opaque black squares.
-    /// </summary>
-    void AddLeavesBlock(Vector3 pos, byte blockType)
-    {
-        for (int p = 0; p < 6; p++)
-        {
-            // Cull against solid neighbours but not against other leaves / air
-            Vector3 neighborPos = pos + VoxelData.faceChecks[p];
-            int nx = Mathf.FloorToInt(neighborPos.x);
-            int ny = Mathf.FloorToInt(neighborPos.y);
-            int nz = Mathf.FloorToInt(neighborPos.z);
-
-            byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz);
-
-            // Skip face if neighbour is any leaf-type block (they all cull each other)
-            if (neighbor == 12 || neighbor == 52 || neighbor == 54) continue;
-            // Skip if neighbour is fully opaque solid (not air/water/flowers/any leaves)
-            if (neighbor != 0 && neighbor != 7 && neighbor != 9 &&
-                neighbor != 10 && neighbor != 11 &&
-                neighbor != 12 && neighbor != 52 && neighbor != 54) continue;
-
-            Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, blockType);
-
-            for (int i = 0; i < 4; i++)
-            {
-                Vector3 vert = pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, i]];
-                foliageVertices.Add(vert);
-                foliageSolidVertices.Add(vert);
-                foliageColors.Add(Color.white);
-            }
-            foliageUvs.AddRange(faceUVs);
-
-            foliageTriangles.Add(foliageVertexIndex);
-            foliageTriangles.Add(foliageVertexIndex + 1);
-            foliageTriangles.Add(foliageVertexIndex + 2);
-            foliageTriangles.Add(foliageVertexIndex + 2);
-            foliageTriangles.Add(foliageVertexIndex + 1);
-            foliageTriangles.Add(foliageVertexIndex + 3);
-            foliageVertexIndex += 4;
-
-            foliageSolidTriangles.Add(foliageSolidVertexIndex);
-            foliageSolidTriangles.Add(foliageSolidVertexIndex + 1);
-            foliageSolidTriangles.Add(foliageSolidVertexIndex + 2);
-            foliageSolidTriangles.Add(foliageSolidVertexIndex + 2);
-            foliageSolidTriangles.Add(foliageSolidVertexIndex + 1);
-            foliageSolidTriangles.Add(foliageSolidVertexIndex + 3);
-            foliageSolidVertexIndex += 4;
-        }
-    }
-
-    void AddCustomStairMeshBlock(Vector3 pos, BlockDefinition def, byte blockType)
-    {
-        if (def.cachedMeshVertices == null || def.cachedMeshTriangles == null) return;
-
-        // Determine rotation angle based on blockType orientation
-        float angle = 0f;
-        if (blockType == 40 || blockType == 43)      // North: 180 degrees
-            angle = 180f;
-        else if (blockType == 41 || blockType == 44) // West: 90 degrees
-            angle = 90f;
-        else if (blockType == 42 || blockType == 45) // East: 270 degrees
-            angle = 270f;
-
-        Quaternion rot = Quaternion.Euler(0f, angle, 0f);
-        Vector3 pivot = new Vector3(0.5f, 0f, 0.5f);
-
-        // Resolve the UV offset/scaling for the block's tile in the texture atlas
-        int tile = -1;
-        if (def.resolvedSideTile != -1) tile = def.resolvedSideTile;
-        else if (def.resolvedTopTile != -1) tile = def.resolvedTopTile;
-        else if (def.resolvedBottomTile != -1) tile = def.resolvedBottomTile;
-        else if (def.resolvedFrontTile != -1) tile = def.resolvedFrontTile;
-        
-        if (tile == -1)
-        {
-            tile = BlockRegistry.GetDefaultTileIndex(def.blockID, 1);
-        }
-        int totalCount = BlockRegistry.TotalTilesCount;
-        float u0 = tile / (float)totalCount;
-        float u1 = (tile + 1f) / (float)totalCount;
-
-        // Custom meshes can be added to solid or transparent/foliage mesh based on def.isTransparent
-        if (def.isTransparent)
-        {
-            int startVert = foliageVertexIndex;
-            for (int i = 0; i < def.cachedMeshVertices.Length; i++)
-            {
-                Vector3 localVert = def.cachedMeshVertices[i];
-                Vector3 rotatedVert = rot * (localVert - pivot) + pivot;
-                foliageVertices.Add(pos + rotatedVert);
-
-                if (def.cachedMeshUVs != null && def.cachedMeshUVs.Length > i)
-                {
-                    Vector2 origUV = def.cachedMeshUVs[i];
-                    float u = Mathf.Lerp(u0, u1, origUV.x);
-                    foliageUvs.Add(new Vector2(u, origUV.y));
-                }
-                else
-                {
-                    foliageUvs.Add(new Vector2(u0, 0f));
-                }
-                foliageColors.Add(Color.white);
-            }
-            for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
-            {
-                foliageTriangles.Add(startVert + def.cachedMeshTriangles[i]);
-            }
-            foliageVertexIndex += def.cachedMeshVertices.Length;
-
-            // If it is transparent but solid, also add to the solid foliage collider
-            if (def.isSolid)
-            {
-                int startSolidVert = foliageSolidVertexIndex;
-                for (int i = 0; i < def.cachedMeshVertices.Length; i++)
-                {
-                    Vector3 localVert = def.cachedMeshVertices[i];
-                    Vector3 rotatedVert = rot * (localVert - pivot) + pivot;
-                    foliageSolidVertices.Add(pos + rotatedVert);
-                }
-                for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
-                {
-                    foliageSolidTriangles.Add(startSolidVert + def.cachedMeshTriangles[i]);
-                }
-                foliageSolidVertexIndex += def.cachedMeshVertices.Length;
-            }
-        }
-        else
-        {
-            int startVert = vertexIndex;
-            for (int i = 0; i < def.cachedMeshVertices.Length; i++)
-            {
-                Vector3 localVert = def.cachedMeshVertices[i];
-                Vector3 rotatedVert = rot * (localVert - pivot) + pivot;
-                vertices.Add(pos + rotatedVert);
-
-                if (def.cachedMeshUVs != null && def.cachedMeshUVs.Length > i)
-                {
-                    Vector2 origUV = def.cachedMeshUVs[i];
-                    float u = Mathf.Lerp(u0, u1, origUV.x);
-                    uvs.Add(new Vector2(u, origUV.y));
-                }
-                else
-                {
-                    uvs.Add(new Vector2(u0, 0f));
-                }
-            }
-            for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
-            {
-                triangles.Add(startVert + def.cachedMeshTriangles[i]);
-            }
-            vertexIndex += def.cachedMeshVertices.Length;
-        }
-    }
-
-    void AddCustomMeshBlock(Vector3 pos, BlockDefinition def)
-    {
-        if (def.cachedMeshVertices == null || def.cachedMeshTriangles == null) return;
-
-        // Resolve the UV offset/scaling for the block's tile in the texture atlas
-        int tile = -1;
-        if (def.resolvedSideTile != -1) tile = def.resolvedSideTile;
-        else if (def.resolvedTopTile != -1) tile = def.resolvedTopTile;
-        else if (def.resolvedBottomTile != -1) tile = def.resolvedBottomTile;
-        else if (def.resolvedFrontTile != -1) tile = def.resolvedFrontTile;
-        
-        if (tile == -1)
-        {
-            tile = BlockRegistry.GetDefaultTileIndex(def.blockID, 1);
-        }
-        int totalCount = BlockRegistry.TotalTilesCount;
-        float u0 = tile / (float)totalCount;
-        float u1 = (tile + 1f) / (float)totalCount;
-
-        // Custom meshes can be added to solid or transparent/foliage mesh based on def.isTransparent
-        if (def.isTransparent)
-        {
-            int startVert = foliageVertexIndex;
-            for (int i = 0; i < def.cachedMeshVertices.Length; i++)
-            {
-                foliageVertices.Add(pos + def.cachedMeshVertices[i]);
-                if (def.cachedMeshUVs != null && def.cachedMeshUVs.Length > i)
-                {
-                    Vector2 origUV = def.cachedMeshUVs[i];
-                    float u = Mathf.Lerp(u0, u1, origUV.x);
-                    foliageUvs.Add(new Vector2(u, origUV.y));
-                }
-                else
-                {
-                    foliageUvs.Add(new Vector2(u0, 0f));
-                }
-                foliageColors.Add(Color.white);
-            }
-            for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
-            {
-                foliageTriangles.Add(startVert + def.cachedMeshTriangles[i]);
-            }
-            foliageVertexIndex += def.cachedMeshVertices.Length;
-
-            // If it is transparent but solid, also add to the solid foliage collider
-            if (def.isSolid)
-            {
-                int startSolidVert = foliageSolidVertexIndex;
-                for (int i = 0; i < def.cachedMeshVertices.Length; i++)
-                {
-                    foliageSolidVertices.Add(pos + def.cachedMeshVertices[i]);
-                }
-                for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
-                {
-                    foliageSolidTriangles.Add(startSolidVert + def.cachedMeshTriangles[i]);
-                }
-                foliageSolidVertexIndex += def.cachedMeshVertices.Length;
-            }
-        }
-        else
-        {
-            int startVert = vertexIndex;
-            for (int i = 0; i < def.cachedMeshVertices.Length; i++)
-            {
-                vertices.Add(pos + def.cachedMeshVertices[i]);
-                if (def.cachedMeshUVs != null && def.cachedMeshUVs.Length > i)
-                {
-                    Vector2 origUV = def.cachedMeshUVs[i];
-                    float u = Mathf.Lerp(u0, u1, origUV.x);
-                    uvs.Add(new Vector2(u, origUV.y));
-                }
-                else
-                {
-                    uvs.Add(new Vector2(u0, 0f));
-                }
-            }
-            for (int i = 0; i < def.cachedMeshTriangles.Length; i++)
-            {
-                triangles.Add(startVert + def.cachedMeshTriangles[i]);
-            }
-            vertexIndex += def.cachedMeshVertices.Length;
-        }
-    }
-
-    void AddStairsBlock(Vector3 pos, byte blockType)
-    {
-        // 38, 40, 41, 42 are Wooden (uses Plank ID 2), 39, 43, 44, 45 are Stone (uses Stone ID 3)
-        bool isWood = (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42);
-        byte textureBlockType = isWood ? (byte)2 : (byte)3;
-
-        // Bottom box: (0, 0, 0) to (1, 0.5, 1)
-        AddSubBox(pos, new Vector3(0f, 0f, 0f), new Vector3(1f, 0.5f, 1f), textureBlockType);
-
-        // Top box: depends on orientation
-        Vector3 topMin = Vector3.zero;
-        Vector3 topMax = Vector3.zero;
-
-        if (blockType == 38 || blockType == 39) // South: step rises to +Z (back half is solid)
-        {
-            topMin = new Vector3(0f, 0.5f, 0.5f);
-            topMax = new Vector3(1f, 1f, 1f);
-        }
-        else if (blockType == 40 || blockType == 43) // North: step rises to -Z (front half is solid)
-        {
-            topMin = new Vector3(0f, 0.5f, 0f);
-            topMax = new Vector3(1f, 1f, 0.5f);
-        }
-        else if (blockType == 41 || blockType == 44) // West: step rises to +X (right half is solid)
-        {
-            topMin = new Vector3(0.5f, 0.5f, 0f);
-            topMax = new Vector3(1f, 1f, 1f);
-        }
-        else if (blockType == 42 || blockType == 45) // East: step rises to -X (left half is solid)
-        {
-            topMin = new Vector3(0f, 0.5f, 0f);
-            topMax = new Vector3(0.5f, 1f, 1f);
-        }
-
-        AddSubBox(pos, topMin, topMax, textureBlockType);
-    }
-
-    void AddSlabBlock(Vector3 pos, byte blockType)
-    {
-        // 46 is Wooden Slab (uses Plank ID 2), 47 is Stone Slab (uses Stone ID 3)
-        byte textureBlockType = (blockType == 46) ? (byte)2 : (byte)3;
-
-        // Slab box: (0, 0, 0) to (1, 0.5, 1)
-        AddSubBox(pos, new Vector3(0f, 0f, 0f), new Vector3(1f, 0.5f, 1f), textureBlockType);
-    }
-
-    void AddSubBox(Vector3 pos, Vector3 min, Vector3 max, byte textureBlockType)
-    {
-        for (int p = 0; p < 6; p++)
-        {
-            Vector3[] faceVerts = GetBoxFaceVertices(p, min, max);
-            for (int i = 0; i < 4; i++)
-            {
-                vertices.Add(pos + faceVerts[i]);
-            }
-
-            Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, textureBlockType);
-            uvs.AddRange(faceUVs);
-
-            triangles.Add(vertexIndex);
-            triangles.Add(vertexIndex + 1);
-            triangles.Add(vertexIndex + 2);
-            triangles.Add(vertexIndex + 2);
-            triangles.Add(vertexIndex + 1);
-            triangles.Add(vertexIndex + 3);
-
-            vertexIndex += 4;
-        }
-    }
-
-    bool HasNeighborBlock(Vector3 pos, Vector3 direction)
-    {
-        Vector3 neighborPos = pos + direction;
-        int nx = Mathf.FloorToInt(neighborPos.x);
-        int ny = Mathf.FloorToInt(neighborPos.y);
-        int nz = Mathf.FloorToInt(neighborPos.z);
-
-        byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz);
-
-        return neighbor != 0 && neighbor != 7 && neighbor != 9 && neighbor != 10 && neighbor != 11 && neighbor != 13 && neighbor != 14 && neighbor != 23 && neighbor != 27;
-    }
-
-    void AddPropellerBlock(Vector3 pos)
-    {
-        bool hasFront = HasNeighborBlock(pos, Vector3.forward);
-        bool hasBack  = HasNeighborBlock(pos, Vector3.back);
-        bool hasLeft  = HasNeighborBlock(pos, Vector3.left);
-        bool hasRight = HasNeighborBlock(pos, Vector3.right);
-        bool hasBottom = HasNeighborBlock(pos, Vector3.down);
-        bool hasTop    = HasNeighborBlock(pos, Vector3.up);
-
-        Quaternion blockRotation = Quaternion.identity;
-        if (hasFront && !hasBack)
-        {
-            blockRotation = Quaternion.Euler(0f, 180f, 0f);
-        }
-        else if (hasBack && !hasFront)
-        {
-            blockRotation = Quaternion.identity;
-        }
-        else if (hasRight && !hasLeft)
-        {
-            blockRotation = Quaternion.Euler(0f, -90f, 0f);
-        }
-        else if (hasLeft && !hasRight)
-        {
-            blockRotation = Quaternion.Euler(0f, 90f, 0f);
-        }
-        else if (hasBottom && !hasTop)
-        {
-            blockRotation = Quaternion.Euler(-90f, 0f, 0f);
-        }
-        else if (hasTop && !hasBottom)
-        {
-            blockRotation = Quaternion.Euler(90f, 0f, 0f);
-        }
-        else
-        {
-            if (hasBottom)
-                blockRotation = Quaternion.Euler(-90f, 0f, 0f);
-            else
-                blockRotation = Quaternion.Euler(0f, 180f, 0f);
-        }
-
-        Vector3 centerOffset = new Vector3(0.5f, 0.5f, 0.5f);
-
-        // 1. Hub (Extended to touch base block at Z = -0.5f)
-        Vector3 hubSize = new Vector3(0.21f, 0.21f, 0.8f);
-        Vector3 hubLocalPos = blockRotation * new Vector3(0f, 0f, -0.1f) + centerOffset;
-        Quaternion hubRot = blockRotation;
-        AddSubBoxRotated(pos, hubLocalPos, hubSize, hubRot, 24);
-
-        // 2. Nose Cone
-        Vector3 noseSize = new Vector3(0.15f, 0.15f, 0.15f);
-        Vector3 noseLocalPos = blockRotation * new Vector3(0f, 0f, 0.3f) + centerOffset;
-        Quaternion noseRot = blockRotation;
-        AddSubBoxRotated(pos, noseLocalPos, noseSize, noseRot, 24);
-
-        // 3. Three blades
-        Vector3 bladeSize = new Vector3(0.132f, 0.48f, 0.03f);
-        for (int i = 0; i < 3; i++)
-        {
-            float angle = i * 120f;
-            Quaternion radialRotation = Quaternion.Euler(0f, 0f, angle);
-            Quaternion bladePitch = Quaternion.Euler(0f, 28f, 0f);
-            
-            Quaternion localBladeRot = radialRotation * bladePitch;
-            Vector3 localBladePos = radialRotation * new Vector3(0f, 0.33f, 0f);
-
-            Quaternion finalRot = blockRotation * localBladeRot;
-            Vector3 finalPos = blockRotation * localBladePos + centerOffset;
-
-            AddSubBoxRotated(pos, finalPos, bladeSize, finalRot, 25);
-        }
-    }
-
-    void AddLargePropellerBlock(Vector3 pos)
-    {
-        bool hasFront = HasNeighborBlock(pos, Vector3.forward);
-        bool hasBack  = HasNeighborBlock(pos, Vector3.back);
-        bool hasLeft  = HasNeighborBlock(pos, Vector3.left);
-        bool hasRight = HasNeighborBlock(pos, Vector3.right);
-        bool hasBottom = HasNeighborBlock(pos, Vector3.down);
-        bool hasTop    = HasNeighborBlock(pos, Vector3.up);
-
-        Quaternion blockRotation = Quaternion.identity;
-        if (hasFront && !hasBack)
-        {
-            blockRotation = Quaternion.Euler(0f, 180f, 0f);
-        }
-        else if (hasBack && !hasFront)
-        {
-            blockRotation = Quaternion.identity;
-        }
-        else if (hasRight && !hasLeft)
-        {
-            blockRotation = Quaternion.Euler(0f, -90f, 0f);
-        }
-        else if (hasLeft && !hasRight)
-        {
-            blockRotation = Quaternion.Euler(0f, 90f, 0f);
-        }
-        else if (hasBottom && !hasTop)
-        {
-            blockRotation = Quaternion.Euler(-90f, 0f, 0f);
-        }
-        else if (hasTop && !hasBottom)
-        {
-            blockRotation = Quaternion.Euler(90f, 0f, 0f);
-        }
-        else
-        {
-            if (hasBottom)
-                blockRotation = Quaternion.Euler(-90f, 0f, 0f);
-            else
-                blockRotation = Quaternion.Euler(0f, 180f, 0f);
-        }
-
-        Vector3 centerOffset = new Vector3(0.5f, 0.5f, 0.5f);
-
-        // Cylindrical/thick hub running along Z-axis (oriented by blockRotation, extended to touch base block at Z = -0.5f)
-        Vector3 hubSize = new Vector3(0.35f, 0.35f, 2.0f);
-        Vector3 hubLocalPos = blockRotation * new Vector3(0f, 0f, 0.5f) + centerOffset;
-        AddSubBoxRotated(pos, hubLocalPos, hubSize, blockRotation, 24);
-
-        // Nose Cone at the front tip
-        Vector3 noseSize = new Vector3(0.25f, 0.25f, 0.25f);
-        Vector3 noseLocalPos = blockRotation * new Vector3(0f, 0f, 1.5f) + centerOffset;
-        AddSubBoxRotated(pos, noseLocalPos, noseSize, blockRotation, 24);
-
-        // Three blades at the upper part (z = 1.35f)
-        Vector3 bladeSize = new Vector3(0.2f, 1.35f, 0.05f);
-        for (int i = 0; i < 3; i++)
-        {
-            float angle = i * 120f;
-            Quaternion radialRotation = Quaternion.Euler(0f, 0f, angle);
-            Quaternion bladePitch = Quaternion.Euler(0f, 28f, 0f);
-            
-            Quaternion localBladeRot = radialRotation * bladePitch;
-            Vector3 localBladePos = radialRotation * new Vector3(0f, 0.8f, 0f);
-
-            Quaternion finalRot = blockRotation * localBladeRot;
-            Vector3 finalPos = blockRotation * (new Vector3(0f, 0f, 1.35f) + localBladePos) + centerOffset;
-
-            AddSubBoxRotated(pos, finalPos, bladeSize, finalRot, 25);
-        }
-    }
-
-    void AddSubBoxRotated(Vector3 pos, Vector3 localCenter, Vector3 size, Quaternion rotation, byte textureBlockType)
-    {
-        Vector3 min = -size * 0.5f;
-        Vector3 max = size * 0.5f;
-
-        for (int p = 0; p < 6; p++)
-        {
-            Vector3[] faceVerts = GetBoxFaceVertices(p, min, max);
-            for (int i = 0; i < 4; i++)
-            {
-                Vector3 rotVert = rotation * faceVerts[i] + localCenter;
-                vertices.Add(pos + rotVert);
-            }
-
-            Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, textureBlockType);
-            uvs.AddRange(faceUVs);
-
-            triangles.Add(vertexIndex);
-            triangles.Add(vertexIndex + 1);
-            triangles.Add(vertexIndex + 2);
-            triangles.Add(vertexIndex + 2);
-            triangles.Add(vertexIndex + 1);
-            triangles.Add(vertexIndex + 3);
-
-            vertexIndex += 4;
-        }
-    }
-
-    Vector3[] GetBoxFaceVertices(int face, Vector3 min, Vector3 max)
-    {
-        Vector3[] verts = new Vector3[4];
-        switch (face)
-        {
-            case 0: // Back
-                verts[0] = new Vector3(min.x, min.y, min.z);
-                verts[1] = new Vector3(min.x, max.y, min.z);
-                verts[2] = new Vector3(max.x, min.y, min.z);
-                verts[3] = new Vector3(max.x, max.y, min.z);
-                break;
-            case 1: // Front
-                verts[0] = new Vector3(max.x, min.y, max.z);
-                verts[1] = new Vector3(max.x, max.y, max.z);
-                verts[2] = new Vector3(min.x, min.y, max.z);
-                verts[3] = new Vector3(min.x, max.y, max.z);
-                break;
-            case 2: // Top
-                verts[0] = new Vector3(min.x, max.y, min.z);
-                verts[1] = new Vector3(min.x, max.y, max.z);
-                verts[2] = new Vector3(max.x, max.y, min.z);
-                verts[3] = new Vector3(max.x, max.y, max.z);
-                break;
-            case 3: // Bottom
-                verts[0] = new Vector3(max.x, min.y, min.z);
-                verts[1] = new Vector3(max.x, min.y, max.z);
-                verts[2] = new Vector3(min.x, min.y, min.z);
-                verts[3] = new Vector3(min.x, min.y, max.z);
-                break;
-            case 4: // Left
-                verts[0] = new Vector3(min.x, min.y, max.z);
-                verts[1] = new Vector3(min.x, max.y, max.z);
-                verts[2] = new Vector3(min.x, min.y, min.z);
-                verts[3] = new Vector3(min.x, max.y, min.z);
-                break;
-            case 5: // Right
-                verts[0] = new Vector3(max.x, min.y, min.z);
-                verts[1] = new Vector3(max.x, max.y, min.z);
-                verts[2] = new Vector3(max.x, min.y, max.z);
-                verts[3] = new Vector3(max.x, max.y, max.z);
-                break;
-        }
-        return verts;
-    }
-
     void EnsureGlassChild()
     {
         Transform t = transform.Find("Glass");
@@ -2067,107 +1546,85 @@ public class Chunk : MonoBehaviour
             glassMeshRenderer.material = meshRenderer.material;
     }
 
-    /// <summary>
-    /// Renders Glass (ID 35) visually into the dedicated glass mesh (ZWrite On + CullBack)
-    /// to correctly occlude back faces. Also adds invisible collision geometry to the solid mesh.
-    /// Adjacent-glass faces are culled. Faces next to solid opaque blocks are also culled.
-    /// </summary>
-    void AddGlassToSolidMesh(Vector3 pos)
+    private void UploadMeshDirect(Mesh mesh, NativeList<Vector3> verts, NativeList<int> tris, NativeList<Vector2> uvs)
     {
-        float transU = 9f / (float)BlockRegistry.TotalTilesCount;
-        Vector2 transparentUV = new Vector2(transU, 0f);
+        mesh.Clear();
+        int vertexCount = verts.Length;
+        if (vertexCount == 0) return;
 
-        for (int p = 0; p < 6; p++)
+        var layout = new[]
         {
-            Vector3 neighborPos = pos + VoxelData.faceChecks[p];
-            int nx = Mathf.FloorToInt(neighborPos.x);
-            int ny = Mathf.FloorToInt(neighborPos.y);
-            int nz = Mathf.FloorToInt(neighborPos.z);
+            new UnityEngine.Rendering.VertexAttributeDescriptor(UnityEngine.Rendering.VertexAttribute.Position, UnityEngine.Rendering.VertexAttributeFormat.Float32, 3, stream: 0),
+            new UnityEngine.Rendering.VertexAttributeDescriptor(UnityEngine.Rendering.VertexAttribute.TexCoord0, UnityEngine.Rendering.VertexAttributeFormat.Float32, 2, stream: 1)
+        };
+        mesh.SetVertexBufferParams(vertexCount, layout);
+        mesh.SetVertexBufferData(verts.AsArray(), 0, 0, vertexCount, 0, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
+        mesh.SetVertexBufferData(uvs.AsArray(), 0, 0, vertexCount, 1, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
 
-            byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz);
+        int indexCount = tris.Length;
+        mesh.SetIndexBufferParams(indexCount, UnityEngine.Rendering.IndexFormat.UInt32);
+        mesh.SetIndexBufferData(tris.AsArray(), 0, 0, indexCount, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
 
-            // Cull face against: same glass=35 (cull), fully-solid blocks (cull)
-            // Show face against: air (0), water (7), flowers (9-11), leaves (12)
-            if (neighbor == 35) continue;  // adjacent glass panes share a face — hide it
-            if (neighbor != 0 && neighbor != 7 && neighbor != 9 &&
-                neighbor != 10 && neighbor != 11 && neighbor != 12) continue;
+        var subMesh = new UnityEngine.Rendering.SubMeshDescriptor(0, indexCount, MeshTopology.Triangles);
+        subMesh.vertexCount = vertexCount;
+        mesh.SetSubMesh(0, subMesh, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
 
-            Vector2[] faceUVs = GrassTextureGenerator.GetBlockUVs(p, 35);
-
-            // 1. Add to dedicated Glass mesh (ZWrite On + CullBack so back frames don't bleed through)
-            for (int i = 0; i < 4; i++)
-                glassVertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, i]]);
-            glassUvs.AddRange(faceUVs);
-
-            glassTriangles.Add(glassVertexIndex);
-            glassTriangles.Add(glassVertexIndex + 1);
-            glassTriangles.Add(glassVertexIndex + 2);
-            glassTriangles.Add(glassVertexIndex + 2);
-            glassTriangles.Add(glassVertexIndex + 1);
-            glassTriangles.Add(glassVertexIndex + 3);
-            glassVertexIndex += 4;
-
-            // 2. Add invisible geometry to the solid mesh for MeshCollider (transparent UVs)
-            for (int i = 0; i < 4; i++)
-            {
-                vertices.Add(pos + VoxelData.voxelVerts[VoxelData.voxelTris[p, i]]);
-                uvs.Add(transparentUV);
-            }
-
-            triangles.Add(vertexIndex);
-            triangles.Add(vertexIndex + 1);
-            triangles.Add(vertexIndex + 2);
-            triangles.Add(vertexIndex + 2);
-            triangles.Add(vertexIndex + 1);
-            triangles.Add(vertexIndex + 3);
-            vertexIndex += 4;
-        }
+        mesh.RecalculateBounds();
+        mesh.RecalculateNormals();
     }
 
-
-    bool CheckVoxelFace(Vector3 pos, int faceIndex, byte currentBlockType)
+    private void UploadMeshDirect(Mesh mesh, NativeList<Vector3> verts, NativeList<int> tris, NativeList<Vector2> uvs, NativeList<Color> colors)
     {
-        Vector3 neighborPos = pos + VoxelData.faceChecks[faceIndex];
-        int x = Mathf.FloorToInt(neighborPos.x);
-        int y = Mathf.FloorToInt(neighborPos.y);
-        int z = Mathf.FloorToInt(neighborPos.z);
+        mesh.Clear();
+        int vertexCount = verts.Length;
+        if (vertexCount == 0) return;
 
-        byte neighbor = GetVoxelFromNeighborOrWorld(x, y, z);
-
-        if (neighbor == 0) return false;
-
-        bool currentIsWater  = (currentBlockType == 7);
-        bool neighborIsWater = (neighbor == 7);
-
-        // Check if neighbor is a custom transparent block
-        bool neighborIsTransparentBlock = false;
-        var def = BlockRegistry.GetDefinition(neighbor);
-        if (def != null)
+        var layout = new[]
         {
-            neighborIsTransparentBlock = def.isTransparent;
-        }
+            new UnityEngine.Rendering.VertexAttributeDescriptor(UnityEngine.Rendering.VertexAttribute.Position, UnityEngine.Rendering.VertexAttributeFormat.Float32, 3, stream: 0),
+            new UnityEngine.Rendering.VertexAttributeDescriptor(UnityEngine.Rendering.VertexAttribute.TexCoord0, UnityEngine.Rendering.VertexAttributeFormat.Float32, 2, stream: 1),
+            new UnityEngine.Rendering.VertexAttributeDescriptor(UnityEngine.Rendering.VertexAttribute.Color, UnityEngine.Rendering.VertexAttributeFormat.Float32, 4, stream: 2)
+        };
+        mesh.SetVertexBufferParams(vertexCount, layout);
+        mesh.SetVertexBufferData(verts.AsArray(), 0, 0, vertexCount, 0, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
+        mesh.SetVertexBufferData(uvs.AsArray(), 0, 0, vertexCount, 1, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
+        mesh.SetVertexBufferData(colors.AsArray(), 0, 0, vertexCount, 2, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
 
-        // Flowers, leaves, glass (ID 35), and stairs are transparent — treat like air for solid-mesh culling purposes
-        bool neighborIsFlower = (neighbor == 9 || neighbor == 10 || neighbor == 11 || neighbor == 12 || neighbor == 35 ||
-                                 neighbor == 13 || neighbor == 14 ||
-                                 neighbor == 38 || neighbor == 40 || neighbor == 41 || neighbor == 42 ||
-                                 neighbor == 39 || neighbor == 43 || neighbor == 44 || neighbor == 45 ||
-                                 neighbor == 46 || neighbor == 47 || neighbor == 22 || neighbor == 26 || neighbor == 27 ||
-                                 neighborIsTransparentBlock);
+        int indexCount = tris.Length;
+        mesh.SetIndexBufferParams(indexCount, UnityEngine.Rendering.IndexFormat.UInt32);
+        mesh.SetIndexBufferData(tris.AsArray(), 0, 0, indexCount, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
 
-        if (currentIsWater)
+        var subMesh = new UnityEngine.Rendering.SubMeshDescriptor(0, indexCount, MeshTopology.Triangles);
+        subMesh.vertexCount = vertexCount;
+        mesh.SetSubMesh(0, subMesh, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
+
+        mesh.RecalculateBounds();
+        mesh.RecalculateNormals();
+    }
+
+    private void UploadMeshDirect(Mesh mesh, NativeList<Vector3> verts, NativeList<int> tris)
+    {
+        mesh.Clear();
+        int vertexCount = verts.Length;
+        if (vertexCount == 0) return;
+
+        var layout = new[]
         {
-            // Water culls against solid blocks and other water
-            return true;
-        }
-        else
-        {
-            // Solid blocks cull against solid blocks, but NOT water, air, or flowers
-            if (neighborIsWater || neighborIsFlower) return false;
+            new UnityEngine.Rendering.VertexAttributeDescriptor(UnityEngine.Rendering.VertexAttribute.Position, UnityEngine.Rendering.VertexAttributeFormat.Float32, 3, stream: 0)
+        };
+        mesh.SetVertexBufferParams(vertexCount, layout);
+        mesh.SetVertexBufferData(verts.AsArray(), 0, 0, vertexCount, 0, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
 
-            // Any remaining solid neighbor culls our face
-            return true;
-        }
+        int indexCount = tris.Length;
+        mesh.SetIndexBufferParams(indexCount, UnityEngine.Rendering.IndexFormat.UInt32);
+        mesh.SetIndexBufferData(tris.AsArray(), 0, 0, indexCount, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
+
+        var subMesh = new UnityEngine.Rendering.SubMeshDescriptor(0, indexCount, MeshTopology.Triangles);
+        subMesh.vertexCount = vertexCount;
+        mesh.SetSubMesh(0, subMesh, UnityEngine.Rendering.MeshUpdateFlags.DontRecalculateBounds | UnityEngine.Rendering.MeshUpdateFlags.DontValidateIndices);
+
+        mesh.RecalculateBounds();
+        mesh.RecalculateNormals();
     }
 
     void CreateMesh()
@@ -2179,20 +1636,14 @@ public class Chunk : MonoBehaviour
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             meshFilter.sharedMesh = mesh;
         }
-        else
-        {
-            mesh.Clear();
-        }
-        mesh.SetVertices(vertices);
-        mesh.SetTriangles(triangles, 0);
-        mesh.SetUVs(0, uvs);
-        mesh.RecalculateNormals();
+
+        UploadMeshDirect(mesh, vertices, triangles, uvs);
 
         meshCollider.sharedMesh = null;
         meshCollider.sharedMesh = mesh;
 
         // ── Water mesh ────────────────────────────────────────────────────────
-        if (waterVertices.Count > 0)
+        if (waterVertices.Length > 0)
         {
             EnsureWaterChild();
             Mesh waterMesh = waterMeshFilter.sharedMesh;
@@ -2202,16 +1653,7 @@ public class Chunk : MonoBehaviour
                 waterMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
                 waterMeshFilter.sharedMesh = waterMesh;
             }
-            else
-            {
-                waterMesh.Clear();
-            }
-            waterMesh.SetVertices(waterVertices);
-            waterMesh.SetTriangles(waterTriangles, 0);
-            waterMesh.SetUVs(0, waterUvs);
-            waterMesh.SetColors(waterColors);
-            waterMesh.RecalculateNormals();
-
+            UploadMeshDirect(waterMesh, waterVertices, waterTriangles, waterUvs, waterColors);
             waterMeshRenderer.gameObject.SetActive(true);
         }
         else
@@ -2221,7 +1663,7 @@ public class Chunk : MonoBehaviour
         }
 
         // ── Foliage mesh (flowers) ─────────────────────────────────────────────
-        if (foliageVertices.Count > 0)
+        if (foliageVertices.Length > 0)
         {
             EnsureFoliageChild();
             Mesh foliageMesh = foliageMeshFilter.sharedMesh;
@@ -2231,21 +1673,13 @@ public class Chunk : MonoBehaviour
                 foliageMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
                 foliageMeshFilter.sharedMesh = foliageMesh;
             }
-            else
-            {
-                foliageMesh.Clear();
-            }
-            foliageMesh.SetVertices(foliageVertices);
-            foliageMesh.SetTriangles(foliageTriangles, 0);
-            foliageMesh.SetUVs(0, foliageUvs);
-            foliageMesh.SetColors(foliageColors);
-            foliageMesh.RecalculateNormals();
+            UploadMeshDirect(foliageMesh, foliageVertices, foliageTriangles, foliageUvs, foliageColors);
 
             foliageMeshCollider.sharedMesh = null;
             foliageMeshCollider.sharedMesh = foliageMesh; // allows raycast hits on flowers
 
             // Build the solid foliage collider if we have solid foliage geometry
-            if (foliageSolidVertices.Count > 0)
+            if (foliageSolidVertices.Length > 0)
             {
                 EnsureFoliageSolidChild();
                 Mesh foliageSolidMesh = foliageSolidCollider.sharedMesh;
@@ -2255,13 +1689,7 @@ public class Chunk : MonoBehaviour
                     foliageSolidMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
                     foliageSolidCollider.sharedMesh = foliageSolidMesh;
                 }
-                else
-                {
-                    foliageSolidMesh.Clear();
-                }
-                foliageSolidMesh.SetVertices(foliageSolidVertices);
-                foliageSolidMesh.SetTriangles(foliageSolidTriangles, 0);
-                foliageSolidMesh.RecalculateNormals();
+                UploadMeshDirect(foliageSolidMesh, foliageSolidVertices, foliageSolidTriangles);
 
                 foliageSolidCollider.sharedMesh = null;
                 foliageSolidCollider.sharedMesh = foliageSolidMesh;
@@ -2285,7 +1713,7 @@ public class Chunk : MonoBehaviour
         }
 
         // ── Glass mesh (ZWrite On + CullBack to prevent back-face border bleed) ─
-        if (glassVertices.Count > 0)
+        if (glassVertices.Length > 0)
         {
             EnsureGlassChild();
             Mesh glassMesh = glassMeshFilter.sharedMesh;
@@ -2295,14 +1723,7 @@ public class Chunk : MonoBehaviour
                 glassMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
                 glassMeshFilter.sharedMesh = glassMesh;
             }
-            else
-            {
-                glassMesh.Clear();
-            }
-            glassMesh.SetVertices(glassVertices);
-            glassMesh.SetTriangles(glassTriangles, 0);
-            glassMesh.SetUVs(0, glassUvs);
-            glassMesh.RecalculateNormals();
+            UploadMeshDirect(glassMesh, glassVertices, glassTriangles, glassUvs);
 
             glassMeshRenderer.gameObject.SetActive(true);
         }
@@ -2320,23 +1741,110 @@ public class Chunk : MonoBehaviour
     public void UpdateWaterMeshOnly()
     {
         // Clear only water lists
-        waterVertexIndex = 0;
         waterVertices.Clear();
         waterTriangles.Clear();
         waterUvs.Clear();
         waterColors.Clear();
 
-        // Iterate only water voxels (water only exists up to sea level which is 14; 40 is a safe maximum that saves massive CPU time)
-        int scanHeight = Mathf.Min(VoxelData.ChunkHeight, Mathf.FloorToInt(VoxelData.ChunkHeight * 0.35f));
-        for (int y = 0; y < scanHeight; y++)
-            for (int x = 0; x < VoxelData.ChunkWidth; x++)
-                for (int z = 0; z < VoxelData.ChunkWidth; z++)
-                    if (voxelMap[VoxelData.GetFlatIndex(x, y, z)] == 7) // Water only
-                        UpdateVoxelMeshData(new Vector3(x, y, z), 7);
+        // Furnaces are not needed for water-only meshing, but we can pass empty arrays
+        var furnaceDataArray = new NativeArray<UnmanagedFurnaceData>(0, Allocator.TempJob);
+        
+        // Gather vehicles for water suppression
+        var activeVehicles = VehicleController.GetCachedVehicles();
+        int totalBounds = 0;
+        for (int i = 0; i < activeVehicles.Count; i++)
+        {
+            if (activeVehicles[i].dryFilters != null)
+                totalBounds += activeVehicles[i].dryFilters.Count;
+        }
+
+        var vehicleFilters = new NativeArray<Bounds>(totalBounds, Allocator.TempJob);
+        var unmanagedVehicles = new NativeArray<UnmanagedVehicleData>(activeVehicles.Count, Allocator.TempJob);
+
+        int boundIndex = 0;
+        for (int i = 0; i < activeVehicles.Count; i++)
+        {
+            var av = activeVehicles[i];
+            int start = boundIndex;
+            int count = 0;
+            if (av.dryFilters != null)
+            {
+                for (int j = 0; j < av.dryFilters.Count; j++)
+                {
+                    vehicleFilters[boundIndex++] = av.dryFilters[j];
+                    count++;
+                }
+            }
+            unmanagedVehicles[i] = new UnmanagedVehicleData
+            {
+                position = av.position,
+                inverseRotation = av.inverseRotation,
+                filterStart = start,
+                filterCount = count
+            };
+        }
+
+        var emptyMap = new NativeArray<byte>(0, Allocator.TempJob);
+
+        var job = new MeshGenerationJob
+        {
+            chunkWorldPos = transform.position,
+            scanHeight = VoxelData.ChunkHeight,
+            totalTilesCount = BlockRegistry.TotalTilesCount,
+            waterOnly = true,
+
+            VoxelMap = voxelMap,
+            WestMap = (neighborWest != null && neighborWest.voxelMap.IsCreated) ? neighborWest.voxelMap : emptyMap,
+            EastMap = (neighborEast != null && neighborEast.voxelMap.IsCreated) ? neighborEast.voxelMap : emptyMap,
+            SouthMap = (neighborSouth != null && neighborSouth.voxelMap.IsCreated) ? neighborSouth.voxelMap : emptyMap,
+            NorthMap = (neighborNorth != null && neighborNorth.voxelMap.IsCreated) ? neighborNorth.voxelMap : emptyMap,
+
+            NativeDefinitions = BlockRegistry.NativeDefinitions,
+            CustomMeshVertices = BlockRegistry.CustomMeshVertices,
+            CustomMeshIndices = BlockRegistry.CustomMeshIndices,
+            CustomMeshUVs = BlockRegistry.CustomMeshUVs,
+
+            VoxelVerts = BlockRegistry.VoxelVerts,
+            VoxelTris = BlockRegistry.VoxelTris,
+            FaceChecks = BlockRegistry.FaceChecks,
+
+            Furnaces = furnaceDataArray,
+            Vehicles = unmanagedVehicles,
+            VehicleFilters = vehicleFilters,
+
+            vertices = vertices,
+            triangles = triangles,
+            uvs = uvs,
+
+            waterVertices = waterVertices,
+            waterTriangles = waterTriangles,
+            waterUvs = waterUvs,
+            waterColors = waterColors,
+
+            foliageVertices = foliageVertices,
+            foliageTriangles = foliageTriangles,
+            foliageUvs = foliageUvs,
+            foliageColors = foliageColors,
+
+            foliageSolidVertices = foliageSolidVertices,
+            foliageSolidTriangles = foliageSolidTriangles,
+
+            glassVertices = glassVertices,
+            glassTriangles = glassTriangles,
+            glassUvs = glassUvs
+        };
+
+        // Run synchronously since this is called on-demand to hide water instantly
+        job.Run();
+
+        furnaceDataArray.Dispose();
+        unmanagedVehicles.Dispose();
+        vehicleFilters.Dispose();
+        emptyMap.Dispose();
 
         // Upload only the water mesh — no collider, no terrain touch
         EnsureWaterChild();
-        if (waterVertices.Count > 0)
+        if (waterVertices.Length > 0)
         {
             Mesh waterMesh = waterMeshFilter.sharedMesh;
             if (waterMesh == null)
@@ -2345,15 +1853,7 @@ public class Chunk : MonoBehaviour
                 waterMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
                 waterMeshFilter.sharedMesh = waterMesh;
             }
-            else
-            {
-                waterMesh.Clear();
-            }
-            waterMesh.SetVertices(waterVertices);
-            waterMesh.SetTriangles(waterTriangles, 0);
-            waterMesh.SetUVs(0, waterUvs);
-            waterMesh.SetColors(waterColors);
-            waterMesh.RecalculateNormals();
+            UploadMeshDirect(waterMesh, waterVertices, waterTriangles, waterUvs, waterColors);
             waterMeshFilter.sharedMesh = waterMesh;
             waterMeshRenderer.gameObject.SetActive(true);
         }
@@ -2362,5 +1862,1095 @@ public class Chunk : MonoBehaviour
             if (waterMeshRenderer != null)
                 waterMeshRenderer.gameObject.SetActive(false);
         }
+    }
+}
+
+public struct UnmanagedVehicleData
+{
+    public Vector3 position;
+    public Quaternion inverseRotation;
+    public int filterStart;
+    public int filterCount;
+}
+
+public struct UnmanagedFurnaceData
+{
+    public int3 localPos;
+    public bool isLit;
+    public int facing;
+}
+
+// [ignoring loop detection]
+[BurstCompile]
+public struct MeshGenerationJob : IJob
+{
+    public Vector3 chunkWorldPos;
+    public int scanHeight;
+    public int totalTilesCount;
+    public bool waterOnly;
+
+    [Unity.Collections.ReadOnly]
+    [Unity.Collections.LowLevel.Unsafe.NativeDisableContainerSafetyRestriction]
+    public NativeArray<byte> VoxelMap;
+    [Unity.Collections.ReadOnly]
+    [Unity.Collections.LowLevel.Unsafe.NativeDisableContainerSafetyRestriction]
+    public NativeArray<byte> WestMap;
+    [Unity.Collections.ReadOnly]
+    [Unity.Collections.LowLevel.Unsafe.NativeDisableContainerSafetyRestriction]
+    public NativeArray<byte> EastMap;
+    [Unity.Collections.ReadOnly]
+    [Unity.Collections.LowLevel.Unsafe.NativeDisableContainerSafetyRestriction]
+    public NativeArray<byte> SouthMap;
+    [Unity.Collections.ReadOnly]
+    [Unity.Collections.LowLevel.Unsafe.NativeDisableContainerSafetyRestriction]
+    public NativeArray<byte> NorthMap;
+
+    [Unity.Collections.ReadOnly]
+    public NativeArray<BlittableBlockDefinition> NativeDefinitions;
+    [Unity.Collections.ReadOnly]
+    public NativeArray<Vector3> CustomMeshVertices;
+    [Unity.Collections.ReadOnly]
+    public NativeArray<int> CustomMeshIndices;
+    [Unity.Collections.ReadOnly]
+    public NativeArray<Vector2> CustomMeshUVs;
+
+    [Unity.Collections.ReadOnly]
+    public NativeArray<Vector3> VoxelVerts;
+    [Unity.Collections.ReadOnly]
+    public NativeArray<int> VoxelTris;
+    [Unity.Collections.ReadOnly]
+    public NativeArray<Vector3> FaceChecks;
+
+    [Unity.Collections.ReadOnly]
+    public NativeArray<UnmanagedFurnaceData> Furnaces;
+    [Unity.Collections.ReadOnly]
+    public NativeArray<UnmanagedVehicleData> Vehicles;
+    [Unity.Collections.ReadOnly]
+    public NativeArray<Bounds> VehicleFilters;
+
+    // Outputs
+    public NativeList<Vector3> vertices;
+    public NativeList<int> triangles;
+    public NativeList<Vector2> uvs;
+
+    public NativeList<Vector3> waterVertices;
+    public NativeList<int> waterTriangles;
+    public NativeList<Vector2> waterUvs;
+    public NativeList<Color> waterColors;
+
+    public NativeList<Vector3> foliageVertices;
+    public NativeList<int> foliageTriangles;
+    public NativeList<Vector2> foliageUvs;
+    public NativeList<Color> foliageColors;
+
+    public NativeList<Vector3> foliageSolidVertices;
+    public NativeList<int> foliageSolidTriangles;
+
+    public NativeList<Vector3> glassVertices;
+    public NativeList<int> glassTriangles;
+    public NativeList<Vector2> glassUvs;
+
+    public void Execute()
+    {
+        if (waterOnly)
+        {
+            int scanHeightLimit = math.min(scanHeight, 40);
+            for (int y = 0; y < scanHeightLimit; y++)
+            {
+                for (int x = 0; x < VoxelData.ChunkWidth; x++)
+                {
+                    for (int z = 0; z < VoxelData.ChunkWidth; z++)
+                    {
+                        byte val = VoxelMap[VoxelData.GetFlatIndex(x, y, z)];
+                        if (val == 7) // Water only
+                        {
+                            UpdateVoxelMeshData(new Vector3(x, y, z), 7);
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (int y = 0; y < scanHeight; y++)
+            {
+                for (int x = 0; x < VoxelData.ChunkWidth; x++)
+                {
+                    for (int z = 0; z < VoxelData.ChunkWidth; z++)
+                    {
+                        byte val = VoxelMap[VoxelData.GetFlatIndex(x, y, z)];
+                        if (val != 0)
+                        {
+                            UpdateVoxelMeshData(new Vector3(x, y, z), val);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void UpdateVoxelMeshData(Vector3 pos, byte blockType)
+    {
+        byte baseStairID = 0;
+        if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42)
+        {
+            baseStairID = 38;
+        }
+        else if (blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45)
+        {
+            baseStairID = 39;
+        }
+
+        BlittableBlockDefinition def = default;
+        bool hasDef = false;
+        if (NativeDefinitions.IsCreated)
+        {
+            byte lookupID = baseStairID != 0 ? baseStairID : blockType;
+            if (lookupID < NativeDefinitions.Length)
+            {
+                def = NativeDefinitions[lookupID];
+                hasDef = true;
+            }
+        }
+
+        if (hasDef && def.hasCustomMesh)
+        {
+            if (baseStairID != 0)
+            {
+                AddCustomStairMeshBlock(pos, def, blockType);
+            }
+            else
+            {
+                AddCustomMeshBlock(pos, def);
+            }
+            return;
+        }
+
+        // Flowers
+        if (blockType == 9 || blockType == 10 || blockType == 11 || blockType == 13 || blockType == 14)
+        {
+            AddFlowerQuads(pos, blockType);
+            return;
+        }
+
+        // Leaves
+        if (blockType == 12 || blockType == 52 || blockType == 54)
+        {
+            AddLeavesBlock(pos, blockType);
+            return;
+        }
+
+        // Glass
+        if (blockType == 35)
+        {
+            AddGlassToSolidMesh(pos);
+            return;
+        }
+
+        // Propeller
+        if (blockType == 22)
+        {
+            AddPropellerBlock(pos);
+            return;
+        }
+
+        // Large Propeller
+        if (blockType == 26)
+        {
+            AddLargePropellerBlock(pos);
+            return;
+        }
+
+        if (blockType == 27)
+        {
+            return;
+        }
+
+        // Stairs
+        if (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42 ||
+            blockType == 39 || blockType == 43 || blockType == 44 || blockType == 45)
+        {
+            AddStairsBlock(pos, blockType);
+            return;
+        }
+
+        // Slab
+        if (blockType == 46 || blockType == 47)
+        {
+            AddSlabBlock(pos, blockType);
+            return;
+        }
+
+        bool isWater = (blockType == 7);
+
+        // Dry interior check
+        if (isWater)
+        {
+            Vector3 center = chunkWorldPos + pos + new Vector3(0.5f, 0.5f, 0.5f);
+            bool insideVehicle = IsWorldPosInsideVehicleCachedBurst(center) ||
+                                IsWorldPosInsideVehicleCachedBurst(center + new Vector3(-0.45f, 0f, -0.45f)) ||
+                                IsWorldPosInsideVehicleCachedBurst(center + new Vector3(0.45f, 0f, -0.45f)) ||
+                                IsWorldPosInsideVehicleCachedBurst(center + new Vector3(-0.45f, 0f, 0.45f)) ||
+                                IsWorldPosInsideVehicleCachedBurst(center + new Vector3(0.45f, 0f, 0.45f));
+            if (insideVehicle)
+            {
+                return;
+            }
+        }
+
+        int depth = 1;
+        bool isWaterSurface = false;
+        if (isWater)
+        {
+            depth = GetWaterDepth((int)pos.x, (int)pos.y, (int)pos.z);
+            byte blockAbove = GetVoxelFromNeighborOrWorld((int)pos.x, (int)pos.y + 1, (int)pos.z);
+            isWaterSurface = (blockAbove != 7);
+        }
+
+        for (int p = 0; p < 6; p++)
+        {
+            if (!CheckVoxelFace(pos, p, blockType))
+            {
+                int baseIndex = isWater ? waterVertices.Length : vertices.Length;
+
+                for (int i = 0; i < 4; i++)
+                {
+                    Vector3 vert = VoxelVerts[VoxelTris[p * 4 + i]];
+
+                    if (isWater && isWaterSurface && vert.y > 0.5f)
+                    {
+                        vert.y = 0.85f;
+                    }
+
+                    if (isWater)
+                    {
+                        waterVertices.Add(pos + vert);
+                    }
+                    else
+                    {
+                        vertices.Add(pos + vert);
+                    }
+                }
+
+                if (isWater)
+                {
+                    float alpha;
+                    if (depth == 1) alpha = 0.85f;
+                    else if (depth == 2) alpha = 0.92f;
+                    else if (depth == 3) alpha = 0.96f;
+                    else alpha = 0.99f;
+
+                    for (int i = 0; i < 4; i++)
+                    {
+                        waterColors.Add(new Color(1f, 1f, 1f, alpha));
+                    }
+
+                    int tile = GetTileIndexNativeBurst(blockType, p, false, -1, NativeDefinitions);
+                    float u0 = tile / (float)totalTilesCount;
+                    float u1 = (tile + 1f) / (float)totalTilesCount;
+
+                    waterUvs.Add(new Vector2(u0, 0f));
+                    waterUvs.Add(new Vector2(u0, 1f));
+                    waterUvs.Add(new Vector2(u1, 0f));
+                    waterUvs.Add(new Vector2(u1, 1f));
+
+                    waterTriangles.Add(baseIndex);
+                    waterTriangles.Add(baseIndex + 1);
+                    waterTriangles.Add(baseIndex + 2);
+                    waterTriangles.Add(baseIndex + 2);
+                    waterTriangles.Add(baseIndex + 1);
+                    waterTriangles.Add(baseIndex + 3);
+                }
+                else
+                {
+                    bool isFurnaceLit = false;
+                    int furnaceFacing = -1;
+                    if (blockType == 37)
+                    {
+                        int3 localIntPos = new int3((int)pos.x, (int)pos.y, (int)pos.z);
+                        for (int f = 0; f < Furnaces.Length; f++)
+                        {
+                            if (Furnaces[f].localPos.x == localIntPos.x &&
+                                Furnaces[f].localPos.y == localIntPos.y &&
+                                Furnaces[f].localPos.z == localIntPos.z)
+                            {
+                                isFurnaceLit = Furnaces[f].isLit;
+                                furnaceFacing = Furnaces[f].facing;
+                                break;
+                            }
+                        }
+                    }
+
+                    int tile = GetTileIndexNativeBurst(blockType, p, isFurnaceLit, furnaceFacing, NativeDefinitions);
+                    float u0 = tile / (float)totalTilesCount;
+                    float u1 = (tile + 1f) / (float)totalTilesCount;
+
+                    uvs.Add(new Vector2(u0, 0f));
+                    uvs.Add(new Vector2(u0, 1f));
+                    uvs.Add(new Vector2(u1, 0f));
+                    uvs.Add(new Vector2(u1, 1f));
+
+                    triangles.Add(baseIndex);
+                    triangles.Add(baseIndex + 1);
+                    triangles.Add(baseIndex + 2);
+                    triangles.Add(baseIndex + 2);
+                    triangles.Add(baseIndex + 1);
+                    triangles.Add(baseIndex + 3);
+                }
+            }
+        }
+    }
+
+    private int GetWaterDepth(int x, int y, int z)
+    {
+        int depth = 0;
+        for (int dy = y; dy >= 0; dy--)
+        {
+            byte block = VoxelMap[VoxelData.GetFlatIndex(x, dy, z)];
+            if (block == 7) // Water
+            {
+                depth++;
+            }
+            else if (block != 0) // Solid block
+            {
+                break;
+            }
+        }
+        return math.max(1, depth);
+    }
+
+    private byte GetVoxelFromNeighborOrWorld(int x, int y, int z)
+    {
+        if (x >= 0 && x < VoxelData.ChunkWidth && y >= 0 && y < VoxelData.ChunkHeight && z >= 0 && z < VoxelData.ChunkWidth)
+        {
+            return VoxelMap[VoxelData.GetFlatIndex(x, y, z)];
+        }
+
+        if (y < 0 || y >= VoxelData.ChunkHeight)
+        {
+            return 0;
+        }
+
+        int targetX = x;
+        int targetZ = z;
+        NativeArray<byte> neighborMap = default;
+
+        if (x < 0)
+        {
+            neighborMap = WestMap;
+            targetX += VoxelData.ChunkWidth;
+        }
+        else if (x >= VoxelData.ChunkWidth)
+        {
+            neighborMap = EastMap;
+            targetX -= VoxelData.ChunkWidth;
+        }
+
+        if (z < 0)
+        {
+            neighborMap = SouthMap;
+            targetZ += VoxelData.ChunkWidth;
+        }
+        else if (z >= VoxelData.ChunkWidth)
+        {
+            neighborMap = NorthMap;
+            targetZ -= VoxelData.ChunkWidth;
+        }
+
+        if (neighborMap.IsCreated && neighborMap.Length > 0)
+        {
+            return neighborMap[VoxelData.GetFlatIndex(targetX, y, targetZ)];
+        }
+
+        return 0;
+    }
+
+    private bool CheckVoxelFace(Vector3 pos, int faceIndex, byte currentBlockType)
+    {
+        Vector3 neighborPos = pos + FaceChecks[faceIndex];
+        int x = (int)math.floor(neighborPos.x);
+        int y = (int)math.floor(neighborPos.y);
+        int z = (int)math.floor(neighborPos.z);
+
+        byte neighbor = GetVoxelFromNeighborOrWorld(x, y, z);
+
+        if (neighbor == 0) return false;
+
+        bool currentIsWater  = (currentBlockType == 7);
+        bool neighborIsWater = (neighbor == 7);
+
+        bool neighborIsTransparentBlock = false;
+        if (NativeDefinitions.IsCreated && neighbor < NativeDefinitions.Length)
+        {
+            neighborIsTransparentBlock = NativeDefinitions[neighbor].isTransparent;
+        }
+
+        bool neighborIsFlower = (neighbor == 9 || neighbor == 10 || neighbor == 11 || neighbor == 12 || neighbor == 35 ||
+                                 neighbor == 13 || neighbor == 14 ||
+                                 neighbor == 38 || neighbor == 40 || neighbor == 41 || neighbor == 42 ||
+                                 neighbor == 39 || neighbor == 43 || neighbor == 44 || neighbor == 45 ||
+                                 neighbor == 46 || neighbor == 47 || neighbor == 22 || neighbor == 26 || neighbor == 27 ||
+                                 neighborIsTransparentBlock);
+
+        if (currentIsWater)
+        {
+            return true;
+        }
+        else
+        {
+            if (neighborIsWater || neighborIsFlower) return false;
+            return true;
+        }
+    }
+
+    private bool IsWorldPosInsideVehicleCachedBurst(Vector3 worldPos)
+    {
+        for (int i = 0; i < Vehicles.Length; i++)
+        {
+            var cv = Vehicles[i];
+            Vector3 localPos = cv.inverseRotation * (worldPos - cv.position);
+            
+            for (int j = 0; j < cv.filterCount; j++)
+            {
+                Bounds filter = VehicleFilters[cv.filterStart + j];
+                if (filter.Contains(localPos))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private void AddFlowerQuads(Vector3 pos, byte blockType)
+    {
+        int tile = GetTileIndexNativeBurst(blockType, 0, false, -1, NativeDefinitions);
+        float u0 = tile / (float)totalTilesCount;
+        float u1 = (tile + 1f) / (float)totalTilesCount;
+
+        // Quad 1
+        int startIdx1 = foliageVertices.Length;
+        foliageVertices.Add(pos + new Vector3(0.05f, 0f, 0.05f));
+        foliageVertices.Add(pos + new Vector3(0.05f, 1f, 0.05f));
+        foliageVertices.Add(pos + new Vector3(0.95f, 0f, 0.95f));
+        foliageVertices.Add(pos + new Vector3(0.95f, 1f, 0.95f));
+
+        for (int i = 0; i < 4; i++) foliageColors.Add(Color.white);
+        foliageUvs.Add(new Vector2(u0, 0f));
+        foliageUvs.Add(new Vector2(u0, 1f));
+        foliageUvs.Add(new Vector2(u1, 0f));
+        foliageUvs.Add(new Vector2(u1, 1f));
+
+        foliageTriangles.Add(startIdx1);
+        foliageTriangles.Add(startIdx1 + 1);
+        foliageTriangles.Add(startIdx1 + 2);
+        foliageTriangles.Add(startIdx1 + 2);
+        foliageTriangles.Add(startIdx1 + 1);
+        foliageTriangles.Add(startIdx1 + 3);
+
+        foliageTriangles.Add(startIdx1 + 2);
+        foliageTriangles.Add(startIdx1 + 1);
+        foliageTriangles.Add(startIdx1);
+        foliageTriangles.Add(startIdx1 + 3);
+        foliageTriangles.Add(startIdx1 + 1);
+        foliageTriangles.Add(startIdx1 + 2);
+
+        // Quad 2
+        int startIdx2 = foliageVertices.Length;
+        foliageVertices.Add(pos + new Vector3(0.95f, 0f, 0.05f));
+        foliageVertices.Add(pos + new Vector3(0.95f, 1f, 0.05f));
+        foliageVertices.Add(pos + new Vector3(0.05f, 0f, 0.95f));
+        foliageVertices.Add(pos + new Vector3(0.05f, 1f, 0.95f));
+
+        for (int i = 0; i < 4; i++) foliageColors.Add(Color.white);
+        foliageUvs.Add(new Vector2(u0, 0f));
+        foliageUvs.Add(new Vector2(u0, 1f));
+        foliageUvs.Add(new Vector2(u1, 0f));
+        foliageUvs.Add(new Vector2(u1, 1f));
+
+        foliageTriangles.Add(startIdx2);
+        foliageTriangles.Add(startIdx2 + 1);
+        foliageTriangles.Add(startIdx2 + 2);
+        foliageTriangles.Add(startIdx2 + 2);
+        foliageTriangles.Add(startIdx2 + 1);
+        foliageTriangles.Add(startIdx2 + 3);
+
+        foliageTriangles.Add(startIdx2 + 2);
+        foliageTriangles.Add(startIdx2 + 1);
+        foliageTriangles.Add(startIdx2);
+        foliageTriangles.Add(startIdx2 + 3);
+        foliageTriangles.Add(startIdx2 + 1);
+        foliageTriangles.Add(startIdx2 + 2);
+    }
+
+    private void AddLeavesBlock(Vector3 pos, byte blockType)
+    {
+        for (int p = 0; p < 6; p++)
+        {
+            Vector3 neighborPos = pos + FaceChecks[p];
+            int nx = (int)math.floor(neighborPos.x);
+            int ny = (int)math.floor(neighborPos.y);
+            int nz = (int)math.floor(neighborPos.z);
+
+            byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz);
+
+            if (neighbor == 12 || neighbor == 52 || neighbor == 54) continue;
+            if (neighbor != 0 && neighbor != 7 && neighbor != 9 &&
+                neighbor != 10 && neighbor != 11 &&
+                neighbor != 12 && neighbor != 52 && neighbor != 54) continue;
+
+            int baseIndex = foliageVertices.Length;
+            int baseSolidIndex = foliageSolidVertices.Length;
+
+            for (int i = 0; i < 4; i++)
+            {
+                Vector3 vert = pos + VoxelVerts[VoxelTris[p * 4 + i]];
+                foliageVertices.Add(vert);
+                foliageSolidVertices.Add(vert);
+                foliageColors.Add(Color.white);
+            }
+
+            int tile = GetTileIndexNativeBurst(blockType, p, false, -1, NativeDefinitions);
+            float u0 = tile / (float)totalTilesCount;
+            float u1 = (tile + 1f) / (float)totalTilesCount;
+
+            foliageUvs.Add(new Vector2(u0, 0f));
+            foliageUvs.Add(new Vector2(u0, 1f));
+            foliageUvs.Add(new Vector2(u1, 0f));
+            foliageUvs.Add(new Vector2(u1, 1f));
+
+            foliageTriangles.Add(baseIndex);
+            foliageTriangles.Add(baseIndex + 1);
+            foliageTriangles.Add(baseIndex + 2);
+            foliageTriangles.Add(baseIndex + 2);
+            foliageTriangles.Add(baseIndex + 1);
+            foliageTriangles.Add(baseIndex + 3);
+
+            foliageSolidTriangles.Add(baseSolidIndex);
+            foliageSolidTriangles.Add(baseSolidIndex + 1);
+            foliageSolidTriangles.Add(baseSolidIndex + 2);
+            foliageSolidTriangles.Add(baseSolidIndex + 2);
+            foliageSolidTriangles.Add(baseSolidIndex + 1);
+            foliageSolidTriangles.Add(baseSolidIndex + 3);
+        }
+    }
+
+    private void AddGlassToSolidMesh(Vector3 pos)
+    {
+        float transU = 9f / (float)totalTilesCount;
+        Vector2 transparentUV = new Vector2(transU, 0f);
+
+        for (int p = 0; p < 6; p++)
+        {
+            Vector3 neighborPos = pos + FaceChecks[p];
+            int nx = (int)math.floor(neighborPos.x);
+            int ny = (int)math.floor(neighborPos.y);
+            int nz = (int)math.floor(neighborPos.z);
+
+            byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz);
+
+            if (neighbor == 35) continue;
+            if (neighbor != 0 && neighbor != 7 && neighbor != 9 &&
+                neighbor != 10 && neighbor != 11 && neighbor != 12) continue;
+
+            int baseIndex = glassVertices.Length;
+            int baseSolidIndex = vertices.Length;
+
+            for (int i = 0; i < 4; i++)
+            {
+                glassVertices.Add(pos + VoxelVerts[VoxelTris[p * 4 + i]]);
+            }
+
+            int tile = GetTileIndexNativeBurst(35, p, false, -1, NativeDefinitions);
+            float u0 = tile / (float)totalTilesCount;
+            float u1 = (tile + 1f) / (float)totalTilesCount;
+
+            glassUvs.Add(new Vector2(u0, 0f));
+            glassUvs.Add(new Vector2(u0, 1f));
+            glassUvs.Add(new Vector2(u1, 0f));
+            glassUvs.Add(new Vector2(u1, 1f));
+
+            glassTriangles.Add(baseIndex);
+            glassTriangles.Add(baseIndex + 1);
+            glassTriangles.Add(baseIndex + 2);
+            glassTriangles.Add(baseIndex + 2);
+            glassTriangles.Add(baseIndex + 1);
+            glassTriangles.Add(baseIndex + 3);
+
+            for (int i = 0; i < 4; i++)
+            {
+                vertices.Add(pos + VoxelVerts[VoxelTris[p * 4 + i]]);
+                uvs.Add(transparentUV);
+            }
+
+            triangles.Add(baseSolidIndex);
+            triangles.Add(baseSolidIndex + 1);
+            triangles.Add(baseSolidIndex + 2);
+            triangles.Add(baseSolidIndex + 2);
+            triangles.Add(baseSolidIndex + 1);
+            triangles.Add(baseSolidIndex + 3);
+        }
+    }
+
+    private bool HasNeighborBlock(Vector3 pos, Vector3 direction)
+    {
+        Vector3 neighborPos = pos + direction;
+        int nx = (int)math.floor(neighborPos.x);
+        int ny = (int)math.floor(neighborPos.y);
+        int nz = (int)math.floor(neighborPos.z);
+
+        byte neighbor = GetVoxelFromNeighborOrWorld(nx, ny, nz);
+
+        return neighbor != 0 && neighbor != 7 && neighbor != 9 && neighbor != 10 && neighbor != 11 && neighbor != 13 && neighbor != 14 && neighbor != 23 && neighbor != 27;
+    }
+
+    private void AddPropellerBlock(Vector3 pos)
+    {
+        bool hasFront = HasNeighborBlock(pos, Vector3.forward);
+        bool hasBack  = HasNeighborBlock(pos, Vector3.back);
+        bool hasLeft  = HasNeighborBlock(pos, Vector3.left);
+        bool hasRight = HasNeighborBlock(pos, Vector3.right);
+        bool hasBottom = HasNeighborBlock(pos, Vector3.down);
+        bool hasTop    = HasNeighborBlock(pos, Vector3.up);
+
+        Quaternion blockRotation = Quaternion.identity;
+        if (hasFront && !hasBack) blockRotation = Quaternion.Euler(0f, 180f, 0f);
+        else if (hasBack && !hasFront) blockRotation = Quaternion.identity;
+        else if (hasRight && !hasLeft) blockRotation = Quaternion.Euler(0f, -90f, 0f);
+        else if (hasLeft && !hasRight) blockRotation = Quaternion.Euler(0f, 90f, 0f);
+        else if (hasBottom && !hasTop) blockRotation = Quaternion.Euler(-90f, 0f, 0f);
+        else if (hasTop && !hasBottom) blockRotation = Quaternion.Euler(90f, 0f, 0f);
+        else
+        {
+            if (hasBottom) blockRotation = Quaternion.Euler(-90f, 0f, 0f);
+            else blockRotation = Quaternion.Euler(0f, 180f, 0f);
+        }
+
+        Vector3 centerOffset = new Vector3(0.5f, 0.5f, 0.5f);
+
+        Vector3 hubSize = new Vector3(0.21f, 0.21f, 0.8f);
+        Vector3 hubLocalPos = blockRotation * new Vector3(0f, 0f, -0.1f) + centerOffset;
+        AddSubBoxRotated(pos, hubLocalPos, hubSize, blockRotation, 24);
+
+        Vector3 noseSize = new Vector3(0.15f, 0.15f, 0.15f);
+        Vector3 noseLocalPos = blockRotation * new Vector3(0f, 0f, 0.3f) + centerOffset;
+        AddSubBoxRotated(pos, noseLocalPos, noseSize, blockRotation, 24);
+
+        Vector3 bladeSize = new Vector3(0.132f, 0.48f, 0.03f);
+        for (int i = 0; i < 3; i++)
+        {
+            float angle = i * 120f;
+            Quaternion radialRotation = Quaternion.Euler(0f, 0f, angle);
+            Quaternion bladePitch = Quaternion.Euler(0f, 28f, 0f);
+            
+            Quaternion localBladeRot = radialRotation * bladePitch;
+            Vector3 localBladePos = radialRotation * new Vector3(0f, 0.33f, 0f);
+
+            Quaternion finalRot = blockRotation * localBladeRot;
+            Vector3 finalPos = blockRotation * localBladePos + centerOffset;
+
+            AddSubBoxRotated(pos, finalPos, bladeSize, finalRot, 25);
+        }
+    }
+
+    private void AddLargePropellerBlock(Vector3 pos)
+    {
+        bool hasFront = HasNeighborBlock(pos, Vector3.forward);
+        bool hasBack  = HasNeighborBlock(pos, Vector3.back);
+        bool hasLeft  = HasNeighborBlock(pos, Vector3.left);
+        bool hasRight = HasNeighborBlock(pos, Vector3.right);
+        bool hasBottom = HasNeighborBlock(pos, Vector3.down);
+        bool hasTop    = HasNeighborBlock(pos, Vector3.up);
+
+        Quaternion blockRotation = Quaternion.identity;
+        if (hasFront && !hasBack) blockRotation = Quaternion.Euler(0f, 180f, 0f);
+        else if (hasBack && !hasFront) blockRotation = Quaternion.identity;
+        else if (hasRight && !hasLeft) blockRotation = Quaternion.Euler(0f, -90f, 0f);
+        else if (hasLeft && !hasRight) blockRotation = Quaternion.Euler(0f, 90f, 0f);
+        else if (hasBottom && !hasTop) blockRotation = Quaternion.Euler(-90f, 0f, 0f);
+        else if (hasTop && !hasBottom) blockRotation = Quaternion.Euler(90f, 0f, 0f);
+        else
+        {
+            if (hasBottom) blockRotation = Quaternion.Euler(-90f, 0f, 0f);
+            else blockRotation = Quaternion.Euler(0f, 180f, 0f);
+        }
+
+        Vector3 centerOffset = new Vector3(0.5f, 0.5f, 0.5f);
+
+        Vector3 hubSize = new Vector3(0.35f, 0.35f, 2.0f);
+        Vector3 hubLocalPos = blockRotation * new Vector3(0f, 0f, 0.5f) + centerOffset;
+        AddSubBoxRotated(pos, hubLocalPos, hubSize, blockRotation, 24);
+
+        Vector3 noseSize = new Vector3(0.25f, 0.25f, 0.25f);
+        Vector3 noseLocalPos = blockRotation * new Vector3(0f, 0f, 1.5f) + centerOffset;
+        AddSubBoxRotated(pos, noseLocalPos, noseSize, blockRotation, 24);
+
+        Vector3 bladeSize = new Vector3(0.2f, 1.35f, 0.05f);
+        for (int i = 0; i < 3; i++)
+        {
+            float angle = i * 120f;
+            Quaternion radialRotation = Quaternion.Euler(0f, 0f, angle);
+            Quaternion bladePitch = Quaternion.Euler(0f, 28f, 0f);
+            
+            Quaternion localBladeRot = radialRotation * bladePitch;
+            Vector3 localBladePos = radialRotation * new Vector3(0f, 0.8f, 0f);
+
+            Quaternion finalRot = blockRotation * localBladeRot;
+            Vector3 finalPos = blockRotation * (new Vector3(0f, 0f, 1.35f) + localBladePos) + centerOffset;
+
+            AddSubBoxRotated(pos, finalPos, bladeSize, finalRot, 25);
+        }
+    }
+
+    private void AddStairsBlock(Vector3 pos, byte blockType)
+    {
+        bool isWood = (blockType == 38 || blockType == 40 || blockType == 41 || blockType == 42);
+        byte textureBlockType = isWood ? (byte)2 : (byte)3;
+
+        AddSubBox(pos, new Vector3(0f, 0f, 0f), new Vector3(1f, 0.5f, 1f), textureBlockType);
+
+        Vector3 topMin = Vector3.zero;
+        Vector3 topMax = Vector3.zero;
+
+        if (blockType == 38 || blockType == 39)
+        {
+            topMin = new Vector3(0f, 0.5f, 0.5f);
+            topMax = new Vector3(1f, 1f, 1f);
+        }
+        else if (blockType == 40 || blockType == 43)
+        {
+            topMin = new Vector3(0f, 0.5f, 0f);
+            topMax = new Vector3(1f, 1f, 0.5f);
+        }
+        else if (blockType == 41 || blockType == 44)
+        {
+            topMin = new Vector3(0.5f, 0.5f, 0f);
+            topMax = new Vector3(1f, 1f, 1f);
+        }
+        else if (blockType == 42 || blockType == 45)
+        {
+            topMin = new Vector3(0f, 0.5f, 0f);
+            topMax = new Vector3(0.5f, 1f, 1f);
+        }
+
+        AddSubBox(pos, topMin, topMax, textureBlockType);
+    }
+
+    private void AddSlabBlock(Vector3 pos, byte blockType)
+    {
+        byte textureBlockType = (blockType == 46) ? (byte)2 : (byte)3;
+        AddSubBox(pos, new Vector3(0f, 0f, 0f), new Vector3(1f, 0.5f, 1f), textureBlockType);
+    }
+
+    private void AddSubBox(Vector3 pos, Vector3 min, Vector3 max, byte textureBlockType)
+    {
+        for (int p = 0; p < 6; p++)
+        {
+            int baseIndex = vertices.Length;
+            WriteBoxFaceVertices(p, min, max, ref vertices, pos, Quaternion.identity, Vector3.zero);
+
+            int tile = GetTileIndexNativeBurst(textureBlockType, p, false, -1, NativeDefinitions);
+            float u0 = tile / (float)totalTilesCount;
+            float u1 = (tile + 1f) / (float)totalTilesCount;
+
+            uvs.Add(new Vector2(u0, 0f));
+            uvs.Add(new Vector2(u0, 1f));
+            uvs.Add(new Vector2(u1, 0f));
+            uvs.Add(new Vector2(u1, 1f));
+
+            triangles.Add(baseIndex);
+            triangles.Add(baseIndex + 1);
+            triangles.Add(baseIndex + 2);
+            triangles.Add(baseIndex + 2);
+            triangles.Add(baseIndex + 1);
+            triangles.Add(baseIndex + 3);
+        }
+    }
+
+    private void AddSubBoxRotated(Vector3 pos, Vector3 localCenter, Vector3 size, Quaternion rotation, byte textureBlockType)
+    {
+        Vector3 min = -size * 0.5f;
+        Vector3 max = size * 0.5f;
+
+        for (int p = 0; p < 6; p++)
+        {
+            int baseIndex = vertices.Length;
+            WriteBoxFaceVertices(p, min, max, ref vertices, pos, rotation, localCenter);
+
+            int tile = GetTileIndexNativeBurst(textureBlockType, p, false, -1, NativeDefinitions);
+            float u0 = tile / (float)totalTilesCount;
+            float u1 = (tile + 1f) / (float)totalTilesCount;
+
+            uvs.Add(new Vector2(u0, 0f));
+            uvs.Add(new Vector2(u0, 1f));
+            uvs.Add(new Vector2(u1, 0f));
+            uvs.Add(new Vector2(u1, 1f));
+
+            triangles.Add(baseIndex);
+            triangles.Add(baseIndex + 1);
+            triangles.Add(baseIndex + 2);
+            triangles.Add(baseIndex + 2);
+            triangles.Add(baseIndex + 1);
+            triangles.Add(baseIndex + 3);
+        }
+    }
+
+    private void WriteBoxFaceVertices(int face, Vector3 min, Vector3 max, ref NativeList<Vector3> targetList, Vector3 pos, Quaternion rotation, Vector3 localCenter)
+    {
+        Vector3 v0 = default, v1 = default, v2 = default, v3 = default;
+        switch (face)
+        {
+            case 0: // Back
+                v0 = new Vector3(min.x, min.y, min.z);
+                v1 = new Vector3(min.x, max.y, min.z);
+                v2 = new Vector3(max.x, min.y, min.z);
+                v3 = new Vector3(max.x, max.y, min.z);
+                break;
+            case 1: // Front
+                v0 = new Vector3(max.x, min.y, max.z);
+                v1 = new Vector3(max.x, max.y, max.z);
+                v2 = new Vector3(min.x, min.y, max.z);
+                v3 = new Vector3(min.x, max.y, max.z);
+                break;
+            case 2: // Top
+                v0 = new Vector3(min.x, max.y, min.z);
+                v1 = new Vector3(min.x, max.y, max.z);
+                v2 = new Vector3(max.x, max.y, min.z);
+                v3 = new Vector3(max.x, max.y, max.z);
+                break;
+            case 3: // Bottom
+                v0 = new Vector3(max.x, min.y, min.z);
+                v1 = new Vector3(max.x, min.y, max.z);
+                v2 = new Vector3(min.x, min.y, min.z);
+                v3 = new Vector3(min.x, min.y, max.z);
+                break;
+            case 4: // Left
+                v0 = new Vector3(min.x, min.y, max.z);
+                v1 = new Vector3(min.x, max.y, max.z);
+                v2 = new Vector3(min.x, min.y, min.z);
+                v3 = new Vector3(min.x, max.y, min.z);
+                break;
+            case 5: // Right
+                v0 = new Vector3(max.x, min.y, min.z);
+                v1 = new Vector3(max.x, max.y, min.z);
+                v2 = new Vector3(max.x, min.y, max.z);
+                v3 = new Vector3(max.x, max.y, max.z);
+                break;
+        }
+
+        if (rotation.Equals(Quaternion.identity) && localCenter.Equals(Vector3.zero))
+        {
+            targetList.Add(pos + v0);
+            targetList.Add(pos + v1);
+            targetList.Add(pos + v2);
+            targetList.Add(pos + v3);
+        }
+        else
+        {
+            targetList.Add(pos + (rotation * v0 + localCenter));
+            targetList.Add(pos + (rotation * v1 + localCenter));
+            targetList.Add(pos + (rotation * v2 + localCenter));
+            targetList.Add(pos + (rotation * v3 + localCenter));
+        }
+    }
+
+    private void AddCustomStairMeshBlock(Vector3 pos, BlittableBlockDefinition def, byte blockType)
+    {
+        if (!def.hasCustomMesh) return;
+
+        float angle = 0f;
+        if (blockType == 40 || blockType == 43) angle = 180f;
+        else if (blockType == 41 || blockType == 44) angle = 90f;
+        else if (blockType == 42 || blockType == 45) angle = 270f;
+
+        Quaternion rot = Quaternion.Euler(0f, angle, 0f);
+        Vector3 pivot = new Vector3(0.5f, 0f, 0.5f);
+
+        int tile = def.tileLeft;
+        float u0 = tile / (float)totalTilesCount;
+        float u1 = (tile + 1f) / (float)totalTilesCount;
+
+        int vertCount = def.customMeshVertexCount;
+        int triCount = def.customMeshIndexCount;
+        int vertStart = def.customMeshVertexStart;
+        int triStart = def.customMeshIndexStart;
+
+        if (def.isTransparent)
+        {
+            int startVert = foliageVertices.Length;
+            for (int i = 0; i < vertCount; i++)
+            {
+                Vector3 localVert = CustomMeshVertices[vertStart + i];
+                Vector3 rotatedVert = rot * (localVert - pivot) + pivot;
+                foliageVertices.Add(pos + rotatedVert);
+
+                Vector2 origUV = CustomMeshUVs[vertStart + i];
+                float u = math.lerp(u0, u1, origUV.x);
+                foliageUvs.Add(new Vector2(u, origUV.y));
+                foliageColors.Add(Color.white);
+            }
+            for (int i = 0; i < triCount; i++)
+            {
+                foliageTriangles.Add(startVert + CustomMeshIndices[triStart + i]);
+            }
+
+            if (def.isSolid)
+            {
+                int startSolidVert = foliageSolidVertices.Length;
+                for (int i = 0; i < vertCount; i++)
+                {
+                    Vector3 localVert = CustomMeshVertices[vertStart + i];
+                    Vector3 rotatedVert = rot * (localVert - pivot) + pivot;
+                    foliageSolidVertices.Add(pos + rotatedVert);
+                }
+                for (int i = 0; i < triCount; i++)
+                {
+                    foliageSolidTriangles.Add(startSolidVert + CustomMeshIndices[triStart + i]);
+                }
+            }
+        }
+        else
+        {
+            int startVert = vertices.Length;
+            for (int i = 0; i < vertCount; i++)
+            {
+                Vector3 localVert = CustomMeshVertices[vertStart + i];
+                Vector3 rotatedVert = rot * (localVert - pivot) + pivot;
+                vertices.Add(pos + rotatedVert);
+
+                Vector2 origUV = CustomMeshUVs[vertStart + i];
+                float u = math.lerp(u0, u1, origUV.x);
+                uvs.Add(new Vector2(u, origUV.y));
+            }
+            for (int i = 0; i < triCount; i++)
+            {
+                triangles.Add(startVert + CustomMeshIndices[triStart + i]);
+            }
+        }
+    }
+
+    private void AddCustomMeshBlock(Vector3 pos, BlittableBlockDefinition def)
+    {
+        if (!def.hasCustomMesh) return;
+
+        int tile = def.tileLeft;
+        float u0 = tile / (float)totalTilesCount;
+        float u1 = (tile + 1f) / (float)totalTilesCount;
+
+        int vertCount = def.customMeshVertexCount;
+        int triCount = def.customMeshIndexCount;
+        int vertStart = def.customMeshVertexStart;
+        int triStart = def.customMeshIndexStart;
+
+        if (def.isTransparent)
+        {
+            int startVert = foliageVertices.Length;
+            for (int i = 0; i < vertCount; i++)
+            {
+                foliageVertices.Add(pos + CustomMeshVertices[vertStart + i]);
+                Vector2 origUV = CustomMeshUVs[vertStart + i];
+                float u = math.lerp(u0, u1, origUV.x);
+                foliageUvs.Add(new Vector2(u, origUV.y));
+                foliageColors.Add(Color.white);
+            }
+            for (int i = 0; i < triCount; i++)
+            {
+                foliageTriangles.Add(startVert + CustomMeshIndices[triStart + i]);
+            }
+
+            if (def.isSolid)
+            {
+                int startSolidVert = foliageSolidVertices.Length;
+                for (int i = 0; i < vertCount; i++)
+                {
+                    foliageSolidVertices.Add(pos + CustomMeshVertices[vertStart + i]);
+                }
+                for (int i = 0; i < triCount; i++)
+                {
+                    foliageSolidTriangles.Add(startSolidVert + CustomMeshIndices[triStart + i]);
+                }
+            }
+        }
+        else
+        {
+            int startVert = vertices.Length;
+            for (int i = 0; i < vertCount; i++)
+            {
+                vertices.Add(pos + CustomMeshVertices[vertStart + i]);
+                Vector2 origUV = CustomMeshUVs[vertStart + i];
+                float u = math.lerp(u0, u1, origUV.x);
+                uvs.Add(new Vector2(u, origUV.y));
+            }
+            for (int i = 0; i < triCount; i++)
+            {
+                triangles.Add(startVert + CustomMeshIndices[triStart + i]);
+            }
+        }
+    }
+
+    private int GetTileIndexNativeBurst(byte blockID, int face, bool isLit, int facing, NativeArray<BlittableBlockDefinition> nativeDefs)
+    {
+        if (nativeDefs.IsCreated && blockID < nativeDefs.Length)
+        {
+            var def = nativeDefs[blockID];
+            if (face == 2) return def.tileTop;
+            if (face == 3) return def.tileBottom;
+
+            bool isFront = (facing != -1) ? (face == facing) : (blockID == 37 ? face == 0 : face == 1);
+            if (isFront)
+            {
+                return isLit ? def.tileFrontLit : def.tileFront;
+            }
+            return def.tileLeft;
+        }
+        return GetDefaultTileIndexBurst(blockID, face, isLit, facing);
+    }
+
+    private int GetDefaultTileIndexBurst(byte blockID, int face, bool isLit, int facing)
+    {
+        if (blockID == 1) return (face == 2 || face == 3) ? 4 : 5;
+        if (blockID == 2) return 6;
+        if (blockID == 3) return 3;
+        if (blockID == 5) return 2;
+        if (blockID == 7) return 7;
+        if (blockID == 8 || blockID == 34) return 8;
+        if (blockID == 9) return 9;
+        if (blockID == 10) return 10;
+        if (blockID == 11) return 11;
+        if (blockID == 12) return 12;
+        if (blockID == 13) return 27;
+        if (blockID == 14) return 28;
+        if (blockID == 20) return (face == 4 || face == 5) ? 16 : 15;
+        if (blockID == 21 || blockID == 23) return (face == 4 || face == 5) ? 17 : 15;
+        if (blockID == 22 || blockID == 26) return (face == 0 || face == 1) ? 29 : 30;
+        if (blockID == 24) return 30;
+        if (blockID == 25) return 31;
+        if (blockID == 50) return (face == 1) ? 14 : 13;
+        if (blockID == 30) return 18;
+        if (blockID == 31) return 19;
+        if (blockID == 32) return 20;
+        if (blockID == 33) return 21;
+        if (blockID == 35) return 22;
+        if (blockID == 36) return (face == 2) ? 23 : (face == 3) ? 6 : 24;
+        if (blockID == 37)
+        {
+            if (face == 2 || face == 3) return 3;
+            bool isFront = (facing != -1) ? (face == facing) : (face == 0);
+            if (isFront) return isLit ? 26 : 25;
+            return 3;
+        }
+        if (blockID == 38 || blockID == 40 || blockID == 41 || blockID == 42) return 6;
+        if (blockID == 39 || blockID == 43 || blockID == 44 || blockID == 45) return 3;
+        if (blockID == 46) return 6;
+        if (blockID == 47) return 3;
+        if (blockID == 48) return 32;
+        if (blockID == 49) return 33;
+        if (blockID == 51) return (face == 2 || face == 3) ? 35 : 34;
+        if (blockID == 52) return 36;
+        if (blockID == 53) return (face == 2 || face == 3) ? 38 : 37;
+        if (blockID == 54) return 39;
+        if (blockID == 55) return 40;
+        if (blockID == 57) return 41;
+        if (blockID == 56) return 3;
+
+        return (face == 2) ? 0 : (face == 3) ? 2 : 1;
     }
 }

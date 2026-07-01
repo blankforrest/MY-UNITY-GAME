@@ -531,6 +531,23 @@ public static class GrassTextureGenerator
         };
     }
 
+    public static Vector2[] GetBlockUVsNative(int face, byte blockType, bool isLit = false, int facing = -1)
+    {
+        int tile = BlockRegistry.GetTileIndexNative(blockType, face, isLit, facing);
+        int totalCount = BlockRegistry.TotalTilesCount;
+
+        float u0 = tile        / (float)totalCount;
+        float u1 = (tile + 1f) / (float)totalCount;
+
+        return new Vector2[]
+        {
+            new Vector2(u0, 0f),
+            new Vector2(u0, 1f),
+            new Vector2(u1, 0f),
+            new Vector2(u1, 1f),
+        };
+    }
+
     // ── New Block Samplers ───────────────────────────────────────────────────
 
     static Color CoalOre(int x, int y)

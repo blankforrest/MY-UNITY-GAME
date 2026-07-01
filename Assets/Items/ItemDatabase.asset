@@ -132,8 +132,8 @@ MonoBehaviour:
     healAmount: 0
   - itemName: Coal Chunk
     itemID: 97
-    inventoryIcon: {fileID: 0}
-    droppedItemSprite: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 5bf8838bcb02d1f438e0fb58b6b39311, type: 3}
+    droppedItemSprite: {fileID: 21300000, guid: 5bf8838bcb02d1f438e0fb58b6b39311, type: 3}
     creativeBag: ITEMS
     blockTypeID: 0
     toolType: 0

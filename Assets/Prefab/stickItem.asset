@@ -16,3 +16,5 @@ MonoBehaviour:
   icon: {fileID: 21300000, guid: 7e62f8ae1a40cf74286d38fb989bc474, type: 3}
   itemID: 0
   blockTypeID: 0
+  toolType: 0
+  toolTier: 0

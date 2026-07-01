@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Unity.Collections;
 
 public class SaveLoadManager : MonoBehaviour
 {
@@ -33,6 +34,9 @@ public class SaveLoadManager : MonoBehaviour
     }
 
     private Dictionary<Vector3Int, byte> worldModifications = new Dictionary<Vector3Int, byte>();
+    private Unity.Collections.NativeParallelHashMap<Vector3Int, byte> _nativeModifications;
+    public Unity.Collections.NativeParallelHashMap<Vector3Int, byte> NativeModifications => _nativeModifications;
+
     public string SaveFilePath => Path.Combine(Application.persistentDataPath, $"WorldSave_{activeWorldSlot}.json");
 
     private void Awake()
@@ -41,6 +45,7 @@ public class SaveLoadManager : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            _nativeModifications = new Unity.Collections.NativeParallelHashMap<Vector3Int, byte>(1024, Unity.Collections.Allocator.Persistent);
         }
         else
         {
@@ -68,6 +73,17 @@ public class SaveLoadManager : MonoBehaviour
     private void OnDisable()
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            if (_nativeModifications.IsCreated)
+            {
+                _nativeModifications.Dispose();
+            }
+        }
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -178,39 +194,29 @@ public class SaveLoadManager : MonoBehaviour
             Mathf.FloorToInt(pos.z)
         );
         worldModifications[gridPos] = blockID;
+
+        if (_nativeModifications.IsCreated)
+        {
+            _nativeModifications[gridPos] = blockID;
+        }
     }
 
-    public void ApplyChunkModifications(Vector2 chunkPos, byte[] voxelMap)
+    private void SyncModificationsToNative()
     {
-        int chunkWidth = VoxelData.ChunkWidth;
-        int chunkHeight = VoxelData.ChunkHeight;
-
-        int startX = Mathf.FloorToInt(chunkPos.x * chunkWidth);
-        int startZ = Mathf.FloorToInt(chunkPos.y * chunkWidth);
-
-        for (int x = 0; x < chunkWidth; x++)
+        if (!_nativeModifications.IsCreated)
         {
-            for (int z = 0; z < chunkWidth; z++)
-            {
-                for (int y = 0; y < chunkHeight; y++)
-                {
-                    Vector3Int globalPos = new Vector3Int(startX + x, y, startZ + z);
-                    if (worldModifications.TryGetValue(globalPos, out byte savedID))
-                    {
-                        int flatIndex = VoxelData.GetFlatIndex(x, y, z);
-                        voxelMap[flatIndex] = savedID;
+            _nativeModifications = new Unity.Collections.NativeParallelHashMap<Vector3Int, byte>(worldModifications.Count + 128, Unity.Collections.Allocator.Persistent);
+        }
+        else
+        {
+            _nativeModifications.Clear();
+        }
 
-                        // Re-register player-placed blocks (excluding air, water, and initial flowers)
-                        if (savedID != 0 && savedID != 7 && savedID != 9 && savedID != 10 && savedID != 11)
-                        {
-                            PlacedBlockRegistry.Instance?.Register(globalPos);
-                        }
-                        else if (savedID == 0)
-                        {
-                            PlacedBlockRegistry.Instance?.Unregister(globalPos);
-                        }
-                    }
-                }
+        foreach (var kvp in worldModifications)
+        {
+            if (!_nativeModifications.ContainsKey(kvp.Key))
+            {
+                _nativeModifications.TryAdd(kvp.Key, kvp.Value);
             }
         }
     }
@@ -521,13 +527,24 @@ public class SaveLoadManager : MonoBehaviour
             UpdateSeedOffsets();
 
             worldModifications.Clear();
+            PlacedBlockRegistry.Instance?.Clear();
+
             if (data.modifications != null)
             {
                 foreach (var b in data.modifications)
                 {
-                    worldModifications[new Vector3Int(b.x, b.y, b.z)] = b.id;
+                    Vector3Int globalPos = new Vector3Int(b.x, b.y, b.z);
+                    worldModifications[globalPos] = b.id;
+
+                    // Re-register player-placed blocks (excluding air, water, and initial flowers)
+                    if (b.id != 0 && b.id != 7 && b.id != 9 && b.id != 10 && b.id != 11)
+                    {
+                        PlacedBlockRegistry.Instance?.Register(globalPos);
+                    }
                 }
             }
+
+            SyncModificationsToNative();
         }
         catch (System.Exception e)
         {

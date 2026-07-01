@@ -52,6 +52,14 @@ public class VoxelWorld : MonoBehaviour
         InitializeMaterials();
     }
 
+    void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            BlockRegistry.DisposeNativeContainers();
+        }
+    }
+
     void InitializeMaterials()
     {
         // 1. Initialize the custom block definitions registry
@@ -296,6 +304,8 @@ public class VoxelWorld : MonoBehaviour
             if (glassMaterial.HasProperty("_Metallic")) glassMaterial.SetFloat("_Metallic", 0f);
             if (glassMaterial.HasProperty("_SpecularHighlights")) glassMaterial.SetFloat("_SpecularHighlights", 0f);
         }
+
+        BlockRegistry.RebuildBlittableDefinitions();
     }
 
     void Start()
