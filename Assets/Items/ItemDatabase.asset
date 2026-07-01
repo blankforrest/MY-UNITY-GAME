@@ -17,7 +17,7 @@ MonoBehaviour:
     itemID: 88
     inventoryIcon: {fileID: 0}
     droppedItemSprite: {fileID: 0}
-    creativeBag: ITEMS
+    creativeBag: FOOD
     blockTypeID: 0
     toolType: 0
     toolTier: 0
@@ -30,7 +30,7 @@ MonoBehaviour:
     itemID: 89
     inventoryIcon: {fileID: 0}
     droppedItemSprite: {fileID: 0}
-    creativeBag: ITEMS
+    creativeBag: FOOD
     blockTypeID: 0
     toolType: 0
     toolTier: 0
@@ -93,8 +93,8 @@ MonoBehaviour:
     healAmount: 0
   - itemName: Gold Ingot
     itemID: 94
-    inventoryIcon: {fileID: 21300000, guid: 6b5dd606b149ba545b71361feb7e9197, type: 3}
-    droppedItemSprite: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 300eb19e5eff45742a8b9f06d0a1e530, type: 3}
+    droppedItemSprite: {fileID: 21300000, guid: 300eb19e5eff45742a8b9f06d0a1e530, type: 3}
     creativeBag: ITEMS
     blockTypeID: 0
     toolType: 0
@@ -119,8 +119,8 @@ MonoBehaviour:
     healAmount: 0
   - itemName: Iron Ingot
     itemID: 96
-    inventoryIcon: {fileID: 0}
-    droppedItemSprite: {fileID: 0}
+    inventoryIcon: {fileID: 21300000, guid: 6483c28250c11ac418c9333aa4205701, type: 3}
+    droppedItemSprite: {fileID: 21300000, guid: 6483c28250c11ac418c9333aa4205701, type: 3}
     creativeBag: ITEMS
     blockTypeID: 0
     toolType: 0

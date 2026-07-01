@@ -34,8 +34,8 @@ public class ItemDatabase : ScriptableObject
         defaults.Add(CreateDef(90, "Leather", "ITEMS", 0, ToolType.None, ToolTier.None, true, 64, "Tough animal leather."));
         
         // 4. Edibles
-        defaults.Add(CreateDef(89, "Mutton", "ITEMS", 0, ToolType.None, ToolTier.None, true, 64, "Raw mutton meat. Restores health.", healAmount: 4));
-        defaults.Add(CreateDef(88, "Apple", "ITEMS", 0, ToolType.None, ToolTier.None, true, 64, "A delicious red apple. Restores health.", healAmount: 2));
+        defaults.Add(CreateDef(89, "Mutton", "FOOD", 0, ToolType.None, ToolTier.None, true, 64, "Raw mutton meat. Restores health.", healAmount: 4));
+        defaults.Add(CreateDef(88, "Apple", "FOOD", 0, ToolType.None, ToolTier.None, true, 64, "A delicious red apple. Restores health.", healAmount: 2));
 
         // 5. Tools of various tiers
         // Diamond

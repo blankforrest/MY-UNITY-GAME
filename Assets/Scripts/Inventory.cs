@@ -853,9 +853,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Bedrock", 48, 64));
             items.Add(new CreativeItemData("Cactus", 49, 64));
             items.Add(new CreativeItemData("Birch Log", 51, 64));
-            items.Add(new CreativeItemData("Birch Leaves", 52, 64));
             items.Add(new CreativeItemData("Spruce Log", 53, 64));
-            items.Add(new CreativeItemData("Spruce Leaves", 54, 64));
             items.Add(new CreativeItemData("Coal Ore", 30, 64));
             items.Add(new CreativeItemData("Iron Ore", 31, 64));
             items.Add(new CreativeItemData("Diamond Ore", 55, 64));
@@ -898,7 +896,6 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Diamond", 0, 64));
             items.Add(new CreativeItemData("Stick", 0, 64));
             items.Add(new CreativeItemData("Wool", 0, 64));
-            items.Add(new CreativeItemData("Mutton", 0, 64));
             items.Add(new CreativeItemData("Leather", 0, 64));
 
             // ── 3. Vehicles ─────────────────────────────────────────
@@ -912,10 +909,15 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Short Grass", 13, 64));
             items.Add(new CreativeItemData("Tall Grass", 14, 64));
             items.Add(new CreativeItemData("Leaves", 12, 64));
+            items.Add(new CreativeItemData("Birch Leaves", 52, 64));
+            items.Add(new CreativeItemData("Spruce Leaves", 54, 64));
             items.Add(new CreativeItemData("Flower", 9, 64));
             items.Add(new CreativeItemData("Dandelion", 10, 64));
             items.Add(new CreativeItemData("Iris", 11, 64));
+
+            // ── 5. Food ─────────────────────────────────────────────
             items.Add(new CreativeItemData("Apple", 0, 64));
+            items.Add(new CreativeItemData("Mutton", 0, 64));
         }
         else if (category == "BLOCKS")
         {
@@ -932,9 +934,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Bedrock", 48, 64));
             items.Add(new CreativeItemData("Cactus", 49, 64));
             items.Add(new CreativeItemData("Birch Log", 51, 64));
-            items.Add(new CreativeItemData("Birch Leaves", 52, 64));
             items.Add(new CreativeItemData("Spruce Log", 53, 64));
-            items.Add(new CreativeItemData("Spruce Leaves", 54, 64));
             items.Add(new CreativeItemData("Coal Ore", 30, 64));
             items.Add(new CreativeItemData("Iron Ore", 31, 64));
             items.Add(new CreativeItemData("Diamond Ore", 55, 64));
@@ -972,17 +972,6 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Wooden Shovel", 0, 1));
             items.Add(new CreativeItemData("Wooden Sword", 0, 1));
             items.Add(new CreativeItemData("Wooden Rake", 0, 1));
-            // Wrench, materials
-            items.Add(new CreativeItemData("Wrench", 0, 1));
-            items.Add(new CreativeItemData("Wolf Spawn Egg", 0, 64));
-            items.Add(new CreativeItemData("Sheep Spawn Egg", 0, 64));
-            items.Add(new CreativeItemData("Coal Chunk", 0, 64));
-            items.Add(new CreativeItemData("Iron Ingot", 0, 64));
-            items.Add(new CreativeItemData("Iron", 0, 64));
-            items.Add(new CreativeItemData("Diamond", 0, 64));
-            items.Add(new CreativeItemData("Wool", 0, 64));
-            items.Add(new CreativeItemData("Mutton", 0, 64));
-            items.Add(new CreativeItemData("Leather", 0, 64));
         }
         else if (category == "VEHICLES")
         {
@@ -998,10 +987,16 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Short Grass", 13, 64));
             items.Add(new CreativeItemData("Tall Grass", 14, 64));
             items.Add(new CreativeItemData("Leaves", 12, 64));
+            items.Add(new CreativeItemData("Birch Leaves", 52, 64));
+            items.Add(new CreativeItemData("Spruce Leaves", 54, 64));
             items.Add(new CreativeItemData("Flower", 9, 64));
             items.Add(new CreativeItemData("Dandelion", 10, 64));
             items.Add(new CreativeItemData("Iris", 11, 64));
+        }
+        else if (category == "FOOD")
+        {
             items.Add(new CreativeItemData("Apple", 0, 64));
+            items.Add(new CreativeItemData("Mutton", 0, 64));
         }
         else if (category == "ITEMS")
         {
@@ -1011,9 +1006,7 @@ public class Inventory : MonoBehaviour
             items.Add(new CreativeItemData("Diamond", 0, 64));
             items.Add(new CreativeItemData("Stick", 0, 64));
             items.Add(new CreativeItemData("Wool", 0, 64));
-            items.Add(new CreativeItemData("Mutton", 0, 64));
             items.Add(new CreativeItemData("Leather", 0, 64));
-            items.Add(new CreativeItemData("Apple", 0, 64));
         }
         else if (category == "SPAWNERS")
         {

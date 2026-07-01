@@ -39,7 +39,7 @@ public class InventoryUI : MonoBehaviour
     private GameObject  tabsContainer;
     private string      activeCategory = "ALL";
     private Image[]     tabImages;
-    private string[]    categories = new string[] { "ALL", "BLOCKS", "TOOLS", "VEHICLES", "ITEMS", "FOLIAGE", "SPAWNERS" };
+    private string[]    categories = new string[] { "ALL", "BLOCKS", "TOOLS", "VEHICLES", "ITEMS", "FOLIAGE", "FOOD", "SPAWNERS" };
     private RectTransform contentRT;
 
     void Awake()
@@ -976,6 +976,7 @@ public class InventoryUI : MonoBehaviour
             case "VEHICLES": return 5;
             case "ITEMS": return 9;
             case "FOLIAGE": return 4;
+            case "FOOD": return 2;
             case "SPAWNERS": return 1;
             default: return 35;
         }

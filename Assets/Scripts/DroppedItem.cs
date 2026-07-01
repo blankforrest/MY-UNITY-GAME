@@ -83,29 +83,59 @@ public class DroppedItem : MonoBehaviour
         visual.transform.localPosition = Vector3.zero;
         visual.transform.localScale    = Vector3.one;
 
-        // Try to retrieve custom sprite from registry
+        // Try to retrieve custom sprite from registry, or fall back to item.icon if it's a non-block item
         ItemDefinition itemDef = ItemRegistry.GetDefinition(item != null ? item.itemName : "");
-        if (itemDef != null && (itemDef.droppedItemSprite != null || itemDef.inventoryIcon != null))
+        Sprite spriteToUse = null;
+        if (itemDef != null)
         {
-            Sprite spriteToUse = itemDef.droppedItemSprite != null ? itemDef.droppedItemSprite : itemDef.inventoryIcon;
-            SpriteRenderer sr = visual.AddComponent<SpriteRenderer>();
-            sr.sprite = spriteToUse;
-            
-            // Set scale to fit nicely in the world
-            visual.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
-            
+            spriteToUse = itemDef.droppedItemSprite != null ? itemDef.droppedItemSprite : itemDef.inventoryIcon;
+        }
+        if (spriteToUse == null && item != null && item.blockTypeID == 0)
+        {
+            spriteToUse = item.icon;
+        }
+
+        if (spriteToUse != null)
+        {
+            // Calculate dynamic scale based on sprite bounds to ensure a consistent, proportional size (0.35f units max dimension)
+            float maxDim = Mathf.Max(spriteToUse.bounds.size.x, spriteToUse.bounds.size.y);
+            float targetScale = 0.35f;
+            if (maxDim > 0.001f)
+            {
+                targetScale = 0.35f / maxDim;
+            }
+            visual.transform.localScale = new Vector3(targetScale, targetScale, 1f);
+
             Shader s = Shader.Find("Sprites/Default") ?? Shader.Find("Universal Render Pipeline/Unlit");
-            Material mat = new Material(s);
-            sr.material = mat;
+            Material sharedMat = new Material(s);
+
+            // Create a layered stack of 5 sprites to give the item a "thick" 3D look when it spins
+            int layersCount = 5;
+            float spacing = 0.012f;
+            for (int i = 0; i < layersCount; i++)
+            {
+                GameObject layerGo = new GameObject($"Layer_{i}");
+                layerGo.layer = 2; // Ignore Raycast
+                layerGo.transform.SetParent(visual.transform);
+                float zOffset = (i - (layersCount - 1) / 2f) * spacing;
+                layerGo.transform.localPosition = new Vector3(0f, 0f, zOffset);
+                layerGo.transform.localScale = Vector3.one;
+                layerGo.transform.localRotation = Quaternion.identity;
+
+                SpriteRenderer sr = layerGo.AddComponent<SpriteRenderer>();
+                sr.sprite = spriteToUse;
+                sr.sharedMaterial = sharedMat;
+            }
             return;
         }
 
         MeshFilter   mf = visual.AddComponent<MeshFilter>();
         MeshRenderer mr = visual.AddComponent<MeshRenderer>();
 
+        BlockDefinition blockDef = BlockRegistry.GetDefinition(blockType);
+
         if (overrideMesh != null)
         {
-            // Use custom mesh (e.g. wrench tool shape)
             mf.mesh = overrideMesh;
             if (overrideMaterial != null)
             {
@@ -118,6 +148,75 @@ public class DroppedItem : MonoBehaviour
                 mat.color = new Color(1f, 0.78f, 0.12f); // gold fallback
                 mr.material = mat;
             }
+
+            // Apply uniform scaling factor of 0.0625f to overrideMesh (Wrench and other custom tool/prop meshes)
+            visual.transform.localScale = new Vector3(0.0625f, 0.0625f, 0.0625f);
+        }
+        else if (blockDef != null && blockDef.customMesh != null)
+        {
+            // Custom block mesh drop (e.g. wheels, propellers, custom building blocks)
+            Mesh customDropMesh = new Mesh();
+            customDropMesh.name = "Dropped_" + blockDef.blockName;
+
+            Vector3[] sourceVerts = blockDef.cachedMeshVertices != null ? blockDef.cachedMeshVertices : blockDef.customMesh.vertices;
+            int[] sourceTris = blockDef.cachedMeshTriangles != null ? blockDef.cachedMeshTriangles : blockDef.customMesh.triangles;
+            Vector2[] sourceUVs = blockDef.cachedMeshUVs != null ? blockDef.cachedMeshUVs : blockDef.customMesh.uv;
+
+            // If we fall back to raw customMesh.vertices, they are at 16x scale. Scale them to 1x scale (0.0625f)
+            if (blockDef.cachedMeshVertices == null)
+            {
+                Vector3[] scaledVerts = new Vector3[sourceVerts.Length];
+                for (int i = 0; i < sourceVerts.Length; i++)
+                {
+                    scaledVerts[i] = sourceVerts[i] * 0.0625f;
+                }
+                sourceVerts = scaledVerts;
+            }
+
+            // Remap UVs to the texture atlas
+            int tile = -1;
+            if (blockDef.resolvedSideTile != -1) tile = blockDef.resolvedSideTile;
+            else if (blockDef.resolvedTopTile != -1) tile = blockDef.resolvedTopTile;
+            else if (blockDef.resolvedBottomTile != -1) tile = blockDef.resolvedBottomTile;
+            else if (blockDef.resolvedFrontTile != -1) tile = blockDef.resolvedFrontTile;
+            
+            if (tile == -1)
+            {
+                tile = BlockRegistry.GetDefaultTileIndex(blockDef.blockID, 1);
+            }
+            int totalCount = BlockRegistry.TotalTilesCount;
+            float u0 = tile / (float)totalCount;
+            float u1 = (tile + 1f) / (float)totalCount;
+
+            Vector2[] remappedUVs = new Vector2[sourceUVs.Length];
+            for (int i = 0; i < sourceUVs.Length; i++)
+            {
+                Vector2 origUV = sourceUVs[i];
+                float u = Mathf.Lerp(u0, u1, origUV.x);
+                remappedUVs[i] = new Vector2(u, origUV.y);
+            }
+
+            customDropMesh.vertices = sourceVerts;
+            customDropMesh.triangles = sourceTris;
+            customDropMesh.uv = remappedUVs;
+            customDropMesh.RecalculateNormals();
+            customDropMesh.RecalculateBounds();
+
+            mf.mesh = customDropMesh;
+
+            if (blockDef.isTransparent)
+            {
+                mr.sharedMaterial = VoxelWorld.Instance != null ? VoxelWorld.Instance.foliageMaterial : null;
+            }
+            else
+            {
+                mr.sharedMaterial = VoxelWorld.Instance != null ? VoxelWorld.Instance.chunkMaterial : null;
+            }
+
+            // Standard block drops are mini-cubes (35% size).
+            // Since customDropMesh vertices are already scaled to 1.0 unit size,
+            // we scale the visual transform by 0.35f to match.
+            visual.transform.localScale = new Vector3(0.35f, 0.35f, 0.35f);
         }
         else
         {
@@ -446,9 +545,10 @@ public class DroppedItem : MonoBehaviour
             return;
         }
 
-        // Landed: check ground still exists, then float bob + spin
+        // Landed: check ground still exists, using the stable startY to prevent bobbing from throwing off the raycast distance
+        Vector3 checkOrigin = new Vector3(transform.position.x, startY, transform.position.z);
         bool groundStillThere = Physics.Raycast(
-            transform.position, Vector3.down, 0.6f, ~0, QueryTriggerInteraction.Ignore);
+            checkOrigin, Vector3.down, 0.6f, ~0, QueryTriggerInteraction.Ignore);
 
         if (!groundStillThere)
         {

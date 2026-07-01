@@ -356,10 +356,10 @@ public class WrenchItem : MonoBehaviour
         var tris  = new List<int>();
         var norms = new List<Vector3>();
 
-        AddBox(verts, tris, norms, new Vector3(0f, -0.08f, 0f),  new Vector3(0.035f, 0.16f, 0.035f)); // handle
-        AddBox(verts, tris, norms, new Vector3(0f,  0.10f, 0f),  new Vector3(0.13f,  0.03f, 0.035f)); // top bar
-        AddBox(verts, tris, norms, new Vector3(-0.05f, 0.07f, 0f), new Vector3(0.03f, 0.06f, 0.035f)); // left jaw
-        AddBox(verts, tris, norms, new Vector3( 0.05f, 0.07f, 0f), new Vector3(0.03f, 0.06f, 0.035f)); // right jaw
+        AddBox(verts, tris, norms, new Vector3(0f, -1.28f, 0f),    new Vector3(0.56f, 2.56f, 0.56f));  // handle
+        AddBox(verts, tris, norms, new Vector3(0f, 1.60f, 0f),     new Vector3(2.08f, 0.48f, 0.56f));  // top bar
+        AddBox(verts, tris, norms, new Vector3(-0.80f, 1.12f, 0f), new Vector3(0.48f, 0.96f, 0.56f));  // left jaw
+        AddBox(verts, tris, norms, new Vector3(0.80f, 1.12f, 0f),  new Vector3(0.48f, 0.96f, 0.56f));  // right jaw
 
         Mesh mesh = new Mesh();
         mesh.name = "WrenchMesh";

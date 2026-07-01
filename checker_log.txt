@@ -4,8 +4,8 @@ OS: 'Windows 10  (10.0.19045) 64bit Professional' Language: 'en' Physical Memory
 BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1
 System  architecture: x64
 Process architecture: x64
-Date: 2026-06-30T04:17:53Z
-[Licensing::IpcConnector] Successfully connected to: "LicenseClient-HP" at "2026-06-30T04:17:53.2490585Z"
+Date: 2026-07-01T02:38:29Z
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-HP" at "2026-07-01T02:38:29.9084715Z"
 
 COMMAND LINE ARGUMENTS:
 C:\Program Files\Unity\Hub\Editor\6000.4.6f1\Editor\Unity.exe
